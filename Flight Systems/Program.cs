@@ -27,7 +27,7 @@ namespace IngameScript
 
 		const double MAX_SPEED = 99.0;      // m/s
 		const double SPEED_TOLERANCE = 0.5;  // m/s deadzone
-		const double OVERRIDE_STEP = 0.02;   // cruise adjustment rate
+		const double OVERRIDE_STEP = 0.05;   // cruise adjustment rate
 
         readonly List<IMyThrust> brakingThrusters = new List<IMyThrust>();
         readonly List<IMyThrust> forwardThrusters = new List<IMyThrust>();
@@ -36,6 +36,7 @@ namespace IngameScript
 
 		bool cruiseMode = false;
 		double currentOverride = 0.0;
+        bool lastCheckIsOnNatGrav = false;
 
         // Docking Routine
         // Connector-based Function Block Shutdown Fields
@@ -47,6 +48,7 @@ namespace IngameScript
         readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
         readonly List<IMyGasTank> tanks = new List<IMyGasTank>();
+        readonly List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
         readonly List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
 
         IMyBatteryBlock backupBattery;
@@ -65,7 +67,8 @@ namespace IngameScript
 		string gridName;
 
         Vector3D lastVelocity;
-		bool firstRun = true;
+        double lastH2Fill = 0;
+        bool firstRun = true;
 
         public Program()
 		{
@@ -74,8 +77,8 @@ namespace IngameScript
 
             Me.CustomData = CustomDataInfo().ToString();
         }
-
-		public void Main(string argument, UpdateType updateSource)
+        StringBuilder debug = new StringBuilder();
+        public void Main(string argument, UpdateType updateSource)
         {
             Echo("Flight Systems");
             Echo(gridName);
@@ -91,14 +94,23 @@ namespace IngameScript
 
             // Docking Routine
 
-            argument = (argument ?? "").ToLower();
+            if (lastCheckIsOnNatGrav == true && controller.GetNaturalGravity().LengthSquared() == 0)
+            {
+                lastCheckIsOnNatGrav = cruiseMode = false;
+            }
+            else
+            {
+                lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
+                argument = (argument ?? "").ToLower();
+            }
+
 
             if (!string.IsNullOrEmpty(argument))
             {
                 HandleArgumentDock(argument);
             }
 
-            if (!runningDockMode)
+            if (runningDockMode)
                 return;
 
             bool anyConnected = IsAnyConnectorConnected();
@@ -125,7 +137,7 @@ namespace IngameScript
 			Vector3D forward = controller.WorldMatrix.Forward;
 			double forwardSpeed = Vector3D.Dot(velocity, forward);
 
-			if (cruiseMode)
+            if (cruiseMode)
 				CruiseControl(forwardSpeed);
 			else
 				ManualLimiter(forwardSpeed);
@@ -146,37 +158,9 @@ namespace IngameScript
             customDataInfo.AppendLine("Dock Mode Override Tag: " + OVERRIDE_BLOCKS);
             return customDataInfo;
         }
-
-        void HandleArgument(string argument)
-        {
-            if (!string.IsNullOrWhiteSpace(argument))
-            {
-                switch (argument.ToLower().Trim())
-                {
-                    case "reload":
-                        Reload();
-                        break;
-                    case "cruise":
-                        cruiseMode = !cruiseMode;
-                        break;
-                    case "cruiseon":
-                        cruiseMode = true;
-                        break;
-                    case "cruiseoff":
-                        cruiseMode = false;
-                        break;
-
-                }
-            }
-        }
         
         void HandleArgumentDock(string argument)
         {
-            if (!string.IsNullOrWhiteSpace(argument))
-            { 
-                return;
-            }
-
             switch (argument.ToLower().Trim())
             {
                 case "reload":
@@ -184,7 +168,7 @@ namespace IngameScript
                     break;
 
                 case "toggle":
-                    ToggleBlocks();
+                    SetBlocks(runningDockMode);
                     break;
 
                 case "on":
@@ -194,13 +178,24 @@ namespace IngameScript
                 case "off":
                     SetBlocks(false);
                     break;
+            }
+        }
 
-                case "stop":
-                    runningDockMode = true;
+        void HandleArgument(string argument)
+        {
+            switch (argument.ToLower().Trim())
+            {
+                case "reload":
+                    Reload();
                     break;
-
-                case "start":
-                    runningDockMode = false;
+                case "cruise":
+                    cruiseMode = !cruiseMode;
+                    break;
+                case "cruiseon":
+                    cruiseMode = true;
+                    break;
+                case "cruiseoff":
+                    cruiseMode = false;
                     break;
             }
         }
@@ -211,6 +206,7 @@ namespace IngameScript
             CacheBlocksCC();
             CacheBlocksDR();
             CacheBlocksLCD();
+            lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
         }
 
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
@@ -344,6 +340,7 @@ namespace IngameScript
             cachedBlocks.Clear();
             connectors.Clear();
             tanks.Clear();
+            h2Tanks.Clear();
             batteries.Clear();
 
             // Functional blocks to power on/off
@@ -370,13 +367,15 @@ namespace IngameScript
                     if (b is IMyEventControllerBlock) return false;
                     if (b is IMyInteriorLight) return false;
                     if (b is IMyLandingGear) return false;
+                    if (b is IMyButtonPanel) return false;
+                    if (b is IMyLargeTurretBase) return false;
+                    if (b is IMyOffensiveCombatBlock) return false;
+                    if (b is IMyDefensiveCombatBlock) return false;
                     if (IsSurvivalKit(b)) return false;
                 }
 
                 return true;
             });
-
-
 
             cachedBlocks.AddRange(temp);
 
@@ -384,6 +383,14 @@ namespace IngameScript
             GetOwnGridBlocks(connectors);
             GetOwnGridBlocks(tanks);
             GetOwnGridBlocks(batteries);
+
+            foreach(IMyGasTank tank in tanks)
+            {
+                if (IsHydrogenTank(tank))
+                {
+                    h2Tanks.Add(tank);
+                }
+            }
 
             // Backup Battery
             if (backupBattery == null)
@@ -397,11 +404,11 @@ namespace IngameScript
                     }
                 }
             }
-
-            lastConnectedState = IsAnyConnectorConnected();
-            SetBlocks(!lastConnectedState);
-            StockpileTanks(lastConnectedState);
-            ChargeBatteries(lastConnectedState);
+        }
+        bool IsHydrogenTank(IMyGasTank tank)
+        {
+            return tank.BlockDefinition.SubtypeName
+                .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         bool IsSurvivalKit(IMyFunctionalBlock b)
@@ -422,6 +429,7 @@ namespace IngameScript
 
         void SetBlocks(bool enabled)
         {
+            runningDockMode = !enabled;
             foreach (IMyFunctionalBlock cachedBlock in cachedBlocks)
             {
                 if (cachedBlock != null && cachedBlock.IsFunctional)
@@ -453,17 +461,6 @@ namespace IngameScript
                 if (battery != null && battery.IsFunctional)
                     battery.ChargeMode = charge ? ChargeMode.Recharge : ChargeMode.Auto;
             }
-        }
-
-        void ToggleBlocks()
-        {
-            foreach (IMyFunctionalBlock b in cachedBlocks)
-            {
-                if (b != null && b.IsFunctional)
-                    b.Enabled = !b.Enabled;
-            }
-
-            isDockMode = !cachedBlocks.First().Enabled;
         }
 
         //Info LCDs
@@ -531,43 +528,27 @@ namespace IngameScript
             var mass = controller.CalculateShipMass();
 
             // Hydrogen
-            double lastH2Fill = ParseDouble(Storage, "lastH2", 0);
-            double smoothedRate = ParseDouble(Storage, "smoothRate", 0);
-
-            double h2Fill = 0;    // current H2 in liters (get from your tank)
-            double h2Cap = 0;     // tank capacity in liters (get from your tank)
-
-            double alpha = 0.1;      // smoothing factor (0 = very smooth, 1 = no smoothing)
-            double minRate = 1e-6;    // ignore tiny fluctuations
-            double h2TimeNum = 0;
-
-            foreach (var t in tanks)
+            double H2CapacityPercent;
+            double h2Cap = 0, h2Fill = 0;
+            foreach (var t in h2Tanks)
             {
                 h2Cap += t.Capacity;
                 h2Fill += t.Capacity * t.FilledRatio;
-            }          
-            double h2Rate = (h2Fill - lastH2Fill) / Runtime.TimeSinceLastRun.TotalSeconds; // Calculate instantaneous rate
-            lastH2Fill = h2Fill;
-
-            if (Math.Abs(h2Rate) < minRate) h2Rate = 0; // Ignore tiny fluctuations
-
-            smoothedRate += alpha * (h2Rate - smoothedRate); // Apply exponential moving average
-
-            if (Math.Abs(smoothedRate) < 100)
-                smoothedRate = 0;
-
-            string h2Time;
-            if (Math.Abs(smoothedRate) > minRate) // Calculate estimated time until empty or full
-            {
-                if (smoothedRate < 0) // consuming H2
-                    h2TimeNum = h2Fill / -smoothedRate;
-                else // producing H2
-                    h2TimeNum = (h2Cap - h2Fill) / smoothedRate;
             }
 
-            h2Time = FormatTime((h2TimeNum > 3600 * 5 ? 0 : h2TimeNum));
+            double h2Rate = (h2Fill - lastH2Fill) / Runtime.TimeSinceLastRun.TotalSeconds;
+            lastH2Fill = h2Fill;
 
-            Storage = $"lastH2:{lastH2Fill};smoothRate:{smoothedRate}";
+            string h2Time = "--";
+            if (Math.Abs(h2Rate) > 1e-6)
+            {
+                if (h2Rate < 0)
+                    h2Time = FormatTime(h2Fill / -h2Rate) + " \\/";
+                else
+                    h2Time = FormatTime((h2Cap - h2Fill) / h2Rate) + " /\\";
+            }
+
+            H2CapacityPercent = h2Fill / h2Cap * 100;
 
             // Batteries
             double batCap = 0, batStored = 0;
@@ -587,9 +568,9 @@ namespace IngameScript
             if (Math.Abs(netPower) > 0.01)
             {
                 if (netPower > 0)
-                    batTime = FormatTime((batCap - batStored) / netPower);
+                    batTime = FormatTime((batCap - batStored) / netPower) + " /\\";
                 else
-                    batTime = FormatTime(batStored / -netPower);
+                    batTime = FormatTime(batStored / -netPower) + " \\/";
             }
 
             // Output
@@ -602,10 +583,10 @@ namespace IngameScript
             sb.AppendLine($"Mass: {mass.PhysicalMass / 1000:0.0} t");
             sb.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
             
-            sb.AppendLine($"Rate: {smoothedRate:F3} L/s");
-            sb.AppendLine($"H2 Time: {h2Time}");
+            sb.AppendLine($"H2: {H2CapacityPercent:0}%");
+            sb.AppendLine($"H2 Time: {h2Time}"); 
 
-            sb.AppendLine($"Battery:  {batStored / batCap * 100:0}%");
+            sb.AppendLine($"Battery:  {batStored / batCap * 100:0} %");
             sb.AppendLine($"Bat Time: {batTime}");
             
             string text = sb.ToString();
