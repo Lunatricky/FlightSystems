@@ -55,8 +55,6 @@ namespace IngameScript
                         NN < 0: set raycast obstacle avoidance accuracy in meters
                         NN < max velocity : set default velocity, measure distance to target and fly
                         NN > max velocity : set default range and measure distance to target
-
-         jump N.N     - set jump distance in km for all jump drives, N.N - number with decimal point
                 
          view MODE    - set default MODE for LCD panel from View MODE dictionary (see below)
                         view without MODE : detailed information about the grid
@@ -391,16 +389,6 @@ namespace IngameScript
                         else if (n > mvel) rayrange = n; else rayspeed = (float)n;
                     }
                     if (!shipLidar(n < mvel)) return false; break;
-
-                case "jump":
-                    if (arg.Count() > 1)
-                    {
-                        float d = numParse(arg[1]) * 1000; if (d < 5000) d = 5000;
-                        List<IMyJumpDrive> jump = new List<IMyJumpDrive>();
-                        GridTerminalSystem.GetBlocksOfType<IMyJumpDrive>(jump);
-                        foreach (var j in jump) j.JumpDistanceMeters = d;
-                    }
-                    return false;
 
                 default:
                     mode = "Cruise";
@@ -1176,7 +1164,6 @@ namespace IngameScript
                    $"Thruster Down: {thrusters.downThrust.Count}/{thrusters.downSubThrust.Count}\n" +
                    $"Thruster Frwd: {thrusters.forwardThrust.Count}/{thrusters.forwardSubThrust.Count}\n" +
                    $"Thruster Back: {thrusters.backwardThrust.Count}/{thrusters.backwardSubThrust.Count}\n" +
-                   $"Jump drives: {shipInfo("jump")}\n" +
                    $"Landing Gr/Cn: {gears.Count()}/{connects.Count()}\n" +
                    $"Parachutes: {shipInfo("para")}\n" +
                    $"Raycast: {(cameras.Count() > 0 && raycast > 0 ? "Enabled" : "Disabled")}\n";
@@ -1201,10 +1188,6 @@ namespace IngameScript
             foreach (var v in pow) { c += (double)v.CurrentStoredPower; t += (double)v.MaxStoredPower; }
             if (t > 0) pw = Math.Round(c / t * 100, 0); if (info == "power") return pw.ToString();
 
-            List<IMyJumpDrive> jump = new List<IMyJumpDrive>(); GridTerminalSystem.GetBlocksOfType<IMyJumpDrive>(jump);
-            foreach (var j in jump) { if (j.Status.ToString() == "Ready") { ++jr; jd = (double)j.MaxJumpDistanceMeters; } }
-            if (info == "jump") return jump.Count.ToString();
-
             t = 0; c = 0;
             foreach (var v in containers) { c += (double)v.GetInventory().CurrentVolume; t += (double)v.GetInventory().MaxVolume; }
             if (t > 0) cargo = (c / t * 100); if (info == "cont") return cargo.ToString();
@@ -1225,7 +1208,6 @@ namespace IngameScript
                    $"Thrust U/D:  {tu} / {td} {(ing ? "tn" : "kN")}\n" +
                    $"Thrust F/B:  {tf} / {tb} {(ing ? "tn" : "kN")}\n" +
                    $"Thrust L/R:  {tr} / {tl} {(ing ? "tn" : "kN")}\n" +
-                   $"Jump ({jump.Count}/{jr}): {Math.Round(jd / 1000, 2)} km\n" +
                    $"H2/Power: {h2} / {pw} %\n" +
                    $"Cargo: {Math.Round(cargo, 0)}% ({t} tn)\n" +
                    $"Gear status: {gearStatus()}";

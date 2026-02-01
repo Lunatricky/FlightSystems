@@ -22,6 +22,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+
         // Cruise Control
 		// Forward Speed Limiter + Cruise Control Fields
 
@@ -35,8 +36,11 @@ namespace IngameScript
 		IMyShipController controller;
 
 		bool cruiseMode = false;
-		double currentOverride = 0.0;
         bool lastCheckIsOnNatGrav = false;
+        bool stopCruiseWhenOutOfGrav = false;
+
+        double currentOverride = 0.0;
+        double cruiseMaxSpeed = 99;
 
         // Docking Routine
         // Connector-based Function Block Shutdown Fields
@@ -53,7 +57,6 @@ namespace IngameScript
 
         IMyBatteryBlock backupBattery;
 
-        bool runningDockMode = true;
         bool isDockMode = false;
         bool lastConnectedState = false;
 
@@ -77,7 +80,7 @@ namespace IngameScript
 
             Me.CustomData = CustomDataInfo().ToString();
         }
-        StringBuilder debug = new StringBuilder();
+
         public void Main(string argument, UpdateType updateSource)
         {
             Echo("Flight Systems");
@@ -92,11 +95,11 @@ namespace IngameScript
             Echo("Dock Mode block count: " + cachedBlocks.Count);
             Echo("------------------------");
 
-            // Docking Routine
+            // Stop cruise control when leaves atmosphere?
 
-            if (lastCheckIsOnNatGrav == true && controller.GetNaturalGravity().LengthSquared() == 0)
+            if (stopCruiseWhenOutOfGrav && lastCheckIsOnNatGrav && controller.GetNaturalGravity().LengthSquared() == 0)
             {
-                lastCheckIsOnNatGrav = cruiseMode = false;
+                stopCruiseWhenOutOfGrav = lastCheckIsOnNatGrav = cruiseMode = false;
             }
             else
             {
@@ -105,13 +108,12 @@ namespace IngameScript
             }
 
 
+            // Docking Routine
+
             if (!string.IsNullOrEmpty(argument))
             {
                 HandleArgumentDock(argument);
             }
-
-            if (runningDockMode)
-                return;
 
             bool anyConnected = IsAnyConnectorConnected();
 
@@ -123,11 +125,14 @@ namespace IngameScript
                 lastConnectedState = anyConnected;
             }
 
+            if (isDockMode)
+                return;
+
             // Cruise Control
 
             if (!string.IsNullOrEmpty(argument))
             {
-                HandleArgument(argument);
+                HandleArgumentCC(argument);
                 ResetThrusters();
             }
 
@@ -168,7 +173,7 @@ namespace IngameScript
                     break;
 
                 case "toggle":
-                    SetBlocks(runningDockMode);
+                    SetBlocks(isDockMode);
                     break;
 
                 case "on":
@@ -181,7 +186,7 @@ namespace IngameScript
             }
         }
 
-        void HandleArgument(string argument)
+        void HandleArgumentCC(string argument)
         {
             switch (argument.ToLower().Trim())
             {
@@ -197,7 +202,16 @@ namespace IngameScript
                 case "cruiseoff":
                     cruiseMode = false;
                     break;
+                case "cruiseorbit":
+                    cruiseMode = true;
+                    stopCruiseWhenOutOfGrav = true;
+                    break;
+                default:
+                    break;
             }
+
+            //TODO fix the cruise to set speed
+            //cruiseMaxSpeed = ParseDouble("cruise", argument);
         }
 
         private void Reload()
@@ -273,7 +287,7 @@ namespace IngameScript
 
 		void CruiseControl(double speed)
 		{
-			double error = MAX_SPEED - speed;
+			double error = cruiseMaxSpeed - speed;
 
 			if (Math.Abs(error) < SPEED_TOLERANCE)
 				return;
@@ -429,7 +443,6 @@ namespace IngameScript
 
         void SetBlocks(bool enabled)
         {
-            runningDockMode = !enabled;
             foreach (IMyFunctionalBlock cachedBlock in cachedBlocks)
             {
                 if (cachedBlock != null && cachedBlock.IsFunctional)
@@ -609,6 +622,22 @@ namespace IngameScript
             if (m > 0)
                 return $"{m}m {sec}s";
             return $"{sec}s";
+        }
+
+        double ParseDouble(string subString, string argument)
+        {
+            double value = 0;
+
+            if (string.IsNullOrWhiteSpace(argument))
+                return value;
+
+            string[] parts = argument.Split(' ');
+
+            if (parts.Length >= 2 && parts[0].Equals(subString, StringComparison.OrdinalIgnoreCase))
+            {
+                double.TryParse(parts[1], out value);
+            }
+            return value;
         }
 
         double ParseDouble(string storage, string key, double defaultValue)
