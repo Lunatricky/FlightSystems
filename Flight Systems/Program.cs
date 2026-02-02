@@ -24,9 +24,9 @@ namespace IngameScript
     {
 
         // Cruise Control
-		// Forward Speed Limiter + Cruise Control Fields
+        // Forward Speed Limiter + Cruise Control Fields
 
-		const double MAX_SPEED = 99.0;      // m/s
+        const double MAX_SPEED = 99.0;      // m/s
 		const double SPEED_TOLERANCE = 0.5;  // m/s deadzone
 		const double OVERRIDE_STEP = 0.05;   // cruise adjustment rate
 
@@ -40,7 +40,7 @@ namespace IngameScript
         bool stopCruiseWhenOutOfGrav = false;
 
         double currentOverride = 0.0;
-        double cruiseMaxSpeed = 99;
+        double cruiseSpeed = 99;
 
         // Docking Routine
         // Connector-based Function Block Shutdown Fields
@@ -48,12 +48,13 @@ namespace IngameScript
         const string OVERRIDE_BLOCKS = "[FS_override]";
         const string IGNORE_TAG = "[FS_ignore]";
 
+        readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         readonly HashSet<long> overrideBlocks = new HashSet<long>();
-        readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
         readonly List<IMyGasTank> tanks = new List<IMyGasTank>();
         readonly List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
         readonly List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+
 
         IMyBatteryBlock backupBattery;
 
@@ -78,22 +79,15 @@ namespace IngameScript
 			Runtime.UpdateFrequency = UpdateFrequency.Update10;
             Reload();
 
-            Me.CustomData = CustomDataInfo().ToString();
+            Me.CustomData = CustomDataInfo();
         }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            Echo("Flight Systems");
-            Echo(gridName);
-            Echo("------------------------");
-            Echo("Dock Mode: " + isDockMode);
-            Echo("Cruise Mode: " + cruiseMode);
-            Echo("------------------------");
-            Echo("LCDs count: " + lcds.Count);
-            Echo("Tanks count: " + tanks.Count);
-            Echo("Batteries count: " + batteries.Count);
-            Echo("Dock Mode block count: " + cachedBlocks.Count);
-            Echo("------------------------");
+            string stringInfo = ScriptInfo();
+
+            Echo(stringInfo);
+            Me.GetSurface(0).WriteText(stringInfo);
 
             // Stop cruise control when leaves atmosphere?
 
@@ -155,13 +149,29 @@ namespace IngameScript
             }
         }
 
-        public StringBuilder CustomDataInfo()
+        public string ScriptInfo()
+        {
+            StringBuilder scriptInfo = new StringBuilder();
+            scriptInfo.Clear();
+            scriptInfo.AppendLine("Flight Systems");
+            scriptInfo.AppendLine(gridName);
+            scriptInfo.AppendLine(new string('-', 28));
+            scriptInfo.AppendLine("Dock Mode: " + isDockMode);
+            scriptInfo.AppendLine("Cruise Mode: " + cruiseMode);
+            scriptInfo.AppendLine("LCDs: " + lcds.Count);
+            scriptInfo.AppendLine("Batteries: " + batteries.Count + " | Tanks: " + tanks.Count);
+            scriptInfo.AppendLine("Dock Mode blocks: " + controlledBlocks.Count);
+
+            return scriptInfo.ToString();
+        }
+
+        public string CustomDataInfo()
         {
             StringBuilder customDataInfo = new StringBuilder();
             customDataInfo.AppendLine("LCD Tag: " + LCD_TAG);
             customDataInfo.AppendLine("Dock Mode Ignore Tag: " + IGNORE_TAG);
             customDataInfo.AppendLine("Dock Mode Override Tag: " + OVERRIDE_BLOCKS);
-            return customDataInfo;
+            return customDataInfo.ToString();
         }
         
         void HandleArgumentDock(string argument)
@@ -194,28 +204,34 @@ namespace IngameScript
                     Reload();
                     break;
                 case "cruise":
+                    cruiseSpeed = 99;
                     cruiseMode = !cruiseMode;
                     break;
                 case "cruiseon":
+                    cruiseSpeed = 99;
                     cruiseMode = true;
                     break;
                 case "cruiseoff":
                     cruiseMode = false;
                     break;
                 case "cruiseorbit":
+                    cruiseSpeed = 99;
                     cruiseMode = true;
                     stopCruiseWhenOutOfGrav = true;
                     break;
                 default:
                     break;
             }
-
-            //TODO fix the cruise to set speed
-            //cruiseMaxSpeed = ParseDouble("cruise", argument);
+            
+            if (argument.Contains("cruise") && ParseDouble("cruise", argument, ref cruiseSpeed))
+            {
+                cruiseMode = true;
+            }
         }
 
         private void Reload()
         {
+            SetupSurface(Me.GetSurface(0));
             LoadOverrideGroup();
             CacheBlocksCC();
             CacheBlocksDR();
@@ -226,8 +242,8 @@ namespace IngameScript
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
         {
             list.Clear();
-            GridTerminalSystem.GetBlocksOfType(list, b =>
-                b.IsSameConstructAs(Me)
+            GridTerminalSystem.GetBlocksOfType(list, block =>
+                block.IsSameConstructAs(Me)
             );
         }
 
@@ -239,25 +255,25 @@ namespace IngameScript
 			brakingThrusters.Clear();
 
 			var allThrusters = new List<IMyThrust>();
-			GridTerminalSystem.GetBlocksOfType(allThrusters, t =>
-               t.IsSameConstructAs(Me) &&
-               t.IsFunctional);
+			GridTerminalSystem.GetBlocksOfType(allThrusters, thruster =>
+               thruster.IsSameConstructAs(Me) &&
+               thruster.IsFunctional);
 
-			foreach (var t in allThrusters)
+			foreach (var thruster in allThrusters)
 			{
 				// Thrusters pushing ship forward
-				if (t.Orientation.Forward == Base6Directions.Direction.Backward)
-					forwardThrusters.Add(t);
+				if (thruster.Orientation.Forward == Base6Directions.Direction.Backward)
+					forwardThrusters.Add(thruster);
 
 				// Thrusters that brake forward motion
-				else if (t.Orientation.Forward == Base6Directions.Direction.Forward)
-					brakingThrusters.Add(t);
+				else if (thruster.Orientation.Forward == Base6Directions.Direction.Forward)
+					brakingThrusters.Add(thruster);
 			}
 
 
 			var controllers = new List<IMyShipController>();
-			GridTerminalSystem.GetBlocksOfType(controllers, c =>
-               c.IsSameConstructAs(Me) && c.IsMainCockpit);
+			GridTerminalSystem.GetBlocksOfType(controllers, controller =>
+               controller.IsSameConstructAs(Me) && controller.IsMainCockpit);
 
 			if (controllers.Count == 0)
                 GetOwnGridBlocks(controllers);
@@ -270,24 +286,24 @@ namespace IngameScript
 			bool allowThrust = speed < MAX_SPEED;
 
 			// Restore braking thrusters
-			foreach (var t in brakingThrusters)
+			foreach (var brakingThruster in brakingThrusters)
 			{
-				t.Enabled = true;
-				t.ThrustOverridePercentage = 0f;
+				brakingThruster.Enabled = true;
+				brakingThruster.ThrustOverridePercentage = 0f;
 			}
 
 			// Normal forward thrust behavior
-			foreach (var t in forwardThrusters)
+			foreach (var forwardThruster in forwardThrusters)
 			{
-				t.ThrustOverridePercentage = 0f;
-				t.Enabled = allowThrust;
+				forwardThruster.ThrustOverridePercentage = 0f;
+				forwardThruster.Enabled = allowThrust;
 			}
 
 		}
 
 		void CruiseControl(double speed)
 		{
-			double error = cruiseMaxSpeed - speed;
+			double error = cruiseSpeed - speed;
 
 			if (Math.Abs(error) < SPEED_TOLERANCE)
 				return;
@@ -300,14 +316,14 @@ namespace IngameScript
 			currentOverride = MathHelper.Clamp(currentOverride, 0f, 1f);
 
 			// Disable braking thrusters so they don't fight cruise
-			foreach (var t in brakingThrusters)
-				t.Enabled = false;
+			foreach (var brakingThruster in brakingThrusters)
+				brakingThruster.Enabled = false;
 
 			// Control forward thrust smoothly
-			foreach (var t in forwardThrusters)
+			foreach (var forwardThruster in forwardThrusters)
 			{
-				t.Enabled = true;
-				t.ThrustOverridePercentage = (float)currentOverride;
+				forwardThruster.Enabled = true;
+				forwardThruster.ThrustOverridePercentage = (float)currentOverride;
 			}
 
 		}
@@ -316,16 +332,16 @@ namespace IngameScript
 		{
 			currentOverride = 0;
 
-			foreach (var t in forwardThrusters)
+			foreach (var forwardThruster in forwardThrusters)
 			{
-				t.ThrustOverridePercentage = 0f;
-				t.Enabled = true;
+				forwardThruster.ThrustOverridePercentage = 0f;
+				forwardThruster.Enabled = true;
 			}
 
-			foreach (var t in brakingThrusters)
+			foreach (var brakingThruster in brakingThrusters)
 			{
-				t.ThrustOverridePercentage = 0f;
-				t.Enabled = true;
+				brakingThruster.ThrustOverridePercentage = 0f;
+				brakingThruster.Enabled = true;
 			}
 
         }
@@ -342,56 +358,34 @@ namespace IngameScript
                 b.CustomName.Contains(OVERRIDE_BLOCKS)
             );
 
-            foreach (var b in blocks)
+            foreach (var block in blocks)
             {
-                if (b.IsSameConstructAs(Me))
-                    overrideBlocks.Add(b.EntityId);
+                if (block.IsSameConstructAs(Me))
+                    overrideBlocks.Add(block.EntityId);
             }
         }
 
         void CacheBlocksDR()
         {
-            cachedBlocks.Clear();
+            controlledBlocks.Clear();
             connectors.Clear();
             tanks.Clear();
             h2Tanks.Clear();
             batteries.Clear();
 
-            // Functional blocks to power on/off
-            var temp = new List<IMyFunctionalBlock>();
-            GridTerminalSystem.GetBlocksOfType(temp, b =>
+
+            IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName("Auto Managed");
+
+            if (group != null)
+                group.GetBlocksOfType(controlledBlocks, block =>
+                    block.IsSameConstructAs(Me));
+
+            if (controlledBlocks.Count == 0)
             {
-                if (!b.IsSameConstructAs(Me) || b == Me)
-                    return false;
+                ReloadControlledBlocks();
+                controlledBlocks.Remove(Me);
+            }
 
-                bool isOverride = overrideBlocks.Contains(b.EntityId);
-
-                if (!isOverride)
-                {
-                    if (b.CustomName.Contains(IGNORE_TAG)) return false;
-
-                    if (b is IMyShipConnector) return false;
-                    if (b is IMyBatteryBlock) return false;
-                    if (b is IMyDoor) return false;
-                    if (b is IMyAirVent) return false;
-                    if (b is IMyCryoChamber) return false;
-                    if (b is IMyMedicalRoom) return false;
-                    if (b is IMyGasTank) return false;
-                    if (b is IMyTimerBlock) return false;
-                    if (b is IMyEventControllerBlock) return false;
-                    if (b is IMyInteriorLight) return false;
-                    if (b is IMyLandingGear) return false;
-                    if (b is IMyButtonPanel) return false;
-                    if (b is IMyLargeTurretBase) return false;
-                    if (b is IMyOffensiveCombatBlock) return false;
-                    if (b is IMyDefensiveCombatBlock) return false;
-                    if (IsSurvivalKit(b)) return false;
-                }
-
-                return true;
-            });
-
-            cachedBlocks.AddRange(temp);
 
             // Connectors, Tanks & Batteries (own construct only)
             GetOwnGridBlocks(connectors);
@@ -407,35 +401,72 @@ namespace IngameScript
             }
 
             // Backup Battery
-            if (backupBattery == null)
+            if (backupBattery == null || backupBattery.Closed)
             {
-                foreach (var b in batteries)
+                foreach (var battery in batteries)
                 {
-                    if (b.CustomName.ToLower().Contains("backup"))
+                    if (!battery.Closed && battery.CustomName.ToLower().Contains("backup"))
                     {
-                        backupBattery = b;
+                        backupBattery = battery;
                         break;
                     }
                 }
+                batteries.Remove(backupBattery);
             }
+
         }
+
+        void ReloadControlledBlocks()
+        {
+            controlledBlocks.Clear();
+
+            AddBlocks<IMyThrust>();
+            AddBlocks<IMyMechanicalConnectionBlock>();
+            AddBlocks<IMyShipToolBase>();
+            AddBlocks<IMyReflectorLight>();
+            AddBlocks<IMySearchlight>();
+            AddBlocks<IMySensorBlock>();
+            AddBlocks<IMyLaserAntenna>();
+            AddBlocks<IMyRadioAntenna>();
+            AddBlocks<IMyBeacon>();
+            AddBlocks<IMyOreDetector>();
+            AddBlocks<IMyTextPanel>();
+            AddBlocks<IMyProgrammableBlock>();
+        }
+
+        void AddBlocks<T>() where T : class, IMyFunctionalBlock
+        {
+            var tempList = new List<T>();
+
+            GridTerminalSystem.GetBlocksOfType(tempList, tempBlock =>
+                tempBlock.IsSameConstructAs(Me) &&
+                !ContainsIgnore(tempBlock.CustomName)
+            );
+
+            foreach (var block in tempList)
+                controlledBlocks.Add(block);
+        }
+
+        bool ContainsIgnore(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return false;
+
+            return text.IndexOf("ignore", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+
         bool IsHydrogenTank(IMyGasTank tank)
         {
             return tank.BlockDefinition.SubtypeName
                 .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        bool IsSurvivalKit(IMyFunctionalBlock b)
-        {
-            return b.BlockDefinition.SubtypeName
-                .IndexOf("SurvivalKit", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
         bool IsAnyConnectorConnected()
         {
-            foreach (IMyShipConnector c in connectors)
+            foreach (IMyShipConnector connector in connectors)
             {
-                if (c.Status == MyShipConnectorStatus.Connected)
+                if (connector.Status == MyShipConnectorStatus.Connected)
                     return true;
             }
             return false;
@@ -443,7 +474,7 @@ namespace IngameScript
 
         void SetBlocks(bool enabled)
         {
-            foreach (IMyFunctionalBlock cachedBlock in cachedBlocks)
+            foreach (IMyFunctionalBlock cachedBlock in controlledBlocks)
             {
                 if (cachedBlock != null && cachedBlock.IsFunctional)
                     cachedBlock.Enabled = enabled;
@@ -486,9 +517,9 @@ namespace IngameScript
 
             // LCDs
             var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, b =>
-                b.IsSameConstructAs(Me) &&
-                b.CustomName.Contains(LCD_TAG)
+            GridTerminalSystem.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
+                block.IsSameConstructAs(Me) &&
+                block.CustomName.Contains(LCD_TAG)
             );
 
             foreach (IMyTextSurfaceProvider surfaceProvider in blocks)
@@ -496,26 +527,31 @@ namespace IngameScript
                 // Only take the first surface (index 0)
                 if (surfaceProvider.SurfaceCount > 0)
                 {
-                    var s = surfaceProvider.GetSurface(0);
-                    s.ContentType = ContentType.TEXT_AND_IMAGE;
-                    s.Font = "DEBUG";
-                    s.FontSize = 1.5f;
-                    s.Alignment = TextAlignment.LEFT;
+                    var surface = surfaceProvider.GetSurface(0);
 
-                    lcds.Add(s);
+                    lcds.Add(SetupSurface(surface));
                 }
             }
 
             firstRun = true;
         }
 
+        private static IMyTextSurface SetupSurface(IMyTextSurface surface)
+        {
+            surface.ContentType = ContentType.TEXT_AND_IMAGE;
+            surface.Font = "DEBUG";
+            surface.FontSize = 1.5f;
+            surface.Alignment = TextAlignment.LEFT;
+            return surface;
+        }
+
         void WriteInfo()
         {
-            var sb = new StringBuilder();
+            var stringBuilder = new StringBuilder();
 
             // Altitude
-            string seaAltText = "No gravity";
-            string groundAltText = "No gravity";
+            string seaAltText = "No g";
+            string groundAltText = "No g";
 
             double sea, ground;
             if (controller.GetNaturalGravity().LengthSquared() > 1e-3)
@@ -543,10 +579,10 @@ namespace IngameScript
             // Hydrogen
             double H2CapacityPercent;
             double h2Cap = 0, h2Fill = 0;
-            foreach (var t in h2Tanks)
+            foreach (var tank in h2Tanks)
             {
-                h2Cap += t.Capacity;
-                h2Fill += t.Capacity * t.FilledRatio;
+                h2Cap += tank.Capacity;
+                h2Fill += tank.Capacity * tank.FilledRatio;
             }
 
             double h2Rate = (h2Fill - lastH2Fill) / Runtime.TimeSinceLastRun.TotalSeconds;
@@ -555,10 +591,10 @@ namespace IngameScript
             string h2Time = "--";
             if (Math.Abs(h2Rate) > 1e-6)
             {
-                if (h2Rate < 0)
-                    h2Time = FormatTime(h2Fill / -h2Rate) + " \\/";
-                else
+                if (h2Rate >= 0)
                     h2Time = FormatTime((h2Cap - h2Fill) / h2Rate) + " /\\";
+                else
+                    h2Time = FormatTime(h2Fill / -h2Rate) + " \\/";
             }
 
             H2CapacityPercent = h2Fill / h2Cap * 100;
@@ -567,12 +603,12 @@ namespace IngameScript
             double batCap = 0, batStored = 0;
             double batIn = 0, batOut = 0;
 
-            foreach (var b in batteries)
+            foreach (var battery in batteries)
             {
-                batCap += b.MaxStoredPower;
-                batStored += b.CurrentStoredPower;
-                batIn += b.CurrentInput;
-                batOut += b.CurrentOutput;
+                batCap += battery.MaxStoredPower;
+                batStored += battery.CurrentStoredPower;
+                batIn += battery.CurrentInput;
+                batOut += battery.CurrentOutput;
             }
 
             double netPower = batIn - batOut;
@@ -587,49 +623,50 @@ namespace IngameScript
             }
 
             // Output
-            sb.AppendLine(gridName);
-            sb.AppendLine(new string('-', 28));
-
-            sb.AppendLine($"Alt (Sea): {seaAltText}");
-            sb.AppendLine($"Alt (Ground): {groundAltText}");
-            sb.AppendLine($"Accel: {accel.Length() / 9.81:F2} g");
-            sb.AppendLine($"Mass: {mass.PhysicalMass / 1000:0.0} t");
-            sb.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
+            stringBuilder.AppendLine(gridName);
+            stringBuilder.AppendLine(new string('-', 28));
             
-            sb.AppendLine($"H2: {H2CapacityPercent:0}%");
-            sb.AppendLine($"H2 Time: {h2Time}"); 
-
-            sb.AppendLine($"Battery:  {batStored / batCap * 100:0} %");
-            sb.AppendLine($"Bat Time: {batTime}");
+            stringBuilder.AppendLine($"Alt (Sea): {seaAltText}");
+            stringBuilder.AppendLine($"Alt (Ground): {groundAltText}");
+            stringBuilder.AppendLine($"Accel: {accel.Length() / 9.81:F2} g");
+            stringBuilder.AppendLine($"Mass: {mass.PhysicalMass / 1000:0.0} t");
+            stringBuilder.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
             
-            string text = sb.ToString();
+            stringBuilder.AppendLine($"H2: {H2CapacityPercent:0}%");
+            stringBuilder.AppendLine($"H2 Time: {h2Time}"); 
+
+            stringBuilder.AppendLine($"Bat:  {batStored / batCap * 100:0} %");
+            stringBuilder.AppendLine($"Bat Time: {batTime}");
+            
+            string text = stringBuilder.ToString();
+
             foreach (var lcd in lcds)
                 lcd.WriteText(text);
         }
 
-        string FormatTime(double seconds)
+        string FormatTime(double time)
         {
-            if (double.IsInfinity(seconds) || seconds < 0)
+            if (double.IsInfinity(time) || time < 0)
                 return "--";
 
-            int s = (int)seconds;
-            int h = s / 3600;
-            int m = (s % 3600) / 60;
-            int sec = s % 60;
+            int intTime = (int)time;
+            int hours = intTime / 3600;
+            int minutes = (intTime % 3600) / 60;
+            int seconds = intTime % 60;
 
-            if (h > 0)
-                return $"{h}h {m}m";
-            if (m > 0)
-                return $"{m}m {sec}s";
-            return $"{sec}s";
+            if (hours > 0)
+                return $"{hours}h {minutes}m";
+            if (minutes > 0)
+                return $"{minutes}m {seconds}s";
+            return $"{seconds}s";
         }
 
-        double ParseDouble(string subString, string argument)
+        bool ParseDouble(string subString, string argument, ref double value)
         {
-            double value = 0;
+            double oldValue = value;
 
             if (string.IsNullOrWhiteSpace(argument))
-                return value;
+                return false;
 
             string[] parts = argument.Split(' ');
 
@@ -637,7 +674,8 @@ namespace IngameScript
             {
                 double.TryParse(parts[1], out value);
             }
-            return value;
+
+            return value != oldValue;
         }
 
         double ParseDouble(string storage, string key, double defaultValue)
@@ -647,12 +685,12 @@ namespace IngameScript
             var parts = storage.Split(';');
             foreach (var part in parts)
             {
-                var kv = part.Split(':');
-                if (kv.Length == 2 && kv[0] == key)
+                var keyValue = part.Split(':');
+                if (keyValue.Length == 2 && keyValue[0] == key)
                 {
-                    double val;
-                    if (double.TryParse(kv[1], out val))
-                        return val;
+                    double value;
+                    if (double.TryParse(keyValue[1], out value))
+                        return value;
                 }
             }
             return defaultValue;
