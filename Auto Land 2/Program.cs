@@ -43,7 +43,6 @@ namespace IngameScript
 
         double ctrlGridHight;
         double gearGridHight;
-        double gridHightBlocks;
         double gridHight;
 
         // safety buffer (VERY important)
@@ -75,8 +74,6 @@ namespace IngameScript
 
         const double CUSHION_ALT = 20;
         const double LOCK_ALT = 5;
-        private const double LargeGridBlockSize = 2.5;
-        private const double SmallGridBlockSize = 0.5;
 
         public Program()
         {
@@ -93,6 +90,7 @@ namespace IngameScript
             Echo($"alt: {alt:F2}");
             Echo($"effectiveAlt: {effectiveAlt:F2}");
             Echo($"stopDist: {stopDist:F2}");
+            Echo($"maxDecel: {maxDecel:F2}");
             tickCount++;
             if (tickCount % 10 == 0)
             {
@@ -104,8 +102,6 @@ namespace IngameScript
             Echo($"targetSpeed: {targetSpeed:F2}");
             Echo($"timeToImpact: {timeToImpact:F2}");
             Echo($"timeToStop: {timeToStop:F2}");
-            Echo($"gridHight: {gridHight:F2}");
-            Echo($"ctrlGridHight: {ctrlGridHight:F2}");
             Echo($"gridHight: {gridHight:F2}");
 
             Echo("\ngyros: " + gyros.Count);
@@ -162,12 +158,12 @@ namespace IngameScript
             timeToImpact = alt / Math.Abs(vEffectiveSpeed);
             timeToStop = SAFETY * Math.Abs(vEffectiveSpeed) / maxDecel;
 
-            effectiveAlt = alt - vEffectiveSpeed * Runtime.TimeSinceLastRun.TotalSeconds + gridHight;
+            effectiveAlt = alt - vEffectiveSpeed * Runtime.TimeSinceLastRun.TotalSeconds - gridHight;
             effectiveAlt = effectiveAlt / gravityRatio;
             stopDist = Math.Abs((vEffectiveSpeed * vEffectiveSpeed) / (2 * maxDecel));
 
 
-            targetSpeed = -Math.Abs(MathHelper.Clamp(alt * 0.05, 5, 110));
+            targetSpeed = -MathHelper.Clamp(alt * 0.05, 5, 110);
         }
 
         void Reload()
@@ -195,18 +191,18 @@ namespace IngameScript
 
             ctrl = ctrls.Find(c => c.IsMainCockpit) ?? ctrls[0];
 
-            bool gridSize = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
+            Vector3D gravityDir = Vector3D.Normalize(ctrl.GetNaturalGravity());
 
-            int ctrlPos = ctrl.Position.Y;
-            ctrlGridHight = Math.Abs(gridSize ? ctrlPos * LargeGridBlockSize : ctrlPos * SmallGridBlockSize);
+            // world positions
+            Vector3D ctrlPos = ctrl.GetPosition();
+            Vector3D gearPos = gears[0].GetPosition();
 
-            int gearPos = gears.First().Position.Y;
-            gearGridHight = Math.Abs(gridSize ? gearPos * LargeGridBlockSize : gearPos * SmallGridBlockSize);
+            // project onto gravity vector
+            ctrlGridHight = ctrlPos.Dot(gravityDir);
+            gearGridHight = gearPos.Dot(gravityDir);
 
-            gridHight = gearGridHight - ctrlGridHight;
-
-
-            
+            // height difference along gravity
+            gridHight = Math.Abs(ctrlGridHight - gearGridHight);
 
             KillGyroOverride();
             KillThrustOverride();
@@ -257,7 +253,7 @@ namespace IngameScript
             Vector3D axis = shipUp.Cross(desiredUp);
             double angle = axis.Length();
 
-            if (angle < 0.001)
+            if (angle < 0.01)
             {
                 foreach (var g in gyros)
                     g.GyroOverride = false;
@@ -336,7 +332,7 @@ namespace IngameScript
         void TryLock()
         {
             AlignToGravity();
-            MatchVerticalSpeed(-3);
+            MatchVerticalSpeed(-2);
 
             foreach (var g in gears)
                 g.Lock();
