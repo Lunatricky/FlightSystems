@@ -325,9 +325,6 @@ namespace IngameScript
                 MatchVerticalSpeed(targetSpeed);
             }
         }
-        
-
-
 
         void TryLock()
         {

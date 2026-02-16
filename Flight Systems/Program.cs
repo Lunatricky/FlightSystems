@@ -36,11 +36,18 @@ namespace IngameScript
 		IMyShipController controller;
 
 		bool cruiseMode = false;
+		bool circumnav = false;
         bool lastCheckIsOnNatGrav = false;
         bool stopCruiseWhenOutOfGrav = false;
 
         double currentOverride = 0.0;
         double cruiseSpeed = 99;
+
+        // Circunavigation
+        // CNav fields
+
+        Vector3D naturalGrav;
+        List<IMyGyro> gyros = new List<IMyGyro>();
 
         // Docking Routine
         // Connector-based Function Block Shutdown Fields
@@ -84,6 +91,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            UpdatePhysics();
             string stringInfo = ScriptInfo();
 
             Echo(stringInfo);
@@ -137,9 +145,11 @@ namespace IngameScript
 			double forwardSpeed = Vector3D.Dot(velocity, forward);
 
             if (cruiseMode)
-				CruiseControl(forwardSpeed);
-			else
-				ManualLimiter(forwardSpeed);
+                CruiseControl(forwardSpeed);
+            else if (circumnav)
+                CircumNav(forwardSpeed);
+            else
+                ManualLimiter(forwardSpeed);
 
             // Info LCDs
 
@@ -149,7 +159,12 @@ namespace IngameScript
             }
         }
 
-        public string ScriptInfo()
+        void UpdatePhysics()
+        {
+            naturalGrav = controller.GetNaturalGravity();
+        }
+
+            public string ScriptInfo()
         {
             StringBuilder scriptInfo = new StringBuilder();
             scriptInfo.Clear();
@@ -158,6 +173,7 @@ namespace IngameScript
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.AppendLine("Dock Mode: " + isDockMode);
             scriptInfo.AppendLine("Cruise Mode: " + cruiseMode);
+            scriptInfo.AppendLine("CircumNavigate Mode: " + circumnav);
             scriptInfo.AppendLine("LCDs: " + lcds.Count);
             scriptInfo.AppendLine("Batteries: " + batteries.Count + " | Tanks: " + tanks.Count);
             scriptInfo.AppendLine("Dock Mode blocks: " + controlledBlocks.Count);
@@ -206,20 +222,36 @@ namespace IngameScript
                 case "cruise":
                     cruiseSpeed = 98;
                     cruiseMode = !cruiseMode;
+                    circumnav = false;
                     stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseon":
                     cruiseSpeed = 98;
                     cruiseMode = true;
+                    circumnav = false;
                     stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseoff":
                     cruiseMode = false;
                     stopCruiseWhenOutOfGrav = false;
                     break;
+                case "cnav":
+                    cruiseSpeed = 98;
+                    circumnav = !circumnav;
+                    cruiseMode = false;
+                    break;
+                case "cnavon":
+                    cruiseSpeed = 98;
+                    circumnav = true;
+                    cruiseMode = false;
+                    break;
+                case "cnavoff":
+                    circumnav = false;
+                    break;
                 case "cruiseorbit":
                     cruiseSpeed = 98;
                     cruiseMode = true;
+                    circumnav = false;
                     stopCruiseWhenOutOfGrav = true;
                     break;
                 default:
@@ -237,6 +269,7 @@ namespace IngameScript
             SetupSurface(Me.GetSurface(0));
             LoadOverrideGroup();
             CacheBlocksCC();
+            CacheBlocksCNav();
             CacheBlocksDR();
             CacheBlocksLCD();
             lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
@@ -251,10 +284,9 @@ namespace IngameScript
         }
 
         // Cruise Control
-
         void CacheBlocksCC()
-		{
-			forwardThrusters.Clear();
+        {
+            forwardThrusters.Clear();
 			brakingThrusters.Clear();
 
 			var allThrusters = new List<IMyThrust>();
@@ -282,9 +314,16 @@ namespace IngameScript
                 GetOwnGridBlocks(controllers);
 
             controller = controllers.Count > 0 ? controllers[0] : null;
-		}
+        }
 
-		void ManualLimiter(double speed)
+        //CircumNavigate
+        void CacheBlocksCNav()
+        {
+            gyros.Clear();
+            GetOwnGridBlocks(gyros);
+        }
+
+        void ManualLimiter(double speed)
 		{
 			bool allowThrust = speed < MAX_SPEED;
 
@@ -302,9 +341,76 @@ namespace IngameScript
 				forwardThruster.Enabled = allowThrust;
 			}
 
-		}
+        }
 
-		void CruiseControl(double speed)
+        bool AlignToGravity()
+        {
+            if (naturalGrav.LengthSquared() < 0.01)
+                return false;
+
+            Vector3D desiredUp = Vector3D.Normalize(naturalGrav);
+            Vector3D shipUp = controller.WorldMatrix.Up;
+
+            Vector3D axis = shipUp.Cross(desiredUp);
+            double angle = axis.Length();
+
+            if (angle < 0.01)
+            {
+                foreach (var g in gyros)
+                    g.GyroOverride = false;
+
+                return true;
+            }
+
+            axis /= angle;
+
+            Vector3D angVel = controller.GetShipVelocities().AngularVelocity;
+
+            //-----------------------------------
+            // ⭐ ANGULAR RATE LIMIT
+            //-----------------------------------
+
+            const double MAX_ROT_RATE = 0.6; // radians/sec
+            const double RESPONSE = 3.0;     // lower = smoother
+
+            Vector3D desiredRate = axis * Math.Min(angle * RESPONSE, MAX_ROT_RATE);
+
+            //-----------------------------------
+            // PD controller on angular velocity
+            //-----------------------------------
+
+            Vector3D correction = desiredRate - angVel;
+
+            //-----------------------------------
+
+            foreach (var g in gyros)
+            {
+                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
+                Vector3D local = Vector3D.TransformNormal(correction, inv);
+
+                g.GyroOverride = true;
+
+                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -3, 3);
+                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -3, 3);
+                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
+            }
+
+            return false;
+        }
+
+        void CircumNav(double speed)
+        {
+            if (circumnav)
+            {
+                AlignToGravity();
+                CruiseControl(speed);
+            } else
+            {
+                KillGyroOverride();
+            }
+        }
+
+        void CruiseControl(double speed)
 		{
 			double error = cruiseSpeed - speed;
 
@@ -681,22 +787,10 @@ namespace IngameScript
             return value != oldValue;
         }
 
-        double ParseDouble(string storage, string key, double defaultValue)
+        private void KillGyroOverride()
         {
-            if (string.IsNullOrEmpty(storage)) return defaultValue;
-
-            var parts = storage.Split(';');
-            foreach (var part in parts)
-            {
-                var keyValue = part.Split(':');
-                if (keyValue.Length == 2 && keyValue[0] == key)
-                {
-                    double value;
-                    if (double.TryParse(keyValue[1], out value))
-                        return value;
-                }
-            }
-            return defaultValue;
+            foreach (var g in gyros)
+                g.GyroOverride = false;
         }
     }
 }
