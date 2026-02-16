@@ -13,6 +13,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flight Systems", "Flight Sy
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Grand Cruise", "Grand Cruise\Grand Cruise.csproj", "{7E4DE015-A315-4033-8EEA-C0013014FC7D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sensor Detection", "Sensor Detection\Sensor Detection.csproj", "{EF3C284B-49EC-430E-978E-E1B25CCC403E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Land", "Auto Land\Auto Land.csproj", "{A86DE86C-DD0A-42AA-AEFB-12A097C81263}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Land 2", "Auto Land 2\Auto Land 2.csproj", "{CC883D65-5CAA-475C-AF90-A6698F89EC18}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -28,6 +34,12 @@ Global
 		{C9656C0C-0CA3-4B27-8E1B-4D19D1A296E0}.Debug|x64.Build.0 = Debug|x64
 		{7E4DE015-A315-4033-8EEA-C0013014FC7D}.Debug|x64.ActiveCfg = Debug|x64
 		{7E4DE015-A315-4033-8EEA-C0013014FC7D}.Debug|x64.Build.0 = Debug|x64
+		{EF3C284B-49EC-430E-978E-E1B25CCC403E}.Debug|x64.ActiveCfg = Debug|x64
+		{EF3C284B-49EC-430E-978E-E1B25CCC403E}.Debug|x64.Build.0 = Debug|x64
+		{A86DE86C-DD0A-42AA-AEFB-12A097C81263}.Debug|x64.ActiveCfg = Debug|x64
+		{A86DE86C-DD0A-42AA-AEFB-12A097C81263}.Debug|x64.Build.0 = Debug|x64
+		{CC883D65-5CAA-475C-AF90-A6698F89EC18}.Debug|x64.ActiveCfg = Debug|x64
+		{CC883D65-5CAA-475C-AF90-A6698F89EC18}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

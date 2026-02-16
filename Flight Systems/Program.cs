@@ -204,18 +204,21 @@ namespace IngameScript
                     Reload();
                     break;
                 case "cruise":
-                    cruiseSpeed = 99;
+                    cruiseSpeed = 98;
                     cruiseMode = !cruiseMode;
+                    stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseon":
-                    cruiseSpeed = 99;
+                    cruiseSpeed = 98;
                     cruiseMode = true;
+                    stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseoff":
                     cruiseMode = false;
+                    stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseorbit":
-                    cruiseSpeed = 99;
+                    cruiseSpeed = 98;
                     cruiseMode = true;
                     stopCruiseWhenOutOfGrav = true;
                     break;
