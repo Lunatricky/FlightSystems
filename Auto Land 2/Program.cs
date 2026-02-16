@@ -105,6 +105,8 @@ namespace IngameScript
             Echo($"timeToImpact: {timeToImpact:F2}");
             Echo($"timeToStop: {timeToStop:F2}");
             Echo($"gridHight: {gridHight:F2}");
+            Echo($"ctrlGridHight: {ctrlGridHight:F2}");
+            Echo($"gridHight: {gridHight:F2}");
 
             Echo("\ngyros: " + gyros.Count);
             Echo("upThrusters: " + upThrusters.Count);
@@ -199,7 +201,7 @@ namespace IngameScript
             ctrlGridHight = Math.Abs(gridSize ? ctrlPos * LargeGridBlockSize : ctrlPos * SmallGridBlockSize);
 
             int gearPos = gears.First().Position.Y;
-            ctrlGridHight = Math.Abs(gridSize ? gearPos * LargeGridBlockSize : gearPos * SmallGridBlockSize);
+            gearGridHight = Math.Abs(gridSize ? gearPos * LargeGridBlockSize : gearPos * SmallGridBlockSize);
 
             gridHight = gearGridHight - ctrlGridHight;
 
