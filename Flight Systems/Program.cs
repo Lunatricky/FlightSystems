@@ -32,6 +32,7 @@ namespace IngameScript
 
         readonly List<IMyThrust> brakingThrusters = new List<IMyThrust>();
         readonly List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+        readonly List<IMyThrust> upThrusters = new List<IMyThrust>();
 
 		IMyShipController controller;
 
@@ -72,7 +73,6 @@ namespace IngameScript
         // Info LCD Telemetry Script Fields
 
         const string LCD_TAG = "[FS_LCD]";
-
         readonly List<IMyTextSurface> lcds = new List<IMyTextSurface>();
 
 		string gridName;
@@ -220,13 +220,13 @@ namespace IngameScript
                     Reload();
                     break;
                 case "cruise":
-                    cruiseSpeed = 98;
+                    cruiseSpeed = cruiseSpeed;
                     cruiseMode = !cruiseMode;
                     circumnav = false;
                     stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cruiseon":
-                    cruiseSpeed = 98;
+                    cruiseSpeed = cruiseSpeed;
                     cruiseMode = true;
                     circumnav = false;
                     stopCruiseWhenOutOfGrav = false;
@@ -236,12 +236,12 @@ namespace IngameScript
                     stopCruiseWhenOutOfGrav = false;
                     break;
                 case "cnav":
-                    cruiseSpeed = 98;
+                    cruiseSpeed = cruiseSpeed;
                     circumnav = !circumnav;
                     cruiseMode = false;
                     break;
                 case "cnavon":
-                    cruiseSpeed = 98;
+                    cruiseSpeed = cruiseSpeed;
                     circumnav = true;
                     cruiseMode = false;
                     break;
@@ -249,7 +249,7 @@ namespace IngameScript
                     circumnav = false;
                     break;
                 case "cruiseorbit":
-                    cruiseSpeed = 98;
+                    cruiseSpeed = cruiseSpeed;
                     cruiseMode = true;
                     circumnav = false;
                     stopCruiseWhenOutOfGrav = true;
@@ -288,6 +288,7 @@ namespace IngameScript
         {
             forwardThrusters.Clear();
 			brakingThrusters.Clear();
+            upThrusters.Clear();
 
 			var allThrusters = new List<IMyThrust>();
 			GridTerminalSystem.GetBlocksOfType(allThrusters, thruster =>
@@ -296,13 +297,17 @@ namespace IngameScript
 
 			foreach (var thruster in allThrusters)
 			{
-				// Thrusters pushing ship forward
+				// Thrusters that push the ship forward
 				if (thruster.Orientation.Forward == Base6Directions.Direction.Backward)
 					forwardThrusters.Add(thruster);
 
-				// Thrusters that brake forward motion
-				else if (thruster.Orientation.Forward == Base6Directions.Direction.Forward)
+                // Thrusters that push the ship backward
+                else if (thruster.Orientation.Forward == Base6Directions.Direction.Forward)
 					brakingThrusters.Add(thruster);
+
+                // Thrusters that push the ship upwards
+                else if (thruster.Orientation.Forward == Base6Directions.Direction.Down)
+                    upThrusters.Add(thruster);
 			}
 
 
