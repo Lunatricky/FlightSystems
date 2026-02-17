@@ -20,13 +20,29 @@ namespace IngameScript
          */
 
         // Descent()
+        int tickCount;
         double alt;
-        double vSpeed;
-        double maxDecel;
+        double effectiveAlt;
         double stopDist;
         double mass;
+        double vSpeed;
+        double vEffectiveSpeed;
+        double maxDecel;
         double gravity;
+        double oldGravity;
+        double gravityRatio = 1;
         Vector3D naturalGrav;
+        double timeToImpact;
+        double timeToStop;
+
+        double thrust = 0;
+
+        double ctrlGridHight;
+        double gearGridHight;
+        double gridHight;
+
+        // safety buffer (VERY important)
+        const double SAFETY = 1.2;
 
 
         //======================================
@@ -38,8 +54,8 @@ namespace IngameScript
         {
             Test,
             Idle,
-            Align,
-            Descent,
+            AlignSuicideBurn,
+            SuicideBurn,
             Cushion,
             Lock
         }
@@ -52,10 +68,6 @@ namespace IngameScript
 
         IMyShipController ctrl;
 
-        const double HORIZONTAL_LIMIT = 1.2;
-        const double CUSHION_ALT = 20;
-        const double LOCK_ALT = 5;
-
         public Program()
         {
             Reload();
@@ -66,36 +78,34 @@ namespace IngameScript
         {
             UpdatePhysics();
 
-            double thrust = 0;
-
-            Vector3D up = Vector3D.Normalize(naturalGrav);
-
-            foreach (var t in upThrusters)
-            {
-                double dot = t.WorldMatrix.Backward.Dot(up);
-
-                if (dot > 0.7)
-                    thrust += t.MaxEffectiveThrust * dot;
-            }
-
-            maxDecel = (thrust / mass) - gravity;
-
-            stopDist = Math.Abs((vSpeed * vSpeed) / (2 * maxDecel));
 
             Echo("state: " + state);
             Echo("controller: " + ctrl.CustomName);
             Echo($"alt: {alt:F2}");
             Echo($"stopDist: {stopDist:F2}");
-            Echo($"vSpeed: {vSpeed:F2}");
             Echo($"gravity: {gravity:F2}");
             Echo($"maxDecel: {maxDecel:F2}");
+            Echo($"mass: {mass:F2}");
+            Echo($"thrust: {thrust:F2}");
+            Echo($"vSpeed: {vSpeed:F2}");
+            Echo($"timeToImpact: {timeToImpact:F2}");
+            Echo($"timeToStop: {timeToStop:F2}");
+            Echo($"gridHight: {gridHight:F2}");
+
+            tickCount++;
+            if (tickCount % 10 == 0)
+            {
+                gravityRatio = gravity / oldGravity;
+                oldGravity = gravity;
+            }
 
             Echo("\ngyros: " + gyros.Count);
             Echo("upThrusters: " + upThrusters.Count);
             Echo("gears: " + gears.Count);
 
+            if (state == State.SuicideBurn && maxDecel < 1) Abort();
             if (arg == "reload") Reload();
-            if (arg == "land") StartLanding();
+            if (arg == "sburn") StartSuicideBurn();
             if (arg == "abort") Abort();
             if (arg == "test") state = State.Test;
 
@@ -106,12 +116,16 @@ namespace IngameScript
                 case State.Idle:
                     return;
 
-                case State.Align:
-                    if (AlignToGravity()) state = State.Descent;
+                case State.AlignSuicideBurn:
+                    if (AlignToGravity()) state = State.SuicideBurn;
                     break;
 
-                case State.Descent:
-                    Descent();
+                case State.SuicideBurn:
+                    SuicideBurn();
+                    break;
+
+                case State.Cushion:
+                    Cushion();
                     break;
 
                 case State.Lock:
@@ -131,10 +145,23 @@ namespace IngameScript
         void UpdatePhysics()
         {
             naturalGrav = ctrl.GetNaturalGravity();
-            gravity = naturalGrav.Length();
             mass = ctrl.CalculateShipMass().PhysicalMass;
+            gravity = naturalGrav.Length();
+            maxDecel = GetMaxDecel();
+
+
             ctrl.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
-            vSpeed = -ctrl.GetShipVelocities().LinearVelocity.Dot(Vector3D.Normalize(naturalGrav));
+
+            vSpeed = GetVerticalSpeed();
+            vEffectiveSpeed = vSpeed + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
+
+            stopDist = Math.Abs((vEffectiveSpeed * vEffectiveSpeed) / (2 * maxDecel));
+
+            effectiveAlt = alt - vEffectiveSpeed * Runtime.TimeSinceLastRun.TotalSeconds - gridHight;
+            effectiveAlt = effectiveAlt / gravityRatio;
+
+            timeToImpact = alt / Math.Abs(vEffectiveSpeed);
+            timeToStop = Math.Abs(vSpeed) / maxDecel;
         }
 
         void Reload()
@@ -161,18 +188,32 @@ namespace IngameScript
 
             ctrl = ctrls.Find(c => c.IsMainCockpit) ?? ctrls[0];
 
+            Vector3D gravityDir = Vector3D.Normalize(ctrl.GetNaturalGravity());
+
+            // world positions
+            Vector3D ctrlPos = ctrl.GetPosition();
+            Vector3D gearPos = gears[0].GetPosition();
+
+            // project onto gravity vector
+            ctrlGridHight = ctrlPos.Dot(gravityDir);
+            gearGridHight = gearPos.Dot(gravityDir);
+
+            // height difference along gravity
+            gridHight = Math.Abs(ctrlGridHight - gearGridHight);
+
             KillGyroOverride();
             KillThrustOverride();
         }
 
-        void StartLanding()
+        void StartSuicideBurn()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            state = State.Align;
+            state = State.AlignSuicideBurn;
         }
 
         void Abort()
         {
+            tickCount = 0;
             KillGyroOverride();
             KillThrustOverride();
 
@@ -258,22 +299,22 @@ namespace IngameScript
         /// SAFE DESCENT
         ////////////////////////////////////////////////////////
 
-        void Descent()
+        void SuicideBurn()
         {
             ctrl.DampenersOverride = false;
             AlignToGravity();
+            if(effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight))
+            {
+                state = State.Cushion;
+            }
+        }
 
-            if (alt > Math.Abs(stopDist + CUSHION_ALT))
+        void Cushion()
+        {
+            MatchVerticalSpeed(-10);
+
+            if (effectiveAlt < 0)
             {
-                MatchVerticalSpeed(-105);
-            }
-            else if (alt > Math.Abs(stopDist + LOCK_ALT))
-            {
-                MatchVerticalSpeed(-10);
-            }
-            else
-            {
-                ctrl.DampenersOverride = true;
                 state = State.Lock;
             }
         }
@@ -281,7 +322,8 @@ namespace IngameScript
         void TryLock()
         {
             AlignToGravity();
-            MatchVerticalSpeed(-1);
+            MatchVerticalSpeed(-3);
+            ctrl.DampenersOverride = true;
 
             foreach (var g in gears)
                 g.Lock();
@@ -304,7 +346,7 @@ namespace IngameScript
 
         double GetMaxDecel()
         {
-            double thrust = 0;
+            thrust = 0;
 
             Vector3D up = -Vector3D.Normalize(naturalGrav);
 

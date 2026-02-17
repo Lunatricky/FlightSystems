@@ -22,9 +22,8 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        int tickCount;
-
         // Descent()
+        int tickCount;
         double alt;
         double effectiveAlt;
         double stopDist;
@@ -40,6 +39,7 @@ namespace IngameScript
         double timeToImpact;
         double timeToStop;
 
+        double thrust = 0;
 
         double ctrlGridHight;
         double gearGridHight;
@@ -91,6 +91,8 @@ namespace IngameScript
             Echo($"effectiveAlt: {effectiveAlt:F2}");
             Echo($"stopDist: {stopDist:F2}");
             Echo($"maxDecel: {maxDecel:F2}");
+            Echo($"mass: {mass:F2}");
+            Echo($"thrust: {thrust:F2}");
             tickCount++;
             if (tickCount % 10 == 0)
             {
@@ -146,22 +148,21 @@ namespace IngameScript
         {
             naturalGrav = ctrl.GetNaturalGravity();
             gravity = naturalGrav.Length();
-            maxDecel = GetMaxDecel();
 
             mass = ctrl.CalculateShipMass().PhysicalMass;
+            maxDecel = GetMaxDecel();
 
             ctrl.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
 
             vSpeed = GetVerticalSpeed();
             vEffectiveSpeed = vSpeed + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
 
-            timeToImpact = alt / Math.Abs(vEffectiveSpeed);
-            timeToStop = SAFETY * Math.Abs(vEffectiveSpeed) / maxDecel;
-
             effectiveAlt = alt - vEffectiveSpeed * Runtime.TimeSinceLastRun.TotalSeconds - gridHight;
             effectiveAlt = effectiveAlt / gravityRatio;
-            stopDist = Math.Abs((vEffectiveSpeed * vEffectiveSpeed) / (2 * maxDecel));
 
+            timeToImpact = effectiveAlt / Math.Abs(vEffectiveSpeed);
+            timeToStop = Math.Abs(vEffectiveSpeed) / maxDecel;
+            stopDist = Math.Abs((vEffectiveSpeed * vEffectiveSpeed) / (2 * maxDecel));
 
             targetSpeed = -MathHelper.Clamp(alt * 0.05, 5, 110);
         }
@@ -216,6 +217,7 @@ namespace IngameScript
 
         void Abort()
         {
+            tickCount = 0;
             KillGyroOverride();
             KillThrustOverride();
 
@@ -355,7 +357,7 @@ namespace IngameScript
 
         double GetMaxDecel()
         {
-            double thrust = 0;
+            thrust = 0;
 
             Vector3D up = -Vector3D.Normalize(naturalGrav);
 
