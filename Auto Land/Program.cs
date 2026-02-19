@@ -54,10 +54,10 @@ namespace IngameScript
         {
             Test,
             Idle,
-            AlignSuicideBurn,
+            Align,
             SuicideBurn,
             Cushion,
-            Lock
+            LockGear
         }
 
         State state = State.Idle;
@@ -116,7 +116,7 @@ namespace IngameScript
                 case State.Idle:
                     return;
 
-                case State.AlignSuicideBurn:
+                case State.Align:
                     if (AlignToGravity()) state = State.SuicideBurn;
                     break;
 
@@ -128,7 +128,7 @@ namespace IngameScript
                     Cushion();
                     break;
 
-                case State.Lock:
+                case State.LockGear:
                     TryLock();
                     break;
 
@@ -208,7 +208,7 @@ namespace IngameScript
         void StartSuicideBurn()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            state = State.AlignSuicideBurn;
+            state = State.Align;
         }
 
         void Abort()
@@ -251,7 +251,7 @@ namespace IngameScript
             Vector3D axis = shipUp.Cross(desiredUp);
             double angle = axis.Length();
 
-            if (angle < 0.005)
+            if (angle < 0.01 && !HasSpeed())
             {
                 foreach (var g in gyros)
                     g.GyroOverride = false;
@@ -295,15 +295,85 @@ namespace IngameScript
             return false;
         }
 
+        /// <summary>
+        /// Aligns ship's Up mostly to anti-gravity, with optional forward/down pitch tilt for glide.
+        /// Returns true when alignment is good enough.
+        /// </summary>
+        /// <param name="tiltAngleDeg">Desired pitch-down angle in degrees (0 = perfect vertical, 5–12 typical for glide)</param>
+        /// <param name="toleranceDeg">When angle error is below this → consider aligned (default 1.5°)</param>
+        bool AlignWithGlideTilt(double tiltAngleDeg = 0, double toleranceDeg = 1.5)
+        {
+            if (naturalGrav.LengthSquared() < 0.01)
+                return false;
+
+            Vector3D gravNorm = Vector3D.Normalize(naturalGrav);          // points down
+            Vector3D desiredUp = -gravNorm;                                // ship up should oppose gravity
+
+            // Add forward/down tilt for glide (positive tiltAngleDeg = nose down)
+            if (Math.Abs(tiltAngleDeg) > 0.01)
+            {
+                Vector3D shipForward = ctrl.WorldMatrix.Forward;
+                // Rotate desired up vector around local right axis (pitch down)
+                MatrixD pitchRot = MatrixD.CreateFromAxisAngle(ctrl.WorldMatrix.Right, MathHelper.ToRadians(tiltAngleDeg));
+                desiredUp = Vector3D.TransformNormal(desiredUp, pitchRot);
+                desiredUp = Vector3D.Normalize(desiredUp);
+            }
+
+            Vector3D shipUp = ctrl.WorldMatrix.Up;
+            Vector3D axis = Vector3D.Cross(shipUp, desiredUp);
+            double angleRad = axis.Length();
+
+            // Early exit if already well aligned and not moving much
+            if (angleRad < MathHelper.ToRadians(toleranceDeg) && !HasSpeed())
+            {
+                foreach (var g in gyros) g.GyroOverride = false;
+                return true;
+            }
+
+            if (angleRad > 1e-6) axis /= angleRad;   // normalize rotation axis
+
+            Vector3D angVel = ctrl.GetShipVelocities().AngularVelocity;
+
+            // ────────────────────────────────────────────────
+            // PD + rate limit (your existing logic – very good)
+            // ────────────────────────────────────────────────
+            const double MAX_ROT_RATE = 0.6;     // rad/s
+            const double RESPONSE = 3.0;     // lower = smoother
+
+            Vector3D desiredRate = axis * Math.Min(angleRad * RESPONSE, MAX_ROT_RATE);
+            Vector3D correction = desiredRate - angVel;
+
+            foreach (var g in gyros)
+            {
+                if (!g.IsFunctional) continue;
+
+                // Local correction in gyro frame
+                MatrixD gyroToLocal = MatrixD.Transpose(g.WorldMatrix);
+                Vector3D localCorr = Vector3D.TransformNormal(correction, gyroToLocal);
+
+                g.GyroOverride = true;
+                g.Pitch = (float)MathHelper.Clamp(localCorr.X / 2, -3, 3);
+                g.Yaw = (float)MathHelper.Clamp(localCorr.Y / 2, -3, 3);
+                g.Roll = (float)MathHelper.Clamp(localCorr.Z / 2, -3, 3);
+            }
+
+            return false;
+        }
+
+        bool HasSpeed(double threshold = 1)
+        {
+            return ctrl.GetShipVelocities().LinearVelocity.LengthSquared() >= threshold;
+        }
+
         ////////////////////////////////////////////////////////
         /// SAFE DESCENT
         ////////////////////////////////////////////////////////
 
         void SuicideBurn()
         {
+            if (!AlignToGravity()) return;
             ctrl.DampenersOverride = false;
-            AlignToGravity();
-            if(effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight))
+            if (effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight))
             {
                 state = State.Cushion;
             }
@@ -315,7 +385,7 @@ namespace IngameScript
 
             if (effectiveAlt < 0)
             {
-                state = State.Lock;
+                state = State.LockGear;
             }
         }
 
