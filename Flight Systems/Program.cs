@@ -38,7 +38,7 @@ namespace IngameScript
         double stopDist;
         double mass;
         double cruiseSpeed;
-        double vSpeed;
+        double gravAlignedVelocity;
         double vEffectiveSpeed;
         double maxDecel;
         double gravity;
@@ -52,6 +52,10 @@ namespace IngameScript
         double ctrlGridHight;
         double gearGridHight;
         double gridHight;
+
+        double forwardVelocity; 
+        double rightVelocity; 
+        double upVelocity;
 
         // safety buffer (VERY important)
         const double SAFETY = 1.2;
@@ -68,9 +72,9 @@ namespace IngameScript
         double MinSpeed = 20; // m/s
         double MaxSpeed = 99; // m/s
 
-        readonly List<IMyThrust> brakingThrusters = new List<IMyThrust>();
+        readonly List<IMyThrust> breakingThrusters = new List<IMyThrust>();
         readonly List<IMyThrust> forwardThrusters = new List<IMyThrust>();
-        readonly List<IMyThrust> upThrusters = new List<IMyThrust>();
+        readonly List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
 		IMyShipController controller;
 
@@ -166,28 +170,7 @@ namespace IngameScript
             }
 
             // Empty
-            public static CommandParam Empty => new CommandParam((string)null);
-
-            // ────────────────────────────────────────────────
-            // Single unified "TryGet" style — extensible
-            // ────────────────────────────────────────────────
-            public bool TryGetNumber(out double value)
-            {
-                value = Number;
-                return Type == ParamType.Number;
-            }
-
-            public bool TryGetText(out string value)
-            {
-                value = Text;
-                return Type == ParamType.Text;
-            }
-
-            public bool TryGetSuicideState(out SuicideBurnStateEnum value)
-            {
-                value = SuicideBurnState;
-                return Type == ParamType.SuicideBurnState;
-            }
+            public static CommandParam Empty => new CommandParam(null);
 
             // Optional: fallback helpers (still clean)
             public double GetNumberOr(double fallback) => Type == ParamType.Number ? Number : fallback;
@@ -208,46 +191,21 @@ namespace IngameScript
             DockToggle(anyConnected);
         }
 
-        string arg = "";
         Command command = Command.Empty;
 
         public void Main(string argument, UpdateType updateSource)
         {
             if (!string.IsNullOrEmpty(argument)) command = ParseCommand(argument);
 
-            if (!isDockMode) UpdatePhysics();
+            StringBuilder scriptInfo = new StringBuilder();
 
-            arg = (argument != null && argument != "" ? argument : arg);
-            Echo("state: " + command.State);
-            Echo("SuicideBurnState: " + command.Param.SuicideBurnState);
-            Echo($"stopDist: {(SAFETY * (Math.Abs(stopDist) + 2 * gridHight)):F2}");
-            Echo($"effectiveAlt < stopDist: {(effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight)):F2}");
-            Echo($"alt: {alt:F2}");
-            Echo($"stopDist: {stopDist:F2}");
-            Echo($"gravity: {gravity:F2}");
-            Echo($"maxDecel: {maxDecel:F2}");
-            Echo($"mass: {mass:F2}");
-            Echo($"thrust: {thrust:F2}");
-            Echo($"cruiseSpeed: {cruiseSpeed:F2}");
-            Echo($"vSpeed: {vSpeed:F2}");
-            Echo($"timeToImpact: {timeToImpact:F2}");
-            Echo($"timeToStop: {timeToStop:F2}");
-
-            tickCount++;
-            if (tickCount % 10 == 0)
-            {
-                gravityRatio = gravity / oldGravity;
-                oldGravity = gravity;
-            }
-
-            Echo("\ngyros: " + gyros.Count);
-            Echo("upThrusters: " + upThrusters.Count);
-            Echo("forwardThrusters: " + forwardThrusters.Count);
-            Echo("brakingThrusters: " + brakingThrusters.Count);
-            Echo("gears: " + gears.Count);
+            ScriptInfoHeader(scriptInfo);
 
             if (!isDockMode)
             {
+                UpdatePhysics();
+                ScriptInfoPhysics(scriptInfo);
+
                 bool anyConnected = IsAnyConnectorConnected();
                 isDockMode = anyConnected;
 
@@ -257,6 +215,10 @@ namespace IngameScript
                     lastConnectedState = anyConnected;
                 }
             }
+            ScriptInfoBlocks(scriptInfo);
+
+            Echo(scriptInfo.ToString());
+            Me.GetSurface(0).WriteText(scriptInfo.ToString());
 
             switch (command.State)
             {
@@ -292,10 +254,7 @@ namespace IngameScript
                     break;
             }
 
-            string stringInfo = ScriptInfo();
-
-            Echo(stringInfo);
-            Me.GetSurface(0).WriteText(stringInfo);
+            if (isDockMode) return;
 
             // Stop cruise control when leaves atmosphere?
 
@@ -311,10 +270,8 @@ namespace IngameScript
 
             // Info LCDs
 
-            if (controller != null && lcds.Count != 0)
-            {
-                WriteInfo();
-            }
+            if (lcds.Count > 0) WriteInfo();
+            if (lcds.Count > 1) WriteInfo2();
         }
 
         private void DockToggle(bool anyConnected)
@@ -360,21 +317,63 @@ namespace IngameScript
             return new Command(cmd, param);
         }
 
-        public string ScriptInfo()
+        public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
         {
-            StringBuilder scriptInfo = new StringBuilder();
             scriptInfo.Clear();
-            scriptInfo.AppendLine("Flight Systems");
             scriptInfo.AppendLine(gridName);
             scriptInfo.AppendLine(new string('-', 28));
-            scriptInfo.AppendLine("Dock Mode: " + isDockMode);
-            scriptInfo.AppendLine("Cruise Mode: " + cruiseToggle);
-            scriptInfo.AppendLine("CircumNavigate Mode: " + circumnavToggle);
+            scriptInfo.AppendLine("State: " + command.State);
+
+            if (command.Param.Text != "")
+                    scriptInfo.AppendLine("Param: " + command.Param.Text);
+            if (command.Param.Number != 0)
+                    scriptInfo.AppendLine("Param: " + command.Param.Number);
+            if (command.Param.SuicideBurnState != SuicideBurnStateEnum.Idle)
+                    scriptInfo.AppendLine("Param: " + command.Param.SuicideBurnState);
+
+            return scriptInfo;
+        }
+
+        public StringBuilder ScriptInfoPhysics(StringBuilder scriptInfo)
+        {
+            scriptInfo.AppendLine();
+
+            if (gravity > 0)
+            {
+                scriptInfo.AppendLine($"Alt: {alt:F2} m");
+                scriptInfo.AppendLine($"Grav aligned velocity: {gravAlignedVelocity:F2} m/s");
+            }
+
+            scriptInfo.AppendLine($"Longitudinal velocity: {forwardVelocity:F2} m/s");
+            scriptInfo.AppendLine($"Lateral velocity: {rightVelocity:F2} m/s");
+            scriptInfo.AppendLine($"Vertical velocity: {upVelocity:F2} m/s");
+
+            switch (command.State)
+            {
+                case MainStateEnum.SBurn: 
+                case MainStateEnum.GEntry:
+                    scriptInfo.AppendLine($"timeToImpact: {timeToImpact:F2} s");
+                    scriptInfo.AppendLine($"gravity: {gravity:F2} m²/s");
+                    scriptInfo.AppendLine($"Max upward accel: {maxDecel:F2} m²/s");
+                    break;
+            }
+
+            return scriptInfo;
+        }
+
+        public StringBuilder ScriptInfoBlocks(StringBuilder scriptInfo)
+        {
+            scriptInfo.AppendLine();
+            scriptInfo.AppendLine("Controller: " + controller.CustomName);
             scriptInfo.AppendLine("LCDs: " + lcds.Count);
             scriptInfo.AppendLine("Batteries: " + batteries.Count + " | Tanks: " + tanks.Count);
+            scriptInfo.AppendLine("Forward thruster: " + forwardThrusters.Count);
+            scriptInfo.AppendLine("Breaking thruster: " + breakingThrusters.Count);
+            scriptInfo.AppendLine("Upward thruster: " + upwardThrusters.Count);
+            scriptInfo.AppendLine("Gears: " + gears.Count);
             scriptInfo.AppendLine("Dock Mode blocks: " + controlledBlocks.Count);
 
-            return scriptInfo.ToString();
+            return scriptInfo;
         }
 
         public string CustomDataInfo()
@@ -443,8 +442,17 @@ namespace IngameScript
                     Abort();
                     break;
                 case "orbit":
-                    command.Param.Text = "on";
-                    stopCruiseWhenOutOfGrav = true;
+                    cruiseToggle = !cruiseToggle;
+                    if (cruiseToggle)
+                    {
+                        command.Param.Text = "on";
+                        stopCruiseWhenOutOfGrav = true;
+                    }
+                    else
+                    {
+                        command.Param.Text = "off";
+                        stopCruiseWhenOutOfGrav = false;
+                    }
                     CruiseControl(cruiseSpeed);
                     break;
             }
@@ -477,6 +485,7 @@ namespace IngameScript
                     break;
 
                 case SuicideBurnStateEnum.Align:
+                    SoftAbort();
                     if (AlignToGravity()) command.Param.SuicideBurnState = SuicideBurnStateEnum.Drop;
                     break;
 
@@ -517,12 +526,11 @@ namespace IngameScript
             );
         }
 
-        // Cruise Control
         void CacheBlocksCC()
         {
             forwardThrusters.Clear();
-			brakingThrusters.Clear();
-            upThrusters.Clear();
+			breakingThrusters.Clear();
+            upwardThrusters.Clear();
 
 			var allThrusters = new List<IMyThrust>();
 			GridTerminalSystem.GetBlocksOfType(allThrusters, thruster =>
@@ -537,11 +545,11 @@ namespace IngameScript
 
                 // Thrusters that push the ship backward
                 else if (thruster.Orientation.Forward == Base6Directions.Direction.Forward)
-					brakingThrusters.Add(thruster);
+					breakingThrusters.Add(thruster);
 
                 // Thrusters that push the ship upwards
                 else if (thruster.Orientation.Forward == Base6Directions.Direction.Up)
-                    upThrusters.Add(thruster);
+                    upwardThrusters.Add(thruster);
 			}
 
 
@@ -555,7 +563,6 @@ namespace IngameScript
             controller = controllers.Count > 0 ? controllers[0] : null;
         }
 
-        //CircumNavigate
         void CacheBlocksLand()
         {
             gyros.Clear();
@@ -578,20 +585,11 @@ namespace IngameScript
             gridHight = Math.Abs(ctrlGridHight - gearGridHight);
         }
 
-        private double ForwardSpeed()
-        {
-            Vector3D velocity = controller.GetShipVelocities().LinearVelocity;
-            Vector3D forward = controller.WorldMatrix.Forward;
-
-            double speed = Vector3D.Dot(velocity, forward);
-            return speed;
-        }
-
         void GlidingEntry(CommandParam param)
         {
             double targeAltitude = param.Number;
             CruiseControl(MaxSpeed);
-            if (alt < targeAltitude)
+            if (effectiveAlt < targeAltitude)
             {
 
             }
@@ -600,7 +598,7 @@ namespace IngameScript
 
         void ManualLimiter()
         {
-            bool allowThrust = ForwardSpeed() < MaxSpeed;
+            bool allowThrust = forwardVelocity < MaxSpeed;
 
             // Normal forward thrust behavior
             foreach (var forwardThruster in forwardThrusters)
@@ -613,7 +611,7 @@ namespace IngameScript
 
         void CruiseControl(double cruiseSpeed)
         {
-            double error = cruiseSpeed - ForwardSpeed();
+            double error = cruiseSpeed - forwardVelocity;
 
 			if (Math.Abs(error) < SPEED_TOLERANCE)
 				return;
@@ -626,7 +624,7 @@ namespace IngameScript
 			currentOverride = MathHelper.Clamp(currentOverride, 0f, 1f);
 
 			// Disable braking thrusters so they don't fight cruise
-			foreach (var brakingThruster in brakingThrusters)
+			foreach (var brakingThruster in breakingThrusters)
 				brakingThruster.Enabled = false;
 
 			// Control forward thrust smoothly
@@ -879,8 +877,6 @@ namespace IngameScript
 
         void WriteInfo()
         {
-            var stringBuilder = new StringBuilder();
-
             // Altitude
             string seaAltText = "No g";
             string groundAltText = "No g";
@@ -955,6 +951,7 @@ namespace IngameScript
             }
 
             // Output
+            StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.AppendLine(gridName);
             stringBuilder.AppendLine(new string('-', 28));
             
@@ -972,11 +969,40 @@ namespace IngameScript
             
             string text = stringBuilder.ToString();
 
-            foreach (var lcd in lcds)
-                lcd.WriteText(text);
+            lcds[0].WriteText(stringBuilder.ToString());
         }
 
-        string FormatTime(double time)
+        void WriteInfo2()
+        {
+            StringBuilder stringBuilder = new StringBuilder();
+
+            ScriptInfoHeader(stringBuilder);
+
+            if (gravity > 0)
+            {
+                stringBuilder.AppendLine($"Climb rate: {gravAlignedVelocity:F2}");
+            }
+
+            stringBuilder.AppendLine($"Longitudinal velocity: {forwardVelocity:F2}");
+            stringBuilder.AppendLine($"Lateral velocity: {rightVelocity:F2}");
+            stringBuilder.AppendLine($"Vertical velocity: {upVelocity:F2}");
+
+            switch (command.State)
+            {
+                case MainStateEnum.SBurn:
+                case MainStateEnum.GEntry:
+                    stringBuilder.AppendLine($"timeToImpact: {timeToImpact:F2}");
+                    stringBuilder.AppendLine($"gravity: {gravity:F2}");
+                    stringBuilder.AppendLine($"Max upward accel: {maxDecel:F2}");
+                    break;
+            }
+
+            stringBuilder.AppendLine();
+            lcds[1].WriteText(stringBuilder.ToString());
+        }
+
+
+            string FormatTime(double time)
         {
             if (double.IsInfinity(time) || time < 0)
                 return "--";
@@ -1004,14 +1030,22 @@ namespace IngameScript
             gravity = naturalGrav.Length();
             maxDecel = GetMaxDecel();
 
+            GetShipAxisVelocities();
+
+            tickCount++;
+            if (tickCount % 10 == 0)
+            {
+                gravityRatio = gravity / oldGravity;
+                oldGravity = gravity;
+            }
 
             controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
 
             var paramSpeed = command.Param.Number;
             cruiseSpeed = (paramSpeed == 0 ? MaxSpeed : MathHelper.Clamp(command.Param.Number, MinSpeed, MaxSpeed));
 
-            vSpeed = GetVerticalSpeed();
-            vEffectiveSpeed = vSpeed + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
+            gravAlignedVelocity = GetGravityAlignedVerticalVelocity();
+            vEffectiveSpeed = gravAlignedVelocity + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
 
             stopDist = Math.Abs((vEffectiveSpeed * vEffectiveSpeed) / (2 * maxDecel));
 
@@ -1019,7 +1053,7 @@ namespace IngameScript
             effectiveAlt = effectiveAlt / gravityRatio;
 
             timeToImpact = alt / Math.Abs(vEffectiveSpeed);
-            timeToStop = Math.Abs(vSpeed) / maxDecel;
+            timeToStop = Math.Abs(gravAlignedVelocity) / maxDecel;
         }
 
         void StartSuicideBurn()
@@ -1038,6 +1072,15 @@ namespace IngameScript
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
             tickCount = 0;
+            ResetGyros();
+            ResetThrusters();
+        }
+
+        void SoftAbort()
+        {
+            controller.DampenersOverride = true;
+            stopCruiseWhenOutOfGrav = false;
+
             ResetGyros();
             ResetThrusters();
         }
@@ -1061,13 +1104,13 @@ namespace IngameScript
                 forwardThruster.Enabled = true;
             }
 
-            foreach (var brakingThruster in brakingThrusters)
+            foreach (var brakingThruster in breakingThrusters)
             {
                 brakingThruster.ThrustOverridePercentage = 0f;
                 brakingThruster.Enabled = true;
             }
 
-            foreach (var upThruster in upThrusters)
+            foreach (var upThruster in upwardThrusters)
             {
                 upThruster.ThrustOverridePercentage = 0f;
                 upThruster.Enabled = true;
@@ -1084,7 +1127,7 @@ namespace IngameScript
         private void KillThrustOverride()
         {
 
-            foreach (var t in upThrusters)
+            foreach (var t in upwardThrusters)
                 t.ThrustOverridePercentage = 0;
         }
 
@@ -1231,7 +1274,7 @@ namespace IngameScript
         {
             MatchVerticalSpeed(-10);
 
-            return effectiveAlt < 0;
+            return effectiveAlt < 10 + gridHight;
         }
 
         bool TryLock()
@@ -1250,12 +1293,22 @@ namespace IngameScript
         /// PHYSICS HELPERS
         ////////////////////////////////////////////////////////
 
-        double GetVerticalSpeed()
+        double GetGravityAlignedVerticalVelocity()
         {
             Vector3D gNorm = Vector3D.Normalize(naturalGrav);
             
             return -controller.GetShipVelocities()
                 .LinearVelocity.Dot(gNorm);
+        }
+
+        void GetShipAxisVelocities()
+        {
+            Vector3D velocity = controller.GetShipVelocities().LinearVelocity;
+            MatrixD wm = controller.WorldMatrix;
+
+            forwardVelocity = Vector3D.Dot(velocity, wm.Forward);
+            rightVelocity = Vector3D.Dot(velocity, wm.Right);
+            upVelocity = Vector3D.Dot(velocity, wm.Up);
         }
 
         double GetMaxDecel()
@@ -1264,7 +1317,7 @@ namespace IngameScript
 
             Vector3D up = -Vector3D.Normalize(naturalGrav);
 
-            foreach (var t in upThrusters)
+            foreach (var t in upwardThrusters)
             {
                 double dot = t.WorldMatrix.Backward.Dot(up);
 
@@ -1279,12 +1332,13 @@ namespace IngameScript
         {
             double hover = (mass * gravity) / SumThrust();
 
-            double current = GetVerticalSpeed();
+            double current = GetGravityAlignedVerticalVelocity();
             double error = target - current;
+            
+            double minThrustOverride = (gravAlignedVelocity < 10 ? 0.001 : 0);
+            double output = MathHelper.Clamp(hover + error * 0.5, 0.01, 1);
 
-            double output = MathHelper.Clamp(hover + error * 0.5, 0, 1);
-
-            foreach (var t in upThrusters)
+            foreach (var t in upwardThrusters)
                 t.ThrustOverridePercentage = (float)output;
         }
 
@@ -1292,7 +1346,7 @@ namespace IngameScript
         {
             double total = 0;
 
-            foreach (var t in upThrusters)
+            foreach (var t in upwardThrusters)
                 total += t.MaxEffectiveThrust;
 
             return total;
