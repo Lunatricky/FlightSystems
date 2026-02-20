@@ -246,23 +246,16 @@ namespace IngameScript
             Echo("brakingThrusters: " + brakingThrusters.Count);
             Echo("gears: " + gears.Count);
 
-            if (isDockMode)
+            if (!isDockMode)
             {
-                return;
-            }
+                bool anyConnected = IsAnyConnectorConnected();
+                isDockMode = anyConnected;
 
-            bool anyConnected = IsAnyConnectorConnected();
-            isDockMode = anyConnected;
-
-            if (anyConnected != lastConnectedState)
-            {
-                DockToggle(anyConnected);
-                lastConnectedState = anyConnected;
-            }
-
-            if (isDockMode)
-            {
-                return;
+                if (anyConnected != lastConnectedState)
+                {
+                    DockToggle(anyConnected);
+                    lastConnectedState = anyConnected;
+                }
             }
 
             switch (command.State)
@@ -283,6 +276,11 @@ namespace IngameScript
                     CircumNavigateStateSwitch(command.Param);
                     break;
                 case MainStateEnum.SBurn: // Suicide Burn
+                    if (gravity == 0)
+                    {
+                        Abort();
+                        return;
+                    }
                     if (command.Param.SuicideBurnState == SuicideBurnStateEnum.Idle) StartSuicideBurn();
                     SuicideBurnStateSwitch(command.Param);
                     break;
@@ -416,11 +414,13 @@ namespace IngameScript
                     break;
                 case "on":
                     isDockMode = true;
+                    command = Command.Empty;
                     DockToggle(isDockMode);
                     break;
 
                 case "off":
                     isDockMode = false;
+                    command = Command.Empty;
                     DockToggle(isDockMode);
                     break;
             }
@@ -489,7 +489,7 @@ namespace IngameScript
                     break;
 
                 case SuicideBurnStateEnum.LockGear:
-                    if (TryLock()) Abort(); // finished
+                    if (TryLock()) Abort();
                     break;
             }
         }
