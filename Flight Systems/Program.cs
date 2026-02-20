@@ -91,6 +91,7 @@ namespace IngameScript
         const string OVERRIDE_BLOCKS = "[FS_override]";
         const string IGNORE_TAG = "[FS_ignore]";
 
+        readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         readonly HashSet<long> overrideBlocks = new HashSet<long>();
         readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
@@ -123,7 +124,7 @@ namespace IngameScript
 
             public Command(MainStateEnum cmd, CommandParam p)
             {
-                State = Enum.IsDefined(typeof(MainStateEnum), cmd) ? cmd : MainStateEnum.Idle;
+                if (Enum.IsDefined(typeof(MainStateEnum), cmd)) State = cmd;
                 Param = p;
             }
 
@@ -201,26 +202,26 @@ namespace IngameScript
             Reload();
 
             Me.CustomData = CustomDataInfo();
+
+            bool anyConnected = IsAnyConnectorConnected();
+            isDockMode = anyConnected;
+            DockToggle(anyConnected);
         }
 
         string arg = "";
         Command command = Command.Empty;
-        CommandParam param;
 
         public void Main(string argument, UpdateType updateSource)
         {
-
             if (!string.IsNullOrEmpty(argument)) command = ParseCommand(argument);
-            param = command.Param;
 
             if (!isDockMode) UpdatePhysics();
-
-            bool anyConnected = IsAnyConnectorConnected();
-            isDockMode = anyConnected;
 
             arg = (argument != null && argument != "" ? argument : arg);
             Echo("state: " + command.State);
             Echo("SuicideBurnState: " + command.Param.SuicideBurnState);
+            Echo($"stopDist: {(SAFETY * (Math.Abs(stopDist) + 2 * gridHight)):F2}");
+            Echo($"effectiveAlt < stopDist: {(effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight)):F2}");
             Echo($"alt: {alt:F2}");
             Echo($"stopDist: {stopDist:F2}");
             Echo($"gravity: {gravity:F2}");
@@ -241,17 +242,28 @@ namespace IngameScript
 
             Echo("\ngyros: " + gyros.Count);
             Echo("upThrusters: " + upThrusters.Count);
+            Echo("forwardThrusters: " + forwardThrusters.Count);
+            Echo("brakingThrusters: " + brakingThrusters.Count);
             Echo("gears: " + gears.Count);
+
+            if (isDockMode)
+            {
+                return;
+            }
+
+            bool anyConnected = IsAnyConnectorConnected();
+            isDockMode = anyConnected;
 
             if (anyConnected != lastConnectedState)
             {
-                SetBlocks(!anyConnected);
-                StockpileTanks(anyConnected);
-                ChargeBatteries(anyConnected);
+                DockToggle(anyConnected);
                 lastConnectedState = anyConnected;
             }
 
-            if (isDockMode) return;
+            if (isDockMode)
+            {
+                return;
+            }
 
             switch (command.State)
             {
@@ -262,23 +274,23 @@ namespace IngameScript
                     Abort();
                     break;
                 case MainStateEnum.Dock:
-                    DockStateSwitch(param);
-                    break;
-                case MainStateEnum.Idle:
-                    ManualLimiter();
+                    DockStateSwitch(command.Param);
                     break;
                 case MainStateEnum.Cruise:
-                    CruiseControlStateSwitch(param);
+                    CruiseControlStateSwitch(command.Param);
                     break;
                 case MainStateEnum.CNav: // Circumnavigation
-                    CircumNavigateStateSwitch(param);
+                    CircumNavigateStateSwitch(command.Param);
                     break;
                 case MainStateEnum.SBurn: // Suicide Burn
-                    StartSuicideBurn();
-                    SuicideBurnStateSwitch(param);
+                    if (command.Param.SuicideBurnState == SuicideBurnStateEnum.Idle) StartSuicideBurn();
+                    SuicideBurnStateSwitch(command.Param);
                     break;
                 case MainStateEnum.GEntry: // Gliding Entry
-                    GlidingEntry(param);
+                    GlidingEntry(command.Param);
+                    break;
+                default:
+                    ManualLimiter();
                     break;
             }
 
@@ -289,13 +301,14 @@ namespace IngameScript
 
             // Stop cruise control when leaves atmosphere?
 
-            if (stopCruiseWhenOutOfGrav && lastCheckIsOnNatGrav && controller.GetNaturalGravity().LengthSquared() == 0)
+            if (stopCruiseWhenOutOfGrav && lastCheckIsOnNatGrav && gravity == 0.0)
             {
                 stopCruiseWhenOutOfGrav = lastCheckIsOnNatGrav = cruiseToggle = false;
+                Abort();
             }
             else
             {
-                lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
+                lastCheckIsOnNatGrav = gravity > 0.0;
             }
 
             // Info LCDs
@@ -306,18 +319,28 @@ namespace IngameScript
             }
         }
 
+        private void DockToggle(bool anyConnected)
+        {
+            SetBlocks(!anyConnected);
+            StockpileTanks(anyConnected);
+            if (anyConnected)
+            {
+                ChargeBatteries();
+            } else
+            {
+                AutoBatteries();
+            }
+        }
+
         Command ParseCommand(string argument)
         {
-            if (string.IsNullOrWhiteSpace(argument))
-                return Command.Empty;
-
             var parts = argument.Trim().Split(
                 new[] { ' ', '\t' },
                 StringSplitOptions.RemoveEmptyEntries
             );
 
             if (parts.Length == 0)
-                return Command.Empty;
+                return command;
 
             // First word = command (lowercase)
             MainStateEnum cmd = TryParseArgument(parts[0].ToLowerInvariant());
@@ -374,7 +397,7 @@ namespace IngameScript
             }
             catch
             {
-                mainStateEnum = MainStateEnum.Reload;
+                mainStateEnum = MainStateEnum.Abort;
             }
             return mainStateEnum;
         }
@@ -386,29 +409,32 @@ namespace IngameScript
             switch (param.Text.ToLowerInvariant())
             {
                 case "toggle":
-                    SetBlocks(isDockMode);
+                case "":
+                    isDockMode = !isDockMode;
+                    if (isDockMode) command.Param.Text = "on";
+                    else command.Param.Text = "off";
                     break;
-
                 case "on":
-                    SetBlocks(true);
+                    isDockMode = true;
+                    DockToggle(isDockMode);
                     break;
 
                 case "off":
-                    SetBlocks(false);
+                    isDockMode = false;
+                    DockToggle(isDockMode);
                     break;
             }
         }
 
         void CruiseControlStateSwitch(CommandParam param)
         {
-            stopCruiseWhenOutOfGrav = false;
             switch (param.Text.ToLowerInvariant())
             {
                 case "toggle":
                 case "":
                     cruiseToggle = !cruiseToggle;
-                    if (cruiseToggle) CruiseControl(cruiseSpeed);
-                    else Abort();
+                    if (cruiseToggle) command.Param.Text = "on";
+                    else command.Param.Text = "off";
                     break;
                 case "on":
                     CruiseControl(cruiseSpeed);
@@ -417,8 +443,9 @@ namespace IngameScript
                     Abort();
                     break;
                 case "orbit":
-                    CruiseControl(cruiseSpeed);
+                    command.Param.Text = "on";
                     stopCruiseWhenOutOfGrav = true;
+                    CruiseControl(cruiseSpeed);
                     break;
             }
         }
@@ -430,8 +457,8 @@ namespace IngameScript
                 case "toggle":
                 case "":
                     circumnavToggle = !circumnavToggle;
-                    if (circumnavToggle) CircumNav(cruiseSpeed);
-                    else Abort();
+                    if (circumnavToggle) command.Param.Text = "on";
+                    else command.Param.Text = "off";
                     break;
                 case "on":
                     CircumNav(cruiseSpeed);
@@ -450,10 +477,10 @@ namespace IngameScript
                     break;
 
                 case SuicideBurnStateEnum.Align:
-                    if (AlignToGravity()) command.Param.SuicideBurnState = SuicideBurnStateEnum.SuicideBurn;
+                    if (AlignToGravity()) command.Param.SuicideBurnState = SuicideBurnStateEnum.Drop;
                     break;
 
-                case SuicideBurnStateEnum.SuicideBurn:
+                case SuicideBurnStateEnum.Drop:
                     if (SuicideBurn()) command.Param.SuicideBurnState = SuicideBurnStateEnum.Cushion;
                     break;
 
@@ -479,6 +506,7 @@ namespace IngameScript
 
             KillGyroOverride();
             KillThrustOverride();
+            controller.DampenersOverride = true;
         }
 
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
@@ -574,13 +602,6 @@ namespace IngameScript
         {
             bool allowThrust = ForwardSpeed() < MaxSpeed;
 
-            // Restore braking thrusters
-            foreach (var brakingThruster in brakingThrusters)
-            {
-                brakingThruster.Enabled = true;
-                brakingThruster.ThrustOverridePercentage = 0f;
-            }
-
             // Normal forward thrust behavior
             foreach (var forwardThruster in forwardThrusters)
             {
@@ -644,11 +665,35 @@ namespace IngameScript
 
         void CacheBlocksDock()
         {
+            cachedBlocks.Clear();
             controlledBlocks.Clear();
             connectors.Clear();
             tanks.Clear();
             h2Tanks.Clear();
             batteries.Clear();
+
+            // Functional blocks to power on/off
+            var temp = new List<IMyFunctionalBlock>();
+            GridTerminalSystem.GetBlocksOfType(temp, b =>
+                b.IsSameConstructAs(Me) &&
+                !ContainsIgnore(b.CustomName) &&
+                !ContainsIgnore(b.CustomData) &&
+                b != Me &&
+                !(b is IMyShipConnector) &&
+                !(b is IMyBatteryBlock) &&
+                !(b is IMyDoor) &&
+                !(b is IMyAirVent) &&
+                !(b is IMyCryoChamber) &&
+                !(b is IMyMedicalRoom) &&
+                !(b is IMyGasTank) &&
+                !(b is IMyTimerBlock) &&
+                !(b is IMyEventControllerBlock) &&
+                !(b is IMyInteriorLight) &&
+                !(b is IMyLandingGear) &&
+                !IsSurvivalKit(b)
+            );
+
+            cachedBlocks.AddRange(temp);
 
 
             IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName("Auto Managed");
@@ -732,6 +777,11 @@ namespace IngameScript
             return text.IndexOf("ignore", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        bool IsSurvivalKit(IMyFunctionalBlock b)
+        {
+            return b.BlockDefinition.SubtypeName
+                .IndexOf("SurvivalKit", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
 
         bool IsHydrogenTank(IMyGasTank tank)
         {
@@ -769,18 +819,23 @@ namespace IngameScript
             }
         }
 
-        void ChargeBatteries(bool charge)
+        void ChargeBatteries()
         {
+            backupBattery.ChargeMode = ChargeMode.Auto;
+
             foreach (IMyBatteryBlock battery in batteries)
             {
-                if (battery == backupBattery)
-                {
-                    battery.ChargeMode = charge ? ChargeMode.Auto : ChargeMode.Recharge;
-                    continue;
-                }
+                battery.ChargeMode = ChargeMode.Recharge;
+            }
+        }
 
-                if (battery != null && battery.IsFunctional)
-                    battery.ChargeMode = charge ? ChargeMode.Recharge : ChargeMode.Auto;
+        void AutoBatteries()
+        {
+            backupBattery.ChargeMode = ChargeMode.Recharge;
+
+            foreach (IMyBatteryBlock battery in batteries)
+            {
+                battery.ChargeMode = ChargeMode.Auto;
             }
         }
 
@@ -952,7 +1007,8 @@ namespace IngameScript
 
             controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
 
-            cruiseSpeed = MathHelper.Clamp(param.Number, MinSpeed, MaxSpeed);
+            var paramSpeed = command.Param.Number;
+            cruiseSpeed = (paramSpeed == 0 ? MaxSpeed : MathHelper.Clamp(command.Param.Number, MinSpeed, MaxSpeed));
 
             vSpeed = GetVerticalSpeed();
             vEffectiveSpeed = vSpeed + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
@@ -974,17 +1030,16 @@ namespace IngameScript
 
         void Abort()
         {
-            tickCount = 0;
-            ResetGyros();
-            ResetThrusters();
+            command = Command.Empty;
 
             controller.DampenersOverride = true;
+            stopCruiseWhenOutOfGrav = false;
 
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
-            command.State = MainStateEnum.Idle;
-
-            command.Param.SuicideBurnState = SuicideBurnStateEnum.Idle;
+            tickCount = 0;
+            ResetGyros();
+            ResetThrusters();
         }
 
         void ResetGyros()

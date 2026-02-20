@@ -5,7 +5,7 @@
         Idle,
         Abort,
         Align,
-        SuicideBurn,
+        Drop,
         Cushion,
         LockGear
     }
