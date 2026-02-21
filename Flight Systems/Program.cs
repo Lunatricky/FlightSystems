@@ -57,10 +57,6 @@ namespace IngameScript
         double rightVelocity; 
         double upVelocity;
 
-        double netDecel;
-        double targetVdown;
-        double maxThrustUp;
-
         // safety buffer (VERY important)
         const double SAFETY = 1.2;
 
@@ -449,7 +445,7 @@ namespace IngameScript
                     cruiseToggle = !cruiseToggle;
                     if (cruiseToggle)
                     {
-                        command.Param.Text = "orbitMode";
+                        command.Param.Text = "on";
                         stopCruiseWhenOutOfGrav = true;
                     }
                     else
@@ -457,11 +453,6 @@ namespace IngameScript
                         command.Param.Text = "off";
                         stopCruiseWhenOutOfGrav = false;
                     }
-                    CruiseControl(cruiseSpeed);
-                    break;
-                case "orbitMode":
-                    double climbDeg = GetRecoveryClimbAngle(forwardThrusters, upwardThrusters);
-                    AlignWithGlideTilt(-climbDeg);     // nose UP
                     CruiseControl(cruiseSpeed);
                     break;
             }
@@ -499,7 +490,11 @@ namespace IngameScript
                     break;
 
                 case SuicideBurnStateEnum.Drop:
-                    if (SuicideBurn()) command.Param.SuicideBurnState = SuicideBurnStateEnum.LockGear;
+                    if (SuicideBurn()) command.Param.SuicideBurnState = SuicideBurnStateEnum.Cushion;
+                    break;
+
+                case SuicideBurnStateEnum.Cushion:
+                    if (Cushion()) command.Param.SuicideBurnState = SuicideBurnStateEnum.LockGear;
                     break;
 
                 case SuicideBurnStateEnum.LockGear:
@@ -988,20 +983,18 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Climb rate: {gravAlignedVelocity:F2}");
             }
 
-            stringBuilder.AppendLine($"netDecel: {netDecel:F2}");
-            stringBuilder.AppendLine($"targetVdown: {targetVdown:F2}");
+            stringBuilder.AppendLine($"Longitudinal velocity: {forwardVelocity:F2}");
+            stringBuilder.AppendLine($"Lateral velocity: {rightVelocity:F2}");
+            stringBuilder.AppendLine($"Vertical velocity: {upVelocity:F2}");
 
-            if (command.State == MainStateEnum.SBurn || command.State == MainStateEnum.GEntry)
+            switch (command.State)
             {
-                stringBuilder.AppendLine($"gravity: {gravity:F2}");
-                stringBuilder.AppendLine($"Max upward accel: {maxDecel:F2}");
-                stringBuilder.AppendLine($"timeToStop: {timeToStop:F2}");
-                stringBuilder.AppendLine($"timeToImpact: {timeToImpact:F2}");
-            } else
-            {
-                stringBuilder.AppendLine($"Longitudinal velocity: {forwardVelocity:F2}");
-                stringBuilder.AppendLine($"Lateral velocity: {rightVelocity:F2}");
-                stringBuilder.AppendLine($"Vertical velocity: {upVelocity:F2}");
+                case MainStateEnum.SBurn:
+                case MainStateEnum.GEntry:
+                    stringBuilder.AppendLine($"timeToImpact: {timeToImpact:F2}");
+                    stringBuilder.AppendLine($"gravity: {gravity:F2}");
+                    stringBuilder.AppendLine($"Max upward accel: {maxDecel:F2}");
+                    break;
             }
 
             stringBuilder.AppendLine();
@@ -1061,8 +1054,6 @@ namespace IngameScript
 
             timeToImpact = alt / Math.Abs(vEffectiveSpeed);
             timeToStop = Math.Abs(gravAlignedVelocity) / maxDecel;
-
-            netDecel = ComputeNetDecel(upwardThrusters, mass);
         }
 
         void StartSuicideBurn()
@@ -1155,7 +1146,7 @@ namespace IngameScript
             Vector3D axis = shipUp.Cross(desiredUp);
             double angle = axis.Length();
 
-            if (angle < 0.002 && !HasSpeed())
+            if (angle < 0.01 && !HasSpeed())
             {
                 foreach (var g in gyros)
                     g.GyroOverride = false;
@@ -1276,18 +1267,12 @@ namespace IngameScript
         bool SuicideBurn()
         {
             controller.DampenersOverride = false;
+            return effectiveAlt < SAFETY * (Math.Abs(stopDist) + 2 * gridHight);
+        }
 
-            if (netDecel > 0.5)  // hysteresis
-            {
-                targetVdown = GetSafeDescentTargetV(netDecel, effectiveAlt, gravAlignedVelocity);
-                MatchVerticalSpeed(-targetVdown);  // your PID
-            }
-            else if (gravAlignedVelocity <= 0)
-            {
-                Abort();
-                command.State = MainStateEnum.Cruise;
-                command.Param.Text = "orbit";
-            }
+        bool Cushion()
+        {
+            MatchVerticalSpeed(-10);
 
             return effectiveAlt < 10 + gridHight;
         }
@@ -1366,92 +1351,5 @@ namespace IngameScript
 
             return total;
         }
-
-        // Suicide Burn
-
-        // Enhanced Suicide Burn Algorithm - C#6 SE PB Compatible
-        // Handles varying gravity (Pertam atm/low well): Thrust-based net decel prediction
-        // Adaptive target descent V (0-110 m/s): Drops to 0 as net_decel -> 0 (safety!)
-        // Recovery: Optimal climb angle from fwd/up thrust ratio (e.g. 45° if equal)
-        // Drop-in methods: ComputeNetDecel(), GetSafeDescentTargetV(), GetRecoveryClimbAngle()
-
-        // ────────────────────────────────────────────────
-        // 1. NET DECEL PREDICTION (core - ignores current g spikes)
-        // Computes max possible upward accel from thrusters - current_g
-        // ────────────────────────────────────────────────
-        double ComputeNetDecel(List<IMyThrust> upThrusters, double mass)
-        {
-            maxThrustUp = 0;
-            foreach (var t in upThrusters) maxThrustUp += t.MaxEffectiveThrust;
-
-            double thrustAccel = maxThrustUp / mass;
-
-            return thrustAccel - naturalGrav.Length();  // positive = can decelerate
-        }
-
-        // ────────────────────────────────────────────────
-        // 2. SAFE DESCENT TARGET VELOCITY (0-110 m/s adaptive)
-        // v_target = min(110, sqrt(2 * net_decel * alt) * safety_factor)
-        // Smoothed EMA to avoid jumps; aggressively ->0 if net_decel low
-        // ────────────────────────────────────────────────
-        double GetSafeDescentTargetV(double netDecel, double alt, double currentVdown, double dt = 0.016)
-        {
-            const double SAFETY_MARGIN = 1.3;     // conservative alt buffer
-            const double MIN_DECEL = 0.1;         // ignore if <0.1g net
-            const double EMA_ALPHA = 0.15;        // smooth response (0.1-0.3)
-            double smoothedV = 110.0;      // persist across calls (use Storage if needed)
-
-            if (netDecel <= 0) return 0;          // emergency stop
-
-            // Classical suicide burn height
-            double idealV = Math.Sqrt(2 * netDecel * alt / SAFETY_MARGIN);
-
-            // Adaptive: scale down if net_decel marginal (Pertam g-spike safety)
-            double margin = Math.Max(0.05, netDecel / 9.81);  // normalize to Earth g
-            double adaptiveFactor = Math.Pow(margin, 1.8);    // aggressive curve near 0
-
-            double rawTarget = Math.Min(110, idealV * adaptiveFactor);
-
-            // EMA smooth
-            smoothedV = smoothedV * (1 - EMA_ALPHA) + rawTarget * EMA_ALPHA;
-
-            // Clamp & sign (positive down)
-            return Math.Max(0, Math.Min(110, smoothedV));
-        }
-
-        // Usage in descent loop:
-        // double netDecel = ComputeNetDecel(upThrusters, mass, -Vector3D.Normalize(naturalGrav));
-        // double targetVdown = GetSafeDescentTargetV(netDecel, alt - gridHeight, vSpeed);
-
-        // Then: MatchVerticalSpeed(-targetVdown);  // your PID
-
-        // ────────────────────────────────────────────────
-        // 3. RECOVERY CLIMB ANGLE (auto 0-90°)
-        // When v_down <=0: atan2(fwd_thrust_max, up_thrust_max)
-        // e.g. equal = 45° (max accel up-forward)
-        // ────────────────────────────────────────────────
-        double GetRecoveryClimbAngle(List<IMyThrust> fwdThrusters, List<IMyThrust> upThrusters)
-        {
-            double fwdThrust = 0, upThrust = 0;
-
-            // Sum max fwd thrust (project fwd if needed)
-            foreach (var t in fwdThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
-
-            // Sum max up thrust
-            foreach (var t in upThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-
-            if (upThrust <= 0) return 0;  // can't climb
-
-            // Optimal angle: sin(theta) = up / hypotenuse → theta = atan(fwd/up)
-            double angleRad = Math.Atan2(fwdThrust, upThrust);  // 0=straight up, PI/2=horizontal fwd
-            return MathHelper.ToDegrees(angleRad);  // degrees for your AlignWithGlideTilt(negative for up?)
-        }
-
-        // Usage in recovery (vSpeed <=0):
-        // double climbAngle = GetRecoveryClimbAngle(fwdThrusters, upThrusters);
-        // AlignWithGlideTilt(-climbAngle);  // negative = nose up
-        // CruiseControl(80);  // your fwd cruise at climb angle
     }
 }

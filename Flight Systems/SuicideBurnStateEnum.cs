@@ -6,6 +6,7 @@
         Abort,
         Align,
         Drop,
+        Cushion,
         LockGear
     }
 }
