@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Land 2", "Auto Land 2\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flight Systems Old", "Flight Systems Old\Flight Systems Old.csproj", "{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ini", "Ini\Ini.csproj", "{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -44,6 +46,8 @@ Global
 		{CC883D65-5CAA-475C-AF90-A6698F89EC18}.Debug|x64.Build.0 = Debug|x64
 		{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}.Debug|x64.ActiveCfg = Debug|x64
 		{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}.Debug|x64.Build.0 = Debug|x64
+		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.ActiveCfg = Debug|x64
+		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
