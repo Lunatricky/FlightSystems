@@ -464,13 +464,13 @@ namespace IngameScript
                 case "align":
                     if (AlignToGravity())
                     {
-                        double pitchAngle = CalculateOptimalClimbPitch(gravity, mass, GetUpThrust(), GetForwardThrust());
-                        desiredUpVector = RotateUpTowardForward(controller, 180 + pitchAngle);
+                        desiredUpVector = GetMaxSafePitchVector();
                         command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
-                    AlignToGravity(desiredUpVector);
+                    Vector3D shipUp = controller.WorldMatrix.Up;
+                    AlignToGravity(desiredUpVector, false, shipUp);
                     CruiseControl(cruiseSpeed);
                     break;
             }
@@ -556,9 +556,7 @@ namespace IngameScript
             controller = controllers.Count > 0 ? controllers[0] : null;
 
             var allThrusters = new List<IMyThrust>();
-            GridTerminalSystem.GetBlocksOfType(allThrusters, thruster =>
-               thruster.IsSameConstructAs(Me) &&
-               thruster.IsFunctional);
+            GetOwnGridBlocks(allThrusters);
 
             foreach (var thruster in allThrusters)
             {
@@ -1050,7 +1048,7 @@ namespace IngameScript
             naturalGrav = controller.GetNaturalGravity();
             mass = controller.CalculateShipMass().PhysicalMass;
             gravity = naturalGrav.Length();
-            maxDecel = GetMaxDecel();
+            maxDecel = GetMaxDecel(upwardThrusters);
 
             GetShipAxisVelocities();
 
@@ -1088,6 +1086,8 @@ namespace IngameScript
 
         void Abort()
         {
+            cruiseToggle = false;
+            circumnavToggle = false;
             command = Command.Empty;
 
             controller.DampenersOverride = true;
@@ -1177,16 +1177,20 @@ namespace IngameScript
 
         bool AlignToGravity(bool checkSpeed, Vector3D desiredUp)
         {
+            Vector3D shipUp = controller.WorldMatrix.Up;
+
+            return AlignToGravity(shipUp, checkSpeed, desiredUp);
+        }
+
+        bool AlignToGravity(Vector3D shipUp, bool checkSpeed, Vector3D desiredUp)
+        {
             if (naturalGrav.LengthSquared() < 0.01)
                 return false;
-
-            
-            Vector3D shipUp = controller.WorldMatrix.Up;
 
             Vector3D axis = shipUp.Cross(desiredUp);
             double angle = axis.Length();
 
-            if (angle < 0.002 && (checkSpeed ? IsStopped() : true))
+            if (angle < 0.005 && (checkSpeed ? IsStopped() : true))
             {
                 foreach (var g in gyros)
                     g.GyroOverride = false;
@@ -1246,7 +1250,7 @@ namespace IngameScript
 
         bool IsStopped(double threshold = 0.1)
         {
-            return upVelocity <= threshold && Math.Abs(forwardVelocity) <= threshold && Math.Abs(rightVelocity) <= threshold;
+            return threshold > upVelocity && threshold >= Math.Abs(forwardVelocity) && threshold >= Math.Abs(rightVelocity);
         }
 
         ////////////////////////////////////////////////////////
@@ -1306,13 +1310,13 @@ namespace IngameScript
             upVelocity = Vector3D.Dot(velocity, wm.Up);
         }
 
-        double GetMaxDecel()
+        double GetMaxDecel(List<IMyThrust> thrusters)
         {
             thrust = 0;
 
             Vector3D up = -Vector3D.Normalize(naturalGrav);
 
-            foreach (var t in upwardThrusters)
+            foreach (var t in thrusters)
             {
                 double dot = t.WorldMatrix.Backward.Dot(up);
 
@@ -1369,206 +1373,67 @@ namespace IngameScript
             return thrustAccel - gravity;  // positive = can decelerate
         }
 
-        Vector3D GetOptimalAntiGravUp()
+        double pitchAngle = 0;
+        double ratio = 0;
+        double weight = 0;
+        double Fu = 0;
+
+        double GetMaxSafePitchUp()
         {
-            double fwdThrust = 0, upThrust = 0;
-            foreach (var t in forwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
-            foreach (var t in upwardThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-            if (upThrust <= 0) return controller.WorldMatrix.Up;  // can't climb
-                                                                  // Fixed optimal pitch angle (nose up)
-            double optimalPitchRad = Math.Atan(fwdThrust / upThrust);
-            double optimalPitchDeg = MathHelper.ToDegrees(optimalPitchRad);
-            // Anti-gravity up direction
-            Vector3D gravity = controller.GetNaturalGravity();
-            if (gravity.LengthSquared() < 0.01) return controller.WorldMatrix.Up;
-            Vector3D antiGravUp = Vector3D.Normalize(-gravity);
-            // Rotate antiGravUp by -optimalPitchDeg around ship RIGHT (nose up)
-            Vector3D rightAxis = controller.WorldMatrix.Right;
-            MatrixD rotation = MatrixD.CreateFromAxisAngle(rightAxis, -optimalPitchRad);  // negative for up
-            Vector3D desiredUp = Vector3D.TransformNormal(antiGravUp, rotation);
-            return Vector3D.Normalize(desiredUp);
-        }
-
-        // Usage in descent loop:
-        // double netDecel = ComputeNetDecel(upThrusters, mass, -Vector3D.Normalize(naturalGrav));
-        // double targetVdown = GetSafeDescentTargetV(netDecel, alt - gridHeight, vSpeed);
-
-        // Then: MatchVerticalSpeed(-targetVdown);  // your PID
-
-        // ────────────────────────────────────────────────
-        // 3. RECOVERY CLIMB ANGLE (auto 0-90°)
-        // When v_down <=0: atan2(fwd_thrust_max, up_thrust_max)
-        // e.g. equal = 45° (max accel up-forward)
-        // ────────────────────────────────────────────────
-        Vector3D GetMaxThrustVector()
-        {
-            double fwdThrust = 0, upThrust = 0;
-
-            // Sum max fwd thrust (project fwd if needed)
-            foreach (var t in forwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
-
-            // Sum max up thrust
-            foreach (var t in upwardThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-
-            Vector3D forward = fwdThrust * controller.WorldMatrix.Forward;
-            Vector3D up = upThrust * controller.WorldMatrix.Up;
-
-            return forward + up;
-        }
-
-        /// <summary>
-        /// Computes the frozen max thrust direction (fwd + up) once, relative to anti-gravity.
-        /// Subtracts to get the true offset vector for pitch adjustment.
-        /// Returns the desired ship Up vector (pitched nose up for optimal fwd lift).
-        /// Call once after aligning to gravity.
-        /// </summary>
-        /// <param name="fwdThrusters">Forward thrusters list</param>
-        /// <param name="upThrusters">Up thrusters list</param>
-        /// <param name="controller">Ship controller</param>
-        /// <param name="gravity">Current gravity vector</param>
-        /// <param name="blendStrength">How much to apply the pitch offset (0 = pure anti-grav, 1 = full offset, default 0.8)</param>
-        Vector3D GetDesiredUpForOptimalPitch(double blendStrength = 0.8)
-        {
-            if (naturalGrav.LengthSquared() < 0.01)
-                return controller.WorldMatrix.Up;  // no gravity → no change
-
-            Vector3D antiGravUp = Vector3D.Normalize(-naturalGrav);
-
-            // Compute frozen max thrust direction (once, in current alignment)
-            double fwdThrust = 0, upThrust = 0;
-            foreach (var t in forwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
-            foreach (var t in upwardThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-
-            if (fwdThrust <= 0 && upThrust <= 0)
-                return antiGravUp;  // no thrust → pure anti-grav
-
-            Vector3D fwdVec = fwdThrust * controller.WorldMatrix.Forward;
-            Vector3D upVec = upThrust * controller.WorldMatrix.Up;
-
-            Vector3D frozenThrustDir = Vector3D.Normalize(fwdVec + upVec);
-
-            // Up direction of frozen thrust = projection on antiGravUp
-            double thrustUpProjScalar = Vector3D.Dot(frozenThrustDir, antiGravUp);
-            Vector3D thrustUpComponent = antiGravUp * thrustUpProjScalar;
-
-            // Subtract: antiGravUp - thrustUpComponent = the "true offset vector" (horizontal adjustment)
-            Vector3D trueOffset = antiGravUp - thrustUpComponent;
-
-            // Normalize offset and blend with antiGravUp
-            if (trueOffset.LengthSquared() < 1e-6)
-                return antiGravUp;  // no meaningful offset
-
-            Vector3D normOffset = Vector3D.Normalize(trueOffset);
-            Vector3D desiredUp = Vector3D.Normalize(antiGravUp + normOffset * blendStrength);
-
-            return desiredUp;
-        }
-
-        private Vector3D ComputeFrozenMaxThrustDirection()
-        {
-            double fwdThrust = 0, upThrust = 0;
-
-            foreach (var t in forwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
-
-            foreach (var t in upwardThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-
-            if (fwdThrust <= 0 && upThrust <= 0)
-                return controller.WorldMatrix.Up;  // fallback
-
-            Vector3D fwdVec = fwdThrust * controller.WorldMatrix.Forward;
-            Vector3D upVec = upThrust * controller.WorldMatrix.Up;
-
-            Vector3D combined = fwdVec + upVec;
-
-            return Vector3D.Normalize(combined);  // now a pure direction
-        }
-
-        /// <summary>
-        /// Returns the desired ship Up vector that rotates the current Up toward the average thrust direction,
-        /// so forward + up thrusters together provide the best lift against gravity.
-        /// The rotation amount is proportional to how much the average thrust deviates from current anti-gravity.
-        /// </summary>
-        /// <param name="gravity">Gravity vector from controller.GetNaturalGravity()</param>
-        /// <param name="controller">The ship controller (for current orientation)</param>
-        /// <param name="maxThrustVector">Result from your GetMaxThrustVector() — combined fwd+up thrust direction</param>
-        /// <param name="strength">Blending factor: 0 = no rotation (keep current Up), 1 = full rotation to thrust vector (default 0.8)</param>
-        Vector3D GetDesiredAntiGravityUp(Vector3D maxThrustVector, double strength = 0.8)
-        {
-            // Desired anti-gravity direction (upward = opposite gravity)
-            Vector3D antiGrav = Vector3D.Normalize(-naturalGrav);
-
-            // Normalize the max thrust vector (it's already a direction after your averaging)
-            Vector3D thrustDir = Vector3D.Normalize(maxThrustVector);
-
-            // Blend: how much we want to rotate current Up toward the thrust direction
-            Vector3D currentUp = controller.WorldMatrix.Up;
-            Vector3D blendedUp = Vector3D.Lerp(currentUp, thrustDir, strength);
-
-            // Project blendedUp onto the plane perpendicular to gravity (to keep it "level-ish")
-            // This avoids tilting too far sideways when thrust vector is off-plane
-            blendedUp -= antiGrav * Vector3D.Dot(blendedUp, antiGrav);
-
-            // Final normalization
-            if (blendedUp.LengthSquared() < 1e-6)
-                return antiGrav;  // fallback to pure anti-gravity if degenerate
-
-            return Vector3D.Normalize(blendedUp);
-        }
-
-        double AngleBetweenLessThanFast(Vector3D v1, Vector3D v2, double maxAngleRad = 0.02)
-        {
-            Vector3D n1 = Vector3D.Normalize(v1);
-            Vector3D n2 = Vector3D.Normalize(v2);
-
-            double dot = Vector3D.Dot(n1, n2);
-            dot = MathHelper.Clamp(dot, -1.0, 1.0);
-
-            // cos(maxAngleRad) is the minimum dot product we accept
-            double minCos = Math.Cos(maxAngleRad);
-
-            //return dot >= minCos;
-            return dot;
-        }
-
-        Vector3D GetMaxClimbVector()
-        {
-            Vector3D grav = controller.GetNaturalGravity();
-
-            if (gravity < 0.0001)
-                return controller.WorldMatrix.Up;
-
             double weight = mass * gravity;
 
-            double Fu = GetUpThrust();       // aligned to gravity
-            double Ff = GetForwardThrust();  // forward thrusters only
+            double Fu = GetUpThrust();
+            double Ff = GetForwardThrust();
 
-            // Case: cannot climb
-            if (Fu + Ff <= weight)
-                return controller.WorldMatrix.Up;
+            double R = Math.Sqrt(Fu * Fu + Ff * Ff);
 
-            // Case: up thrust alone can hover
-            if (Fu >= weight)
-                return controller.WorldMatrix.Forward;
+            if (R <= 0)
+                return 0;
 
-            double ratio = (weight - Fu) / Ff;
-            ratio = MathHelper.Clamp(ratio, 0, 1);
+            if (weight >= R)
+            {
+                // Even full combined thrust cannot hold ship
+                return 0;
+            }
 
-            double theta = Math.Asin(ratio);
+            double phi = Math.Atan2(Fu, Ff);
 
-            Vector3D up = controller.WorldMatrix.Up;
-            Vector3D forward = controller.WorldMatrix.Forward;
+            double theta = Math.Acos(weight / R) - phi;
 
-            Vector3D desiredUp = (up + forward) * Math.Sin(theta);
+            return Math.PI / 2 - theta;
+        }
 
-            return Vector3D.Normalize(desiredUp);
+        Vector3D GetMaxSafePitchUpVector()
+        {
+            double theta = GetMaxSafePitchUp();
+
+            Vector3D gravityDir = Vector3D.Normalize(controller.GetNaturalGravity());
+            Vector3D verticalUp = -gravityDir;
+
+            Vector3D rightAxis = controller.WorldMatrix.Right;
+
+            Vector3D rotated = RotateVectorAroundAxis(verticalUp, rightAxis, theta);
+
+            return Vector3D.Normalize(rotated);
+        }
+
+        Vector3D RotateVectorAroundAxis(Vector3D vectorToRotate, Vector3D axis, double angleRadians)
+        {
+            // Create rotation matrix around the axis
+            MatrixD rotationMatrix = MatrixD.CreateFromAxisAngle(axis.Normalized(), angleRadians);
+
+            // Apply rotation to the vector
+            Vector3D rotated = Vector3D.TransformNormal(vectorToRotate, rotationMatrix);
+
+            return rotated;
+        }
+
+        Vector3D GetUnitPlaneNormal(Vector3D v1, Vector3D v2)
+        {
+            Vector3D normal = Vector3D.Cross(v1, v2);
+            double lenSq = normal.LengthSquared();
+
+            return lenSq > 1e-10 ? Vector3D.Normalize(normal) : Vector3D.Zero;
         }
 
         double GetUpThrust()
@@ -1585,7 +1450,6 @@ namespace IngameScript
 
             return total;
         }
-
         double GetForwardThrust()
         {
             Vector3D forward = controller.WorldMatrix.Forward;
@@ -1593,83 +1457,97 @@ namespace IngameScript
 
             foreach (var t in forwardThrusters)
             {
-                double dot = t.WorldMatrix.Backward.Dot(forward);
-                if (dot > 0.7)
+                if (t.BlockDefinition.ToString().Contains("HydrogenThrust"))
+                {
+                    double dot = t.WorldMatrix.Backward.Dot(forward);
                     total += t.MaxEffectiveThrust * dot;
+                }
             }
 
             return total;
         }
 
-        public double CalculateOptimalClimbPitch(
-            double gravityMagnitude,           // from physics.GravityMagnitude
-            double shipMass,                   // controller.CalculateShipMass().PhysicalMass
-            double maxThrustUp,                 // precomputed strong upward thrust (N)
-            double maxThrustForward)            // precomputed weak forward thrust (N)
+        Vector3D Project(Vector3D a, Vector3D b)
         {
-            if (gravityMagnitude < 0.05) return 90f;                    // zero-g → go vertical
-            if (shipMass <= 0 || maxThrustUp <= 0) return 0f;           // safety
+            double lenSq = b.LengthSquared();
+            if (lenSq < 1e-8)
+                return Vector3D.Zero;
 
-            double requiredVertical = shipMass * gravityMagnitude;      // N needed to balance g
-
-            double a = maxThrustUp;      // strong upward
-            double b = maxThrustForward; // weak forward
-            double R = Math.Sqrt(a * a + b * b);
-
-            if (requiredVertical > R + 1e-4)
-            {
-                return 0f;               // can't hover even at best angle → stay level, full power
-            }
-
-            double phi = Math.Atan2(b, a);                              // angle of resultant thrust vector
-            double acosArg = requiredVertical / R;
-            acosArg = Math.Max(-1.0, Math.Min(1.0, acosArg));          // floating-point safety
-
-            double delta = Math.Acos(acosArg);
-
-            // Two mathematical solutions – pick the one in [0, 90°]
-            double theta1 = phi + delta;
-            double theta2 = phi - delta;
-
-            double thetaRad = (theta1 >= 0 && theta1 <= Math.PI / 2) ? theta1 : theta2;
-            if (thetaRad < 0 || thetaRad > Math.PI / 2)
-                thetaRad = Math.Max(0, Math.Min(Math.PI / 2, theta1)); // fallback
-
-            double pitchDeg = (thetaRad * 180.0 / Math.PI);
-
-            // Safety cap: never allow net horizontal thrust to go negative
-            double sinT = Math.Sin(thetaRad);
-            double cosT = Math.Cos(thetaRad);
-            double netHorizontal = b * cosT - a * sinT;
-            if (netHorizontal < 0)
-            {
-                // max safe pitch where netHorizontal == 0
-                double safeTheta = Math.Atan2(b, a);   // = atan(T_forward / T_up)
-                pitchDeg = (float)(safeTheta * 180.0 / Math.PI);
-            }
-
-            return pitchDeg;
+            double scale = a.Dot(b) / lenSq;
+            return b * scale;
         }
 
-        /// <summary>
-        /// Rotates the ship's Up vector toward the ship's Forward vector (nose-up pitch)
-        /// by the specified angle in degrees.
-        /// Positive angleDeg = nose UP (Up rotates toward Forward).
-        /// Returns the rotated Up vector (normalized).
-        /// </summary>
-        Vector3D RotateUpTowardForward(IMyShipController controller, double angleDeg)
+        double ProjectScalar(Vector3D a, Vector3D direction)
         {
-            if (controller == null)
-                return Vector3D.Up;  // fallback
+            if (direction.LengthSquared() < 1e-8)
+                return 0;
 
-            Vector3D currentUp = controller.WorldMatrix.Up;
-            Vector3D rightAxis = controller.WorldMatrix.Right;  // pitch axis
+            return a.Dot(Vector3D.Normalize(direction));
+        }
 
-            double angleRad = MathHelper.ToRadians(angleDeg);
-            MatrixD rotation = MatrixD.CreateFromAxisAngle(rightAxis, angleRad);
+        Vector3D GetTotalThrustVector(List<IMyThrust> thrusters)
+        {
+            Vector3D total = Vector3D.Zero;
 
-            Vector3D rotatedUp = Vector3D.TransformNormal(currentUp, rotation);
-            return Vector3D.Normalize(rotatedUp);
+            foreach (var t in thrusters)
+            {
+                if (!t.IsFunctional) continue;
+
+                total += t.MaxEffectiveThrust;
+            }
+
+            Vector3D thrustDir = thrusters.First().WorldMatrix.Backward;
+
+            return total * thrustDir;
+        }
+
+        Vector3D GetMaxSafePitchVector()
+        {
+            Vector3D gravity = controller.GetNaturalGravity();
+
+            if (gravity.LengthSquared() < 1e-8)
+                return controller.WorldMatrix.Up;
+
+            Vector3D gravityDir = Vector3D.Normalize(gravity);
+            Vector3D verticalUp = -gravityDir;
+
+            // Project ship forward onto horizontal plane
+            Vector3D forward = controller.WorldMatrix.Forward;
+            Vector3D forwardHoriz =
+                forward - gravityDir * forward.Dot(gravityDir);
+
+            if (forwardHoriz.LengthSquared() < 1e-8)
+                return verticalUp;
+
+            forwardHoriz = Vector3D.Normalize(forwardHoriz);
+
+            double Fu = GetUpThrust();       // magnitude only
+            double Ff = GetForwardThrust();  // magnitude only
+            double weight = mass * gravity.Length();
+
+            double R = Math.Sqrt(Fu * Fu + Ff * Ff);
+
+            if (R <= weight)
+                return verticalUp; // cannot climb
+
+            // Solve Fu cosθ + Ff sinθ = weight
+            double phi = Math.Atan2(Fu, Ff);
+
+            double baseAngle = Math.Asin(weight / R);
+
+            double theta1 = baseAngle - phi;
+            double theta2 = (Math.PI - baseAngle) - phi;
+
+            // choose the smaller absolute pitch
+            double theta = Math.Abs(theta1) < Math.Abs(theta2) ? theta1 : theta2;
+
+            theta = MathHelper.Clamp(theta, -Math.PI / 2, Math.PI / 2);
+
+            Vector3D desiredUp =
+                verticalUp * Math.Cos(theta)
+              + forwardHoriz * Math.Sin(theta);
+
+            return Vector3D.Normalize(desiredUp);
         }
     }
 }
