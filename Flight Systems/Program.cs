@@ -58,11 +58,9 @@ namespace IngameScript
         double upVelocity;
 
         double netDecel;
-        double targetVdown;
         double maxThrustUp;
 
-        // safety buffer (VERY important)
-        const double SAFETY = 1.2;
+        Vector3D desiredUpVector;
 
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
@@ -116,8 +114,10 @@ namespace IngameScript
         // Info LCDs
         // Info LCD Telemetry Script Fields
 
-        const string LCD_TAG = "[FS_LCD]";
-        readonly List<IMyTextSurface> lcds = new List<IMyTextSurface>();
+        const string LCD1_TAG = "[FS_LCD1]";
+        const string LCD2_TAG = "[FS_LCD2]";
+        readonly List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
+        readonly List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
         string gridName;
 
@@ -274,8 +274,8 @@ namespace IngameScript
 
             // Info LCDs
 
-            if (lcds.Count > 0) WriteInfo();
-            if (lcds.Count > 1) WriteInfo2();
+            if (lcds1.Count > 0) WriteInfo();
+            if (lcds2.Count > 0) WriteInfo2();
         }
 
         private void DockToggle(bool anyConnected)
@@ -346,7 +346,7 @@ namespace IngameScript
             if (gravity > 0)
             {
                 scriptInfo.AppendLine($"Alt: {alt:F2} m");
-                scriptInfo.AppendLine($"Grav aligned velocity: {climbRate:F2} m/s");
+                scriptInfo.AppendLine($"Rate of climb: {climbRate:F2} m/s");
             }
 
             scriptInfo.AppendLine($"Longitudinal velocity: {forwardVelocity:F2} m/s");
@@ -370,7 +370,8 @@ namespace IngameScript
         {
             scriptInfo.AppendLine();
             scriptInfo.AppendLine("Controller: " + controller.CustomName);
-            scriptInfo.AppendLine("LCDs: " + lcds.Count);
+            scriptInfo.AppendLine("LCDs1: " + lcds1.Count);
+            scriptInfo.AppendLine("LCDs2: " + lcds2.Count);
             scriptInfo.AppendLine("Batteries: " + batteries.Count + " | Tanks: " + tanks.Count);
             scriptInfo.AppendLine("Forward thruster: " + forwardThrusters.Count);
             scriptInfo.AppendLine("Breaking thruster: " + breakingThrusters.Count);
@@ -384,7 +385,8 @@ namespace IngameScript
         public string CustomDataInfo()
         {
             StringBuilder customDataInfo = new StringBuilder();
-            customDataInfo.AppendLine("LCD Tag: " + LCD_TAG);
+            customDataInfo.AppendLine("LCD 1 Tag: " + LCD1_TAG);
+            customDataInfo.AppendLine("LCD 2 Tag: " + LCD2_TAG);
             customDataInfo.AppendLine("Dock Mode Ignore Tag: " + IGNORE_TAG);
             customDataInfo.AppendLine("Dock Mode Override Tag: " + OVERRIDE_BLOCKS);
             return customDataInfo.ToString();
@@ -450,19 +452,25 @@ namespace IngameScript
                     cruiseToggle = !cruiseToggle;
                     if (cruiseToggle)
                     {
-                        command.Param.Text = "orbitMode";
+                        command.Param.Text = "align";
                         stopCruiseWhenOutOfGrav = true;
+                        CruiseControl(cruiseSpeed);
                     }
                     else
                     {
-                        command.Param.Text = "off";
-                        stopCruiseWhenOutOfGrav = false;
+                        Abort();
                     }
-                    CruiseControl(cruiseSpeed);
                     break;
-                case "orbitMode":
-                    double climbDeg = GetRecoveryClimbAngle(forwardThrusters, upwardThrusters);
-                    AlignWithGlideTilt(-climbDeg);     // nose UP
+                case "align":
+                    if (AlignToGravity())
+                    {
+                        desiredUpVector = RotateUpTowardForwardForNoseUp(-0.7 * GetPitchAngle());
+                        command.Param.Text = "climb";
+                    }
+                    break;
+                case "climb":
+                    Vector3D shipUp = controller.WorldMatrix.Up;
+                    AlignToGravity(desiredUpVector, false, shipUp);
                     CruiseControl(cruiseSpeed);
                     break;
             }
@@ -496,7 +504,7 @@ namespace IngameScript
 
                 case SuicideBurnStateEnum.Align:
                     SoftAbort();
-                    if (AlignToGravity()) command.Param.SuicideBurnState = SuicideBurnStateEnum.Drop;
+                    if (AlignToGravity(true)) command.Param.SuicideBurnState = SuicideBurnStateEnum.Drop;
                     break;
 
                 case SuicideBurnStateEnum.Drop:
@@ -527,8 +535,8 @@ namespace IngameScript
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
         {
             list.Clear();
-            GridTerminalSystem.GetBlocksOfType(list, block =>
-                block.IsSameConstructAs(Me)
+            GridTerminalSystem.GetBlocksOfType(list, block => 
+            (block.IsSameConstructAs(Me) && !block.CustomName.Contains(IGNORE_TAG))
             );
         }
 
@@ -548,9 +556,7 @@ namespace IngameScript
             controller = controllers.Count > 0 ? controllers[0] : null;
 
             var allThrusters = new List<IMyThrust>();
-            GridTerminalSystem.GetBlocksOfType(allThrusters, thruster =>
-               thruster.IsSameConstructAs(Me) &&
-               thruster.IsFunctional);
+            GetOwnGridBlocks(allThrusters);
 
             foreach (var thruster in allThrusters)
             {
@@ -846,9 +852,19 @@ namespace IngameScript
 
         void CacheBlocksLCD()
         {
-            lcds.Clear();
+            lcds1.Clear();
+            lcds2.Clear();
 
             gridName = Me.CubeGrid.CustomName;
+
+            AddLCDsToList(lcds1, LCD1_TAG);
+            AddLCDsToList(lcds2, LCD2_TAG);
+
+            firstRun = true;
+        }
+
+        private void AddLCDsToList(List<IMyTextSurface> lcds, string LCD_TAG)
+        {
 
             // LCDs
             var blocks = new List<IMyTerminalBlock>();
@@ -867,8 +883,6 @@ namespace IngameScript
                     lcds.Add(SetupSurface(surface));
                 }
             }
-
-            firstRun = true;
         }
 
         private static IMyTextSurface SetupSurface(IMyTextSurface surface)
@@ -882,20 +896,6 @@ namespace IngameScript
 
         void WriteInfo()
         {
-            // Altitude
-            string seaAltText = "No g";
-            string groundAltText = "No g";
-
-            double sea, ground;
-            if (controller.GetNaturalGravity().LengthSquared() > 1e-3)
-            {
-                if (controller.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out sea))
-                    seaAltText = $"{sea:0} m";
-
-                if (controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out ground))
-                    groundAltText = $"{ground:0} m";
-            }
-
             // Velocity & acceleration
             Vector3D velocity = controller.GetShipVelocities().LinearVelocity;
             Vector3D accel = Vector3D.Zero;
@@ -960,8 +960,7 @@ namespace IngameScript
             stringBuilder.AppendLine(gridName);
             stringBuilder.AppendLine(new string('-', 28));
 
-            stringBuilder.AppendLine($"Alt (Sea): {seaAltText}");
-            stringBuilder.AppendLine($"Alt (Ground): {groundAltText}");
+            stringBuilder.AppendLine($"stopDist: {stopDist:F2} m");
             stringBuilder.AppendLine($"Accel: {accel.Length() / 9.81:F2} g");
             stringBuilder.AppendLine($"Mass: {mass.PhysicalMass / 1000:0.0} t");
             stringBuilder.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
@@ -972,20 +971,33 @@ namespace IngameScript
             stringBuilder.AppendLine($"Bat:  {batStored / batCap * 100:0} %");
             stringBuilder.AppendLine($"Bat Time: {batTime}");
 
-            string text = stringBuilder.ToString();
-
-            lcds[0].WriteText(stringBuilder.ToString());
+            foreach(IMyTextSurface lcd1 in lcds1)
+                lcd1.WriteText(stringBuilder.ToString());
         }
 
         void WriteInfo2()
         {
+            // Altitude
+            string seaAltText = "No g";
+            string groundAltText = "No g";
+
+            double sea, ground;
+            if (controller.GetNaturalGravity().LengthSquared() > 1e-3)
+            {
+                if (controller.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out sea))
+                    seaAltText = $"{sea:0} m";
+
+                if (controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out ground))
+                    groundAltText = $"{ground:0} m";
+            }
+
             StringBuilder stringBuilder = new StringBuilder();
 
             ScriptInfoHeader(stringBuilder);
 
             if (gravity > 0)
             {
-                stringBuilder.AppendLine($"Climb rate: {climbRate:F2}");
+                stringBuilder.AppendLine($"Rate of climb: {climbRate:F2}");
             }
 
 
@@ -1004,7 +1016,9 @@ namespace IngameScript
             }
 
             stringBuilder.AppendLine();
-            lcds[1].WriteText(stringBuilder.ToString());
+
+            foreach (IMyTextSurface lcd2 in lcds2)
+                lcd2.WriteText(stringBuilder.ToString());
         }
 
 
@@ -1034,7 +1048,7 @@ namespace IngameScript
             naturalGrav = controller.GetNaturalGravity();
             mass = controller.CalculateShipMass().PhysicalMass;
             gravity = naturalGrav.Length();
-            maxDecel = GetMaxDecel();
+            maxDecel = GetMaxDecel(upwardThrusters);
 
             GetShipAxisVelocities();
 
@@ -1072,6 +1086,8 @@ namespace IngameScript
 
         void Abort()
         {
+            cruiseToggle = false;
+            circumnavToggle = false;
             command = Command.Empty;
 
             controller.DampenersOverride = true;
@@ -1145,16 +1161,36 @@ namespace IngameScript
 
         bool AlignToGravity()
         {
+            return AlignToGravity(false);
+        }
+
+        bool AlignToGravity(bool checkSpeed)
+        {
+            Vector3D desiredUp = Vector3D.Normalize(naturalGrav);
+            return AlignToGravity(checkSpeed, desiredUp);
+        }
+
+        bool AlignToGravity(Vector3D desiredUp)
+        {
+            return AlignToGravity(false, desiredUp);
+        }
+
+        bool AlignToGravity(bool checkSpeed, Vector3D desiredUp)
+        {
+            Vector3D shipUp = controller.WorldMatrix.Up;
+
+            return AlignToGravity(shipUp, checkSpeed, desiredUp);
+        }
+
+        bool AlignToGravity(Vector3D shipUp, bool checkSpeed, Vector3D desiredUp)
+        {
             if (naturalGrav.LengthSquared() < 0.01)
                 return false;
-
-            Vector3D desiredUp = Vector3D.Normalize(naturalGrav);
-            Vector3D shipUp = controller.WorldMatrix.Up;
 
             Vector3D axis = shipUp.Cross(desiredUp);
             double angle = axis.Length();
 
-            if (angle < 0.002 && !HasSpeed())
+            if (angle < 0.005 && (checkSpeed ? IsStopped() : true))
             {
                 foreach (var g in gyros)
                     g.GyroOverride = false;
@@ -1171,7 +1207,7 @@ namespace IngameScript
             //-----------------------------------
 
             const double MAX_ROT_RATE = 0.6; // radians/sec
-            const double RESPONSE = 3.0;     // lower = smoother
+            const double RESPONSE = 1.0;     // lower = smoother
 
             Vector3D desiredRate = axis * Math.Min(angle * RESPONSE, MAX_ROT_RATE);
 
@@ -1197,75 +1233,24 @@ namespace IngameScript
 
             return false;
         }
-
+        
         /// <summary>
-        /// Aligns ship's Up mostly to anti-gravity, with optional forward/down pitch tilt for glide.
-        /// Returns true when alignment is good enough.
-        /// </summary>
-        /// <param name="tiltAngleDeg">Desired pitch-down angle in degrees (0 = perfect vertical, 5–12 typical for glide)</param>
-        /// <param name="toleranceDeg">When angle error is below this → consider aligned (default 1.5°)</param>
-        bool AlignWithGlideTilt(double tiltAngleDeg = 0, double toleranceDeg = 1.5)
+         /// Rotates the input vector (typically ship's Forward) upward by pitch angle around ship's RIGHT axis.
+         /// Positive angleDeg = nose UP (climb attitude).
+         /// Output: rotated direction vector (normalized).
+         /// </summary>
+        Vector3D RotatePitchUp(Vector3D inputVector, double angleDeg)
         {
-            if (naturalGrav.LengthSquared() < 0.01)
-                return false;
-
-            Vector3D gravNorm = Vector3D.Normalize(naturalGrav);          // points down
-            Vector3D desiredUp = -gravNorm;                                // ship up should oppose gravity
-
-            // Add forward/down tilt for glide (positive tiltAngleDeg = nose down)
-            if (Math.Abs(tiltAngleDeg) > 0.01)
-            {
-                Vector3D shipForward = controller.WorldMatrix.Forward;
-                // Rotate desired up vector around local right axis (pitch down)
-                MatrixD pitchRot = MatrixD.CreateFromAxisAngle(controller.WorldMatrix.Right, MathHelper.ToRadians(tiltAngleDeg));
-                desiredUp = Vector3D.TransformNormal(desiredUp, pitchRot);
-                desiredUp = Vector3D.Normalize(desiredUp);
-            }
-
-            Vector3D shipUp = controller.WorldMatrix.Up;
-            Vector3D axis = Vector3D.Cross(shipUp, desiredUp);
-            double angleRad = axis.Length();
-
-            // Early exit if already well aligned and not moving much
-            if (angleRad < MathHelper.ToRadians(toleranceDeg) && !HasSpeed())
-            {
-                foreach (var g in gyros) g.GyroOverride = false;
-                return true;
-            }
-
-            if (angleRad > 1e-6) axis /= angleRad;   // normalize rotation axis
-
-            Vector3D angVel = controller.GetShipVelocities().AngularVelocity;
-
-            // ────────────────────────────────────────────────
-            // PD + rate limit (your existing logic – very good)
-            // ────────────────────────────────────────────────
-            const double MAX_ROT_RATE = 0.6;     // rad/s
-            const double RESPONSE = 3.0;     // lower = smoother
-
-            Vector3D desiredRate = axis * Math.Min(angleRad * RESPONSE, MAX_ROT_RATE);
-            Vector3D correction = desiredRate - angVel;
-
-            foreach (var g in gyros)
-            {
-                if (!g.IsFunctional) continue;
-
-                // Local correction in gyro frame
-                MatrixD gyroToLocal = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D localCorr = Vector3D.TransformNormal(correction, gyroToLocal);
-
-                g.GyroOverride = true;
-                g.Pitch = (float)MathHelper.Clamp(localCorr.X / 2, -3, 3);
-                g.Yaw = (float)MathHelper.Clamp(localCorr.Y / 2, -3, 3);
-                g.Roll = (float)MathHelper.Clamp(localCorr.Z / 2, -3, 3);
-            }
-
-            return false;
+            double angleRad = MathHelper.ToRadians(angleDeg);
+            Vector3D pitchAxis = controller.WorldMatrix.Right;  // RIGHT axis for pitch (standard)
+            MatrixD rotationMatrix = MatrixD.CreateFromAxisAngle(pitchAxis, angleRad);
+            Vector3D rotated = Vector3D.TransformNormal(inputVector, rotationMatrix);
+            return Vector3D.Normalize(rotated);  // ensure unit vector
         }
 
-        bool HasSpeed(double threshold = 1)
+        bool IsStopped(double threshold = 0.1)
         {
-            return upVelocity > threshold && Math.Abs(forwardVelocity) > threshold && Math.Abs(rightVelocity) > threshold;
+            return threshold > upVelocity && threshold >= Math.Abs(forwardVelocity) && threshold >= Math.Abs(rightVelocity);
         }
 
         ////////////////////////////////////////////////////////
@@ -1273,7 +1258,7 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         bool SuicideBurn()
         {
-            if (netDecel - 1 < 0)
+            if (netDecel - 0.5 < 0)
             {
                 Abort();
                 command.State = MainStateEnum.Cruise;
@@ -1294,7 +1279,7 @@ namespace IngameScript
         bool TryLock()
         {
             AlignToGravity();
-            MatchVerticalSpeed(-3);
+            MatchVerticalSpeed(-2);
             controller.DampenersOverride = true;
 
             foreach (var g in gears)
@@ -1325,13 +1310,13 @@ namespace IngameScript
             upVelocity = Vector3D.Dot(velocity, wm.Up);
         }
 
-        double GetMaxDecel()
+        double GetMaxDecel(List<IMyThrust> thrusters)
         {
             thrust = 0;
 
             Vector3D up = -Vector3D.Normalize(naturalGrav);
 
-            foreach (var t in upwardThrusters)
+            foreach (var t in thrusters)
             {
                 double dot = t.WorldMatrix.Backward.Dot(up);
 
@@ -1388,39 +1373,34 @@ namespace IngameScript
             return thrustAccel - gravity;  // positive = can decelerate
         }
 
-        // Usage in descent loop:
-        // double netDecel = ComputeNetDecel(upThrusters, mass, -Vector3D.Normalize(naturalGrav));
-        // double targetVdown = GetSafeDescentTargetV(netDecel, alt - gridHeight, vSpeed);
-
-        // Then: MatchVerticalSpeed(-targetVdown);  // your PID
-
-        // ────────────────────────────────────────────────
-        // 3. RECOVERY CLIMB ANGLE (auto 0-90°)
-        // When v_down <=0: atan2(fwd_thrust_max, up_thrust_max)
-        // e.g. equal = 45° (max accel up-forward)
-        // ────────────────────────────────────────────────
-        double GetRecoveryClimbAngle(List<IMyThrust> fwdThrusters, List<IMyThrust> upThrusters)
+        /// <summary>
+        /// Rotates the ship's Up vector toward the ship's Forward vector (nose-UP pitch).
+        /// Positive angleDeg = nose UP.
+        /// </summary>
+        Vector3D RotateUpTowardForwardForNoseUp(double angleDeg)
         {
-            double fwdThrust = 0, upThrust = 0;
+            if (controller == null)
+                return Vector3D.Up;
 
-            // Sum max fwd thrust (project fwd if needed)
-            foreach (var t in fwdThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
+            Vector3D currentUp = controller.WorldMatrix.Up;
+            Vector3D rightAxis = controller.WorldMatrix.Right;  // pitch axis
 
-            // Sum max up thrust
-            foreach (var t in upThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
+            double angleRad = MathHelper.ToRadians(angleDeg);
+            MatrixD rotation = MatrixD.CreateFromAxisAngle(rightAxis, -angleRad);  // NEGATIVE = nose UP!
 
-            if (upThrust <= 0) return 0;  // can't climb
-
-            // Optimal angle: sin(theta) = up / hypotenuse → theta = atan(fwd/up)
-            double angleRad = Math.Atan2(fwdThrust, upThrust);  // 0=straight up, PI/2=horizontal fwd
-            return MathHelper.ToDegrees(angleRad);  // degrees for your AlignWithGlideTilt(negative for up?)
+            Vector3D rotatedUp = Vector3D.TransformNormal(currentUp, rotation);
+            return Vector3D.Normalize(rotatedUp);
         }
 
-        // Usage in recovery (vSpeed <=0):
-        // double climbAngle = GetRecoveryClimbAngle(fwdThrusters, upThrusters);
-        // AlignWithGlideTilt(-climbAngle);  // negative = nose up
-        // CruiseControl(80);  // your fwd cruise at climb angle
+        private double GetPitchAngle()
+        {
+            double fwdThrust = 0, upThrust = 0;
+            foreach (var t in forwardThrusters)
+                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
+            foreach (var t in upwardThrusters)
+                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
+
+            return MathHelper.ToDegrees(Math.Atan2(fwdThrust, upThrust));
+        }
     }
 }
