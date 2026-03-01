@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flight Systems Old", "Fligh
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ini", "Ini\Ini.csproj", "{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Where's Waldo", "Where's Waldo\Where's Waldo.csproj", "{C828628F-B828-4804-9220-F50F94EEAB2D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -48,6 +50,8 @@ Global
 		{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}.Debug|x64.Build.0 = Debug|x64
 		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.ActiveCfg = Debug|x64
 		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.Build.0 = Debug|x64
+		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.ActiveCfg = Debug|x64
+		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
