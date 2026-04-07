@@ -84,7 +84,6 @@ namespace IngameScript
 
         IMyRemoteControl controller;
 
-        bool AllowDockMode = false;
         bool cruiseToggle = false;
         bool circumnavToggle = false;
         bool lastCheckIsOnNatGrav = false;
@@ -113,7 +112,7 @@ namespace IngameScript
         string __Lcd1Tag = "[FS_LCD1]";
         string __Lcd2Tag = "[FS_LCD2]";
         double __maxSpeed = 99; // m/s
-        bool __dockMode = false;
+        bool __allowDockMode = false;
 
         readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
@@ -230,10 +229,11 @@ namespace IngameScript
             {
                 DockToggle(anyConnected);
                 lastConnectedState = anyConnected;
-                return;
             }
 
-            ScriptInfoBlocks(scriptInfo);
+            if (anyConnected) return;
+
+                ScriptInfoBlocks(scriptInfo);
 
             Echo(scriptInfo.ToString());
             me.GetSurface(0).WriteText(scriptInfo.ToString());
@@ -248,7 +248,7 @@ namespace IngameScript
                     break;
                 case MainStateEnum.Dock:
                     DockStateSwitch(command.Param);
-                    break;
+                    return;
                 case MainStateEnum.Cruise:
                     CruiseControlStateSwitch(command.Param);
                     break;
@@ -292,7 +292,7 @@ namespace IngameScript
 
         private void DockToggle(bool anyConnected)
         {
-            if (!AllowDockMode) return;
+            if (!__allowDockMode) return;
 
             SetBlocks(!anyConnected);
             StockpileTanks(anyConnected);
@@ -541,7 +541,7 @@ namespace IngameScript
         {
             list.Clear();
             GridTerminalSystem.GetBlocksOfType(list, block =>
-            (block.IsSameConstructAs(me) && !block.CustomName.Contains(INI_IGNORE_TAG))
+            (block.IsSameConstructAs(me) && !block.CustomName.Contains(__ignoreTag))
             );
         }
 
@@ -667,7 +667,7 @@ namespace IngameScript
             var blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(blocks, b =>
                 b.IsSameConstructAs(me) &&
-                b.CustomName.Contains(INI_OVERRIDE_BLOCKS_TAG)
+                b.CustomName.Contains(__overrideBlockTag)
             );
 
             foreach (var block in blocks)
@@ -862,8 +862,8 @@ namespace IngameScript
 
             gridName = me.CubeGrid.CustomName;
 
-            AddLCDsToList(lcds1, INI_LCD1_TAG);
-            AddLCDsToList(lcds2, INI_LCD2_TAG);
+            AddLCDsToList(lcds1, __Lcd1Tag);
+            AddLCDsToList(lcds2, __Lcd2Tag);
 
             firstRun = true;
         }
@@ -1432,7 +1432,7 @@ namespace IngameScript
             __Lcd1Tag = ini.Get(sectionName, INI_LCD1_TAG).ToString(__Lcd1Tag);
             __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
             __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
-            __dockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__dockMode);
+            __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
 
 
             ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
@@ -1440,7 +1440,7 @@ namespace IngameScript
             ini.Set(SectionName, INI_LCD1_TAG, __Lcd1Tag);
             ini.Set(SectionName, INI_LCD2_TAG, __Lcd2Tag);
             ini.Set(SectionName, MAX_SPEED, __maxSpeed);
-            ini.Set(SectionName, DOCK_MODE, __dockMode);
+            ini.Set(SectionName, DOCK_MODE, __allowDockMode);
 
             string output = ini.ToString();
             me.CustomData = output;
