@@ -202,7 +202,7 @@ namespace IngameScript
         public Program()
         {
             me = Me;
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
             Reload();
 
             bool anyConnected = IsAnyConnectorConnected();
@@ -212,7 +212,20 @@ namespace IngameScript
 
         Command command = Command.Empty;
 
+
+        int tick = 0;
+
         public void Main(string argument, UpdateType updateSource)
+        {
+            tick++;
+
+            if (tick % 10 == 0)
+            {
+                FlightSystems(argument);
+            }
+        }
+
+        private void FlightSystems(string argument)
         {
             if (!string.IsNullOrEmpty(argument)) command = ParseCommand(argument);
 
@@ -233,7 +246,7 @@ namespace IngameScript
 
             if (anyConnected) return;
 
-                ScriptInfoBlocks(scriptInfo);
+            ScriptInfoBlocks(scriptInfo);
 
             Echo(scriptInfo.ToString());
             me.GetSurface(0).WriteText(scriptInfo.ToString());
