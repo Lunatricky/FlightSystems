@@ -202,7 +202,7 @@ namespace IngameScript
         public Program()
         {
             me = Me;
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+            Runtime.UpdateFrequency = UpdateFrequency.Update10;
             Reload();
 
             bool anyConnected = IsAnyConnectorConnected();
@@ -217,12 +217,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            tick++;
-
-            if (tick % 10 == 0)
-            {
-                FlightSystems(argument);
-            }
+            FlightSystems(argument);
         }
 
         private void FlightSystems(string argument)
