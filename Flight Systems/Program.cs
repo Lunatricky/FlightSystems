@@ -212,7 +212,15 @@ namespace IngameScript
 
         Command command = Command.Empty;
 
+
+        int tick = 0;
+
         public void Main(string argument, UpdateType updateSource)
+        {
+            FlightSystems(argument);
+        }
+
+        private void FlightSystems(string argument)
         {
             if (!string.IsNullOrEmpty(argument)) command = ParseCommand(argument);
 
@@ -233,7 +241,7 @@ namespace IngameScript
 
             if (anyConnected) return;
 
-                ScriptInfoBlocks(scriptInfo);
+            ScriptInfoBlocks(scriptInfo);
 
             Echo(scriptInfo.ToString());
             me.GetSurface(0).WriteText(scriptInfo.ToString());
