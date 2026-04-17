@@ -1,6 +1,6 @@
 ﻿namespace IngameScript
 {
-    enum SuicideBurnStateEnum
+    enum AutoLandStateEnum
     {
         Idle,
         Abort,

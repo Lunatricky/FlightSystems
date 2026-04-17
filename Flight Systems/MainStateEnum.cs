@@ -8,7 +8,8 @@
         Dock,
         Cruise,
         CNav, // Circumnavigation
+        Land, // Auto Land
         SBurn, // Suicide Burn
-        GEntry // GlidingEntry
+        GEntry // Gliding Entry
     }
 }

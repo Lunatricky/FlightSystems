@@ -109,13 +109,15 @@ namespace IngameScript
         IMyBatteryBlock backupBattery;
 
         bool isDockMode = false;
-        bool lastConnectedState = false;
+        bool lastConnectorState = false;
+        bool lastGearState = false;
 
         // Info LCDs
         // Info LCD Telemetry Script Fields
 
         const string LCD1_TAG = "[FS_LCD1]";
         const string LCD2_TAG = "[FS_LCD2]";
+        private const string BACKUP_TAG = "backup";
         readonly List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         readonly List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
@@ -144,7 +146,7 @@ namespace IngameScript
             public ParamType Type;
             public double Number;
             public string Text;
-            public SuicideBurnStateEnum SuicideBurnState;
+            public AutoLandStateEnum SuicideBurnState;
 
             // ────────────────────────────────────────────────
             // Constructors — one per type
@@ -154,7 +156,7 @@ namespace IngameScript
                 Type = ParamType.Number;
                 Number = n;
                 Text = null;
-                SuicideBurnState = SuicideBurnStateEnum.Idle;
+                SuicideBurnState = AutoLandStateEnum.Idle;
             }
 
             public CommandParam(string t)
@@ -162,10 +164,10 @@ namespace IngameScript
                 Type = ParamType.Text;
                 Number = 0;
                 Text = t ?? "";
-                SuicideBurnState = SuicideBurnStateEnum.Idle;
+                SuicideBurnState = AutoLandStateEnum.Idle;
             }
 
-            public CommandParam(SuicideBurnStateEnum s)
+            public CommandParam(AutoLandStateEnum s)
             {
                 Type = ParamType.SuicideBurnState;
                 Number = 0;
@@ -179,7 +181,7 @@ namespace IngameScript
             // Optional: fallback helpers (still clean)
             public double GetNumberOr(double fallback) => Type == ParamType.Number ? Number : fallback;
             public string GetTextOr(string fallback) => Type == ParamType.Text ? Text : fallback;
-            public SuicideBurnStateEnum GetSuicideStateOr(SuicideBurnStateEnum fallback)
+            public AutoLandStateEnum GetSuicideStateOr(AutoLandStateEnum fallback)
                 => Type == ParamType.SuicideBurnState ? SuicideBurnState : fallback;
         }
 
@@ -211,14 +213,26 @@ namespace IngameScript
                 ScriptInfoPhysics(scriptInfo);
 
                 bool anyConnected = IsAnyConnectorConnected();
-                isDockMode = anyConnected;
+                bool isGearlocked = gears.Exists(g => g.IsLocked);
 
-                if (anyConnected != lastConnectedState)
+
+                //isDockMode = anyConnected || isGearlocked;
+
+                if (anyConnected && anyConnected != lastConnectorState)
                 {
                     DockToggle(anyConnected);
-                    lastConnectedState = anyConnected;
+                    lastConnectorState = anyConnected;
+                    return;
+                }
+
+                if (isGearlocked && isGearlocked != lastGearState)
+                {
+                    DockToggle(isGearlocked);
+                    lastGearState = isGearlocked;
+                    return;
                 }
             }
+
             ScriptInfoBlocks(scriptInfo);
 
             Echo(scriptInfo.ToString());
@@ -242,13 +256,15 @@ namespace IngameScript
                     CircumNavigateStateSwitch(command.Param);
                     break;
                 case MainStateEnum.SBurn: // Suicide Burn
+                    break;
+                case MainStateEnum.Land: // Auto Land
                     if (gravity == 0)
                     {
                         Abort();
                         return;
                     }
-                    if (command.Param.SuicideBurnState == SuicideBurnStateEnum.Idle) StartSuicideBurn();
-                    SuicideBurnStateSwitch(command.Param);
+                    if (command.Param.SuicideBurnState == AutoLandStateEnum.Idle) StartSuicideBurn();
+                    AutoLandStateSwitch(command.Param);
                     break;
                 case MainStateEnum.GEntry: // Gliding Entry
                     GlidingEntry(command.Param);
@@ -325,6 +341,10 @@ namespace IngameScript
         public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
         {
             scriptInfo.Clear();
+            scriptInfo.AppendLine(new string('-', 28));
+            scriptInfo.AppendLine("isDockMode: " + isDockMode);
+            scriptInfo.AppendLine("lastConnectorState: " + lastConnectorState);
+            scriptInfo.AppendLine("lastGearState: " + lastGearState);
             scriptInfo.AppendLine(gridName);
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.AppendLine("State: " + command.State);
@@ -333,7 +353,7 @@ namespace IngameScript
                 scriptInfo.AppendLine("Param: " + command.Param.Text);
             if (command.Param.Number != 0)
                 scriptInfo.AppendLine("Param: " + command.Param.Number);
-            if (command.Param.SuicideBurnState != SuicideBurnStateEnum.Idle)
+            if (command.Param.SuicideBurnState != AutoLandStateEnum.Idle)
                 scriptInfo.AppendLine("Param: " + command.Param.SuicideBurnState);
 
             return scriptInfo;
@@ -355,7 +375,7 @@ namespace IngameScript
 
             switch (command.State)
             {
-                case MainStateEnum.SBurn:
+                case MainStateEnum.Land:
                 case MainStateEnum.GEntry:
                     scriptInfo.AppendLine($"timeToImpact: {timeToImpact:F2} s");
                     scriptInfo.AppendLine($"gravity: {gravity:F2} m²/s");
@@ -495,23 +515,23 @@ namespace IngameScript
             }
         }
 
-        void SuicideBurnStateSwitch(CommandParam param)
+        void AutoLandStateSwitch(CommandParam param)
         {
             switch (param.SuicideBurnState)
             {
-                case SuicideBurnStateEnum.Idle:
+                case AutoLandStateEnum.Idle:
                     break;
 
-                case SuicideBurnStateEnum.Align:
+                case AutoLandStateEnum.Align:
                     SoftAbort();
-                    if (AlignToGravity(true)) command.Param.SuicideBurnState = SuicideBurnStateEnum.Drop;
+                    if (AlignToGravity(true)) command.Param.SuicideBurnState = AutoLandStateEnum.Drop;
                     break;
 
-                case SuicideBurnStateEnum.Drop:
-                    if (SuicideBurn()) command.Param.SuicideBurnState = SuicideBurnStateEnum.LockGear;
+                case AutoLandStateEnum.Drop:
+                    if (AutoLand()) command.Param.SuicideBurnState = AutoLandStateEnum.LockGear;
                     break;
 
-                case SuicideBurnStateEnum.LockGear:
+                case AutoLandStateEnum.LockGear:
                     if (TryLock()) Abort();
                     break;
             }
@@ -720,6 +740,8 @@ namespace IngameScript
 
             // Connectors, Tanks & Batteries (own construct only)
             GetOwnGridBlocks(connectors);
+            SetConnectors();
+
             GetOwnGridBlocks(tanks);
             GetOwnGridBlocks(batteries);
 
@@ -736,7 +758,7 @@ namespace IngameScript
             {
                 foreach (var battery in batteries)
                 {
-                    if (!battery.Closed && battery.CustomName.ToLower().Contains("backup"))
+                    if (!battery.Closed && battery.CustomName.ToLower().Contains(BACKUP_TAG))
                     {
                         backupBattery = battery;
                         break;
@@ -745,6 +767,15 @@ namespace IngameScript
                 batteries.Remove(backupBattery);
             }
 
+        }
+
+        private void SetConnectors()
+        {
+            foreach (IMyShipConnector connector in connectors)
+            {
+                connector.IsParkingEnabled = false;
+                connector.PullStrength = 0.005f;
+            }
         }
 
         void ReloadControlledBlocks()
@@ -830,7 +861,8 @@ namespace IngameScript
 
         void ChargeBatteries()
         {
-            backupBattery.ChargeMode = ChargeMode.Auto;
+            if (backupBattery != null)
+                backupBattery.ChargeMode = ChargeMode.Auto;
 
             foreach (IMyBatteryBlock battery in batteries)
             {
@@ -840,7 +872,8 @@ namespace IngameScript
 
         void AutoBatteries()
         {
-            backupBattery.ChargeMode = ChargeMode.Recharge;
+            if (backupBattery != null)
+                backupBattery.ChargeMode = ChargeMode.Recharge;
 
             foreach (IMyBatteryBlock battery in batteries)
             {
@@ -1001,7 +1034,7 @@ namespace IngameScript
             }
 
 
-            if (command.State == MainStateEnum.SBurn || command.State == MainStateEnum.GEntry)
+            if (command.State == MainStateEnum.Land || command.State == MainStateEnum.GEntry)
             {
                 stringBuilder.AppendLine($"gravity: {gravity:F2} m²/s");
                 stringBuilder.AppendLine($"Max upward accel: {maxDecel:F2} m²/s");
@@ -1081,7 +1114,7 @@ namespace IngameScript
         void StartSuicideBurn()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            command.Param.SuicideBurnState = SuicideBurnStateEnum.Align;
+            command.Param.SuicideBurnState = AutoLandStateEnum.Align;
         }
 
         void Abort()
@@ -1170,11 +1203,6 @@ namespace IngameScript
             return AlignToGravity(checkSpeed, desiredUp);
         }
 
-        bool AlignToGravity(Vector3D desiredUp)
-        {
-            return AlignToGravity(false, desiredUp);
-        }
-
         bool AlignToGravity(bool checkSpeed, Vector3D desiredUp)
         {
             Vector3D shipUp = controller.WorldMatrix.Up;
@@ -1233,20 +1261,6 @@ namespace IngameScript
 
             return false;
         }
-        
-        /// <summary>
-         /// Rotates the input vector (typically ship's Forward) upward by pitch angle around ship's RIGHT axis.
-         /// Positive angleDeg = nose UP (climb attitude).
-         /// Output: rotated direction vector (normalized).
-         /// </summary>
-        Vector3D RotatePitchUp(Vector3D inputVector, double angleDeg)
-        {
-            double angleRad = MathHelper.ToRadians(angleDeg);
-            Vector3D pitchAxis = controller.WorldMatrix.Right;  // RIGHT axis for pitch (standard)
-            MatrixD rotationMatrix = MatrixD.CreateFromAxisAngle(pitchAxis, angleRad);
-            Vector3D rotated = Vector3D.TransformNormal(inputVector, rotationMatrix);
-            return Vector3D.Normalize(rotated);  // ensure unit vector
-        }
 
         bool IsStopped(double threshold = 0.1)
         {
@@ -1256,7 +1270,7 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         /// SAFE DESCENT
         ////////////////////////////////////////////////////////
-        bool SuicideBurn()
+        bool AutoLand()
         {
             if (netDecel - 0.5 < 0)
             {
