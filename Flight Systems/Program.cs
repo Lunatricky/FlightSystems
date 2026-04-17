@@ -23,6 +23,9 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        // ================= CONFIG =================
+        MyIni ini = new MyIni();
+
         /*
          * R e a d m e
          * -----------
@@ -30,6 +33,7 @@ namespace IngameScript
          * In this file you can include any instructions or other comments you want to have injected onto the 
          * top of your final script. You can safely delete this file if you do not want any such comments.
          */
+
 
         // Descent()
         int tickCount;
@@ -49,8 +53,8 @@ namespace IngameScript
         double timeToStop;
         double thrust = 0;
 
-        double ctrlGridHight;
-        double gearGridHight;
+        double centerGridHight;
+        double bottomGridHight;
         double gridHight;
 
         double forwardVelocity;
@@ -62,6 +66,8 @@ namespace IngameScript
 
         Vector3D desiredUpVector;
 
+        IMyProgrammableBlock me;
+
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
 
@@ -70,9 +76,7 @@ namespace IngameScript
 
         const double SPEED_TOLERANCE = 0.5;  // m/s deadzone
         const double OVERRIDE_STEP = 0.05;   // cruise adjustment rate
-
         double MinSpeed = 20; // m/s
-        double MaxSpeed = 99; // m/s
 
         readonly List<IMyThrust> breakingThrusters = new List<IMyThrust>();
         readonly List<IMyThrust> forwardThrusters = new List<IMyThrust>();
@@ -93,9 +97,22 @@ namespace IngameScript
 
         // Docking Routine
         // Connector-based Function Block Shutdown Fields
+        
+        const string SectionName = "Flight Systems";
 
-        const string OVERRIDE_BLOCKS = "[FS_override]";
-        const string IGNORE_TAG = "[FS_ignore]";
+        string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks Tag";
+        string INI_IGNORE_TAG = "Ignore Tag";
+        string INI_LCD1_TAG = "LCD 1";
+        string INI_LCD2_TAG = "LCD 2";
+        string MAX_SPEED = "Max Speed";
+        string DOCK_MODE = "Dock Mode";
+
+        string __overrideBlockTag = "[FS_override]";
+        string __ignoreTag = "[FS_ignore]";
+        string __Lcd1Tag = "[FS_LCD1]";
+        string __Lcd2Tag = "[FS_LCD2]";
+        double __maxSpeed = 99; // m/s
+        bool __allowDockMode = false;
 
         readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
@@ -109,8 +126,7 @@ namespace IngameScript
         IMyBatteryBlock backupBattery;
 
         bool isDockMode = false;
-        bool lastConnectorState = false;
-        bool lastGearState = false;
+        bool lastDockState = false;
 
         // Info LCDs
         // Info LCD Telemetry Script Fields
@@ -126,6 +142,7 @@ namespace IngameScript
         Vector3D lastVelocity;
         double lastH2Fill = 0;
         bool firstRun = true;
+        // Global config instance
 
         class Command
         {
@@ -187,48 +204,47 @@ namespace IngameScript
 
         public Program()
         {
+            me = Me;
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
             Reload();
 
-            Me.CustomData = CustomDataInfo();
-
-            bool anyConnected = IsAnyConnectorConnected();
-            isDockMode = anyConnected;
-            DockToggle(anyConnected);
+            if (__allowDockMode)
+            {
+                bool anyConnected = IsAnyConnectorConnected();
+                bool isGearlocked = gears.Exists(g => g.IsLocked);
+                isDockMode = anyConnected || isGearlocked;
+                DockToggle(isDockMode);
+            }
         }
 
         Command command = Command.Empty;
 
         public void Main(string argument, UpdateType updateSource)
         {
+            FlightSystems(argument);
+        }
+
+        private void FlightSystems(string argument)
+        {
             if (!string.IsNullOrEmpty(argument)) command = ParseCommand(argument);
 
             StringBuilder scriptInfo = new StringBuilder();
 
             ScriptInfoHeader(scriptInfo);
+            UpdatePhysics();
+            ScriptInfoPhysics(scriptInfo);
 
-            if (!isDockMode)
+
+            if (__allowDockMode)
             {
-                UpdatePhysics();
-                ScriptInfoPhysics(scriptInfo);
-
                 bool anyConnected = IsAnyConnectorConnected();
                 bool isGearlocked = gears.Exists(g => g.IsLocked);
+                isDockMode = anyConnected || isGearlocked;
 
-
-                //isDockMode = anyConnected || isGearlocked;
-
-                if (anyConnected && anyConnected != lastConnectorState)
+                if (isDockMode != lastDockState)
                 {
-                    DockToggle(anyConnected);
-                    lastConnectorState = anyConnected;
-                    return;
-                }
-
-                if (isGearlocked && isGearlocked != lastGearState)
-                {
-                    DockToggle(isGearlocked);
-                    lastGearState = isGearlocked;
+                    DockToggle(isDockMode);
+                    lastDockState = isDockMode;
                     return;
                 }
             }
@@ -236,7 +252,7 @@ namespace IngameScript
             ScriptInfoBlocks(scriptInfo);
 
             Echo(scriptInfo.ToString());
-            Me.GetSurface(0).WriteText(scriptInfo.ToString());
+            me.GetSurface(0).WriteText(scriptInfo.ToString());
 
             switch (command.State)
             {
@@ -248,7 +264,7 @@ namespace IngameScript
                     break;
                 case MainStateEnum.Dock:
                     DockStateSwitch(command.Param);
-                    break;
+                    return;
                 case MainStateEnum.Cruise:
                     CruiseControlStateSwitch(command.Param);
                     break;
@@ -273,8 +289,6 @@ namespace IngameScript
                     ManualLimiter();
                     break;
             }
-
-            if (isDockMode) return;
 
             // Stop cruise control when leaves atmosphere?
 
@@ -343,8 +357,7 @@ namespace IngameScript
             scriptInfo.Clear();
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.AppendLine("isDockMode: " + isDockMode);
-            scriptInfo.AppendLine("lastConnectorState: " + lastConnectorState);
-            scriptInfo.AppendLine("lastGearState: " + lastGearState);
+            scriptInfo.AppendLine("lastDockState: " + lastDockState);
             scriptInfo.AppendLine(gridName);
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.AppendLine("State: " + command.State);
@@ -400,16 +413,6 @@ namespace IngameScript
             scriptInfo.AppendLine("Dock Mode blocks: " + controlledBlocks.Count);
 
             return scriptInfo;
-        }
-
-        public string CustomDataInfo()
-        {
-            StringBuilder customDataInfo = new StringBuilder();
-            customDataInfo.AppendLine("LCD 1 Tag: " + LCD1_TAG);
-            customDataInfo.AppendLine("LCD 2 Tag: " + LCD2_TAG);
-            customDataInfo.AppendLine("Dock Mode Ignore Tag: " + IGNORE_TAG);
-            customDataInfo.AppendLine("Dock Mode Override Tag: " + OVERRIDE_BLOCKS);
-            return customDataInfo.ToString();
         }
 
         private static MainStateEnum TryParseArgument(string input)
@@ -539,7 +542,8 @@ namespace IngameScript
 
         private void Reload()
         {
-            SetupSurface(Me.GetSurface(0));
+            ParseIni();
+            SetupSurface(me.GetSurface(0));
             LoadOverrideGroup();
             CacheBlocksCC();
             CacheBlocksLand();
@@ -555,8 +559,8 @@ namespace IngameScript
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
         {
             list.Clear();
-            GridTerminalSystem.GetBlocksOfType(list, block => 
-            (block.IsSameConstructAs(Me) && !block.CustomName.Contains(IGNORE_TAG))
+            GridTerminalSystem.GetBlocksOfType(list, block =>
+            (block.IsSameConstructAs(me) && !block.CustomName.Contains(__ignoreTag))
             );
         }
 
@@ -566,9 +570,9 @@ namespace IngameScript
             breakingThrusters.Clear();
             upwardThrusters.Clear();
 
-            var controllers = new List<IMyRemoteControl>();
+            List<IMyRemoteControl> controllers = new List<IMyRemoteControl>();
             GridTerminalSystem.GetBlocksOfType(controllers, controller =>
-               controller.IsSameConstructAs(Me) && controller.IsMainCockpit);
+               controller.IsSameConstructAs(me) && controller.IsMainCockpit);
 
             if (controllers.Count == 0)
                 GetOwnGridBlocks(controllers);
@@ -604,22 +608,43 @@ namespace IngameScript
 
             Vector3D gravityDir = Vector3D.Normalize(controller.GetNaturalGravity());
 
-            // world positions
-            Vector3D ctrlPos = controller.GetPosition();
-            Vector3D gearPos = gears[0].GetPosition();
+            Vector3D center = me.CubeGrid.WorldVolume.Center;
+            Vector3D shipBottom = GetLowestPoint(controller);
 
             // project onto gravity vector
-            ctrlGridHight = ctrlPos.Dot(gravityDir);
-            gearGridHight = gearPos.Dot(gravityDir);
+            centerGridHight = center.Dot(gravityDir);
+            bottomGridHight = shipBottom.Dot(gravityDir);
 
             // height difference along gravity
-            gridHight = Math.Abs(ctrlGridHight - gearGridHight);
+            gridHight = Math.Abs(centerGridHight - bottomGridHight);
+        }
+
+        Vector3D GetLowestPoint(IMyShipController controller)
+        {
+            BoundingBoxD bb = Me.CubeGrid.WorldAABB;
+
+            Vector3D shipDown = Base6Directions.GetVector(
+                Base6Directions.GetOppositeDirection(controller.Orientation.Up)
+            );
+
+            // This gives the true lowest point of the grid in the ship's "down" direction
+            Vector3D lowestPoint = bb.Center - shipDown * bb.HalfExtents.Dot(shipDown);
+
+            return lowestPoint;
+        }
+
+        public Vector3D GetWorldPosition(Vector3I localPosition, Vector3D center)
+        {
+            // Transform the local position to world coordinates using the grid's WorldMatrix
+            Vector3D worldCoords = Vector3D.Transform(center, controller.CubeGrid.WorldMatrix);
+
+            return worldCoords;
         }
 
         void GlidingEntry(CommandParam param)
         {
             double targeAltitude = param.Number;
-            CruiseControl(MaxSpeed);
+            CruiseControl(__maxSpeed);
             if (effectiveAlt < targeAltitude)
             {
 
@@ -629,7 +654,7 @@ namespace IngameScript
 
         void ManualLimiter()
         {
-            bool allowThrust = forwardVelocity < MaxSpeed;
+            bool allowThrust = forwardVelocity < __maxSpeed;
 
             // Normal forward thrust behavior
             foreach (var forwardThruster in forwardThrusters)
@@ -681,13 +706,13 @@ namespace IngameScript
 
             var blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(blocks, b =>
-                b.IsSameConstructAs(Me) &&
-                b.CustomName.Contains(OVERRIDE_BLOCKS)
+                b.IsSameConstructAs(me) &&
+                b.CustomName.Contains(__overrideBlockTag)
             );
 
             foreach (var block in blocks)
             {
-                if (block.IsSameConstructAs(Me))
+                if (block.IsSameConstructAs(me))
                     overrideBlocks.Add(block.EntityId);
             }
         }
@@ -704,10 +729,10 @@ namespace IngameScript
             // Functional blocks to power on/off
             var temp = new List<IMyFunctionalBlock>();
             GridTerminalSystem.GetBlocksOfType(temp, b =>
-                b.IsSameConstructAs(Me) &&
+                b.IsSameConstructAs(me) &&
                 !ContainsIgnore(b.CustomName) &&
                 !ContainsIgnore(b.CustomData) &&
-                b != Me &&
+                b != me &&
                 !(b is IMyShipConnector) &&
                 !(b is IMyBatteryBlock) &&
                 !(b is IMyDoor) &&
@@ -729,12 +754,12 @@ namespace IngameScript
 
             if (group != null)
                 group.GetBlocksOfType(controlledBlocks, block =>
-                    block.IsSameConstructAs(Me));
+                    block.IsSameConstructAs(me));
 
             if (controlledBlocks.Count == 0)
             {
                 ReloadControlledBlocks();
-                controlledBlocks.Remove(Me);
+                controlledBlocks.Remove(me);
             }
 
 
@@ -801,7 +826,7 @@ namespace IngameScript
             var tempList = new List<T>();
 
             GridTerminalSystem.GetBlocksOfType(tempList, tempBlock =>
-                tempBlock.IsSameConstructAs(Me) &&
+                tempBlock.IsSameConstructAs(me) &&
                 !ContainsIgnore(tempBlock.CustomName)
             );
 
@@ -888,10 +913,10 @@ namespace IngameScript
             lcds1.Clear();
             lcds2.Clear();
 
-            gridName = Me.CubeGrid.CustomName;
+            gridName = me.CubeGrid.CustomName;
 
-            AddLCDsToList(lcds1, LCD1_TAG);
-            AddLCDsToList(lcds2, LCD2_TAG);
+            AddLCDsToList(lcds1, __Lcd1Tag);
+            AddLCDsToList(lcds2, __Lcd2Tag);
 
             firstRun = true;
         }
@@ -902,7 +927,7 @@ namespace IngameScript
             // LCDs
             var blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
-                block.IsSameConstructAs(Me) &&
+                block.IsSameConstructAs(me) &&
                 block.CustomName.Contains(LCD_TAG)
             );
 
@@ -1004,7 +1029,7 @@ namespace IngameScript
             stringBuilder.AppendLine($"Bat:  {batStored / batCap * 100:0} %");
             stringBuilder.AppendLine($"Bat Time: {batTime}");
 
-            foreach(IMyTextSurface lcd1 in lcds1)
+            foreach (IMyTextSurface lcd1 in lcds1)
                 lcd1.WriteText(stringBuilder.ToString());
         }
 
@@ -1095,7 +1120,7 @@ namespace IngameScript
             controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
 
             var paramSpeed = command.Param.Number;
-            cruiseSpeed = (paramSpeed == 0 ? MaxSpeed : MathHelper.Clamp(command.Param.Number, MinSpeed, MaxSpeed));
+            cruiseSpeed = (paramSpeed == 0 ? __maxSpeed : MathHelper.Clamp(command.Param.Number, MinSpeed, __maxSpeed));
 
             climbRate = GetGravityAlignedVerticalVelocity();
             vEffectiveSpeed = climbRate + maxDecel * Runtime.TimeSinceLastRun.TotalSeconds;
@@ -1262,6 +1287,20 @@ namespace IngameScript
             return false;
         }
 
+        /// <summary>
+        /// Rotates the input vector (typically ship's Forward) upward by pitch angle around ship's RIGHT axis.
+        /// Positive angleDeg = nose UP (climb attitude).
+        /// Output: rotated direction vector (normalized).
+        /// </summary>
+        Vector3D RotatePitchUp(Vector3D inputVector, double angleDeg)
+        {
+            double angleRad = MathHelper.ToRadians(angleDeg);
+            Vector3D pitchAxis = controller.WorldMatrix.Right;  // RIGHT axis for pitch (standard)
+            MatrixD rotationMatrix = MatrixD.CreateFromAxisAngle(pitchAxis, angleRad);
+            Vector3D rotated = Vector3D.TransformNormal(inputVector, rotationMatrix);
+            return Vector3D.Normalize(rotated);  // ensure unit vector
+        }
+
         bool IsStopped(double threshold = 0.1)
         {
             return threshold > upVelocity && threshold >= Math.Abs(forwardVelocity) && threshold >= Math.Abs(rightVelocity);
@@ -1276,9 +1315,9 @@ namespace IngameScript
             {
                 Abort();
                 command.State = MainStateEnum.Cruise;
-                command.Param.Text= "orbit";
-            }                
-                
+                command.Param.Text = "orbit";
+            }
+
             controller.DampenersOverride = false;
             AlignToGravity();
 
@@ -1415,6 +1454,48 @@ namespace IngameScript
                 if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
 
             return MathHelper.ToDegrees(Math.Atan2(fwdThrust, upThrust));
+        }
+
+        // ────────────────────────────────────────────────
+        // Load config from CustomData (INI style)
+        // ────────────────────────────────────────────────
+        
+        private void ParseIni()
+        {
+            ini.Clear();
+            string customData = me.CustomData;
+            bool parsed = ini.TryParse(customData);
+
+            string sectionName = SectionName;
+
+            if (!ini.ContainsSection(sectionName))
+            {
+                ini.AddSection(sectionName);
+            }
+
+            String referenceBlockGridCoords;
+
+            __overrideBlockTag = ini.Get(sectionName, INI_OVERRIDE_BLOCKS_TAG).ToString(__overrideBlockTag);
+            __ignoreTag = ini.Get(sectionName, INI_IGNORE_TAG).ToString(__ignoreTag);
+            __Lcd1Tag = ini.Get(sectionName, INI_LCD1_TAG).ToString(__Lcd1Tag);
+            __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
+            __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
+            __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
+
+
+            ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
+            ini.Set(SectionName, INI_IGNORE_TAG, __ignoreTag);
+            ini.Set(SectionName, INI_LCD1_TAG, __Lcd1Tag);
+            ini.Set(SectionName, INI_LCD2_TAG, __Lcd2Tag);
+            ini.Set(SectionName, MAX_SPEED, __maxSpeed);
+            ini.Set(SectionName, DOCK_MODE, __allowDockMode);
+
+            string output = ini.ToString();
+            me.CustomData = output;
+            if (!string.Equals(output, me.CustomData))
+            {
+                me.CustomData = output;
+            }
         }
     }
 }
