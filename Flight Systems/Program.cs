@@ -827,7 +827,7 @@ namespace IngameScript
             foreach (IMyShipConnector connector in connectors)
             {
                 connector.IsParkingEnabled = false;
-                connector.PullStrength = 0.005f;
+                connector.PullStrength = 0.00005f;
             }
         }
 
