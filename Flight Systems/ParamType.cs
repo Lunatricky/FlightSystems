@@ -11,7 +11,7 @@ namespace IngameScript
         None,
         Number,
         Text,
-        SuicideBurnState
+        AutoLandState
         // Add more later: Vector3D, BlockName, GPS, etc.
     }
 }

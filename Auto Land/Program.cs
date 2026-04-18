@@ -170,21 +170,16 @@ namespace IngameScript
             upThrusters.Clear();
             gears.Clear();
 
-            var group = GridTerminalSystem.GetBlockGroupWithName("AUTO LAND");
-
-            if (group == null)
-                throw new Exception("Missing group AUTO LAND");
-
-            group.GetBlocksOfType(gyros);
-            group.GetBlocksOfType(gears);
+            GridTerminalSystem.GetBlocksOfType(gyros);
+            GridTerminalSystem.GetBlocksOfType(gears);
 
             var thrusters = new List<IMyThrust>();
-            group.GetBlocksOfType(thrusters);
+            GridTerminalSystem.GetBlocksOfType(thrusters);
 
             foreach (var t in thrusters) upThrusters.Add(t);
 
             var ctrls = new List<IMyShipController>();
-            group.GetBlocksOfType(ctrls);
+            GridTerminalSystem.GetBlocksOfType(ctrls);
 
             ctrl = ctrls.Find(c => c.IsMainCockpit) ?? ctrls[0];
 
