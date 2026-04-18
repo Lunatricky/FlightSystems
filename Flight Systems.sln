@@ -3,25 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.36631.11
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cruise Control", "CruiseControl\Cruise Control.csproj", "{9A834B58-DAAB-41DC-9F6D-FB29E4B68968}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Docking Routine", "Docking Routine\Docking Routine.csproj", "{59E2B24F-11D3-4560-A480-A382235BF088}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Info LCDs", "Info LCDs\Info LCDs.csproj", "{0DE91B37-3A46-4120-A82E-752140DAC5D2}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flight Systems", "Flight Systems\Flight Systems.csproj", "{C9656C0C-0CA3-4B27-8E1B-4D19D1A296E0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Grand Cruise", "Grand Cruise\Grand Cruise.csproj", "{7E4DE015-A315-4033-8EEA-C0013014FC7D}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sensor Detection", "Sensor Detection\Sensor Detection.csproj", "{EF3C284B-49EC-430E-978E-E1B25CCC403E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Land", "Auto Land\Auto Land.csproj", "{A86DE86C-DD0A-42AA-AEFB-12A097C81263}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Land 2", "Auto Land 2\Auto Land 2.csproj", "{CC883D65-5CAA-475C-AF90-A6698F89EC18}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flight Systems Old", "Flight Systems Old\Flight Systems Old.csproj", "{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ini", "Ini\Ini.csproj", "{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Where's Waldo", "Where's Waldo\Where's Waldo.csproj", "{C828628F-B828-4804-9220-F50F94EEAB2D}"
 EndProject
@@ -35,26 +19,10 @@ Global
 		Debug|x64 = Debug|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{9A834B58-DAAB-41DC-9F6D-FB29E4B68968}.Debug|x64.ActiveCfg = Debug|x64
-		{9A834B58-DAAB-41DC-9F6D-FB29E4B68968}.Debug|x64.Build.0 = Debug|x64
-		{59E2B24F-11D3-4560-A480-A382235BF088}.Debug|x64.ActiveCfg = Debug|x64
-		{59E2B24F-11D3-4560-A480-A382235BF088}.Debug|x64.Build.0 = Debug|x64
-		{0DE91B37-3A46-4120-A82E-752140DAC5D2}.Debug|x64.ActiveCfg = Debug|x64
-		{0DE91B37-3A46-4120-A82E-752140DAC5D2}.Debug|x64.Build.0 = Debug|x64
 		{C9656C0C-0CA3-4B27-8E1B-4D19D1A296E0}.Debug|x64.ActiveCfg = Debug|x64
 		{C9656C0C-0CA3-4B27-8E1B-4D19D1A296E0}.Debug|x64.Build.0 = Debug|x64
-		{7E4DE015-A315-4033-8EEA-C0013014FC7D}.Debug|x64.ActiveCfg = Debug|x64
-		{7E4DE015-A315-4033-8EEA-C0013014FC7D}.Debug|x64.Build.0 = Debug|x64
 		{EF3C284B-49EC-430E-978E-E1B25CCC403E}.Debug|x64.ActiveCfg = Debug|x64
 		{EF3C284B-49EC-430E-978E-E1B25CCC403E}.Debug|x64.Build.0 = Debug|x64
-		{A86DE86C-DD0A-42AA-AEFB-12A097C81263}.Debug|x64.ActiveCfg = Debug|x64
-		{A86DE86C-DD0A-42AA-AEFB-12A097C81263}.Debug|x64.Build.0 = Debug|x64
-		{CC883D65-5CAA-475C-AF90-A6698F89EC18}.Debug|x64.ActiveCfg = Debug|x64
-		{CC883D65-5CAA-475C-AF90-A6698F89EC18}.Debug|x64.Build.0 = Debug|x64
-		{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}.Debug|x64.ActiveCfg = Debug|x64
-		{7F6F8036-BDC3-47D3-ADDA-2001C2787B3E}.Debug|x64.Build.0 = Debug|x64
-		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.ActiveCfg = Debug|x64
-		{BBE7A73E-8E07-41A3-AB97-CC8ABBABA495}.Debug|x64.Build.0 = Debug|x64
 		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.ActiveCfg = Debug|x64
 		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection

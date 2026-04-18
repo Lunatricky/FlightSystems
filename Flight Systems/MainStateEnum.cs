@@ -10,6 +10,5 @@
         CNav, // Circumnavigation
         Land, // Auto Land
         SBurn, // Suicide Burn
-        GEntry // Gliding Entry
     }
 }

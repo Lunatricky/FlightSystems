@@ -106,6 +106,7 @@ namespace IngameScript
         string INI_LCD2_TAG = "LCD 2";
         string MAX_SPEED = "Max Speed";
         string DOCK_MODE = "Dock Mode";
+        string MANUAL_SPEED_LIMITER = "Manual Speed Limiter";
 
         string __overrideBlockTag = "[FS_override]";
         string __ignoreTag = "[FS_ignore]";
@@ -113,6 +114,7 @@ namespace IngameScript
         string __Lcd2Tag = "[FS_LCD2]";
         double __maxSpeed = 99; // m/s
         bool __allowDockMode = false;
+        bool __allowManualSpeedLimiter = false;
 
         readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
@@ -163,7 +165,7 @@ namespace IngameScript
             public ParamType Type;
             public double Number;
             public string Text;
-            public AutoLandStateEnum SuicideBurnState;
+            public AutoLandStateEnum AutoLandState;
 
             // ────────────────────────────────────────────────
             // Constructors — one per type
@@ -173,7 +175,7 @@ namespace IngameScript
                 Type = ParamType.Number;
                 Number = n;
                 Text = null;
-                SuicideBurnState = AutoLandStateEnum.Idle;
+                AutoLandState = AutoLandStateEnum.Idle;
             }
 
             public CommandParam(string t)
@@ -181,15 +183,15 @@ namespace IngameScript
                 Type = ParamType.Text;
                 Number = 0;
                 Text = t ?? "";
-                SuicideBurnState = AutoLandStateEnum.Idle;
+                AutoLandState = AutoLandStateEnum.Idle;
             }
 
             public CommandParam(AutoLandStateEnum s)
             {
-                Type = ParamType.SuicideBurnState;
+                Type = ParamType.AutoLandState;
                 Number = 0;
                 Text = null;
-                SuicideBurnState = s;
+                AutoLandState = s;
             }
 
             // Empty
@@ -199,7 +201,7 @@ namespace IngameScript
             public double GetNumberOr(double fallback) => Type == ParamType.Number ? Number : fallback;
             public string GetTextOr(string fallback) => Type == ParamType.Text ? Text : fallback;
             public AutoLandStateEnum GetSuicideStateOr(AutoLandStateEnum fallback)
-                => Type == ParamType.SuicideBurnState ? SuicideBurnState : fallback;
+                => Type == ParamType.AutoLandState ? AutoLandState : fallback;
         }
 
         public Program()
@@ -211,8 +213,8 @@ namespace IngameScript
             if (__allowDockMode)
             {
                 bool anyConnected = IsAnyConnectorConnected();
-                bool isGearlocked = gears.Exists(g => g.IsLocked);
-                isDockMode = anyConnected || isGearlocked;
+                bool isGearLocked = gears.Exists(g => g.IsLocked);
+                isDockMode = anyConnected || isGearLocked;
                 DockToggle(isDockMode);
             }
         }
@@ -271,22 +273,21 @@ namespace IngameScript
                 case MainStateEnum.CNav: // Circumnavigation
                     CircumNavigateStateSwitch(command.Param);
                     break;
-                case MainStateEnum.SBurn: // Suicide Burn
-                    break;
                 case MainStateEnum.Land: // Auto Land
                     if (gravity == 0)
                     {
                         Abort();
                         return;
                     }
-                    if (command.Param.SuicideBurnState == AutoLandStateEnum.Idle) StartSuicideBurn();
+                    if (command.Param.AutoLandState == AutoLandStateEnum.Idle) StartLand();
                     AutoLandStateSwitch(command.Param);
                     break;
-                case MainStateEnum.GEntry: // Gliding Entry
-                    GlidingEntry(command.Param);
+                case MainStateEnum.SBurn: // Suicide Burn
+                    if (command.Param.AutoLandState == AutoLandStateEnum.Idle) StartLand();
+                    SuicideBurnStateSwitch(command.Param);
                     break;
                 default:
-                    ManualLimiter();
+                    if (__allowManualSpeedLimiter) ManualSpeedLimiter();
                     break;
             }
 
@@ -354,10 +355,6 @@ namespace IngameScript
 
         public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
         {
-            scriptInfo.Clear();
-            scriptInfo.AppendLine(new string('-', 28));
-            scriptInfo.AppendLine("isDockMode: " + isDockMode);
-            scriptInfo.AppendLine("lastDockState: " + lastDockState);
             scriptInfo.AppendLine(gridName);
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.AppendLine("State: " + command.State);
@@ -366,8 +363,8 @@ namespace IngameScript
                 scriptInfo.AppendLine("Param: " + command.Param.Text);
             if (command.Param.Number != 0)
                 scriptInfo.AppendLine("Param: " + command.Param.Number);
-            if (command.Param.SuicideBurnState != AutoLandStateEnum.Idle)
-                scriptInfo.AppendLine("Param: " + command.Param.SuicideBurnState);
+            if (command.Param.AutoLandState != AutoLandStateEnum.Idle)
+                scriptInfo.AppendLine("Param: " + command.Param.AutoLandState);
 
             return scriptInfo;
         }
@@ -389,7 +386,7 @@ namespace IngameScript
             switch (command.State)
             {
                 case MainStateEnum.Land:
-                case MainStateEnum.GEntry:
+                case MainStateEnum.SBurn:
                     scriptInfo.AppendLine($"timeToImpact: {timeToImpact:F2} s");
                     scriptInfo.AppendLine($"gravity: {gravity:F2} m²/s");
                     scriptInfo.AppendLine($"Max upward accel: {maxDecel:F2} m²/s");
@@ -487,14 +484,22 @@ namespace IngameScript
                 case "align":
                     if (AlignToGravity())
                     {
-                        desiredUpVector = RotateUpTowardForwardForNoseUp(-0.7 * GetPitchAngle());
+                        desiredUpVector = RotateUpTowardForwardForNoseUp(-0.7 * GetMaxPitchAngle());
                         command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
                     Vector3D shipUp = controller.WorldMatrix.Up;
-                    AlignToGravity(desiredUpVector, false, shipUp);
+                    AlignToVector(desiredUpVector, false, shipUp);
                     CruiseControl(cruiseSpeed);
+                    break;
+                case "glide":
+                    CruiseControl(cruiseSpeed);
+                    if (effectiveAlt < 500)
+                    {
+                        Abort();
+                        command.State = MainStateEnum.Land;
+                    }
                     break;
             }
         }
@@ -518,20 +523,42 @@ namespace IngameScript
             }
         }
 
-        void AutoLandStateSwitch(CommandParam param)
+        void SuicideBurnStateSwitch(CommandParam param)
         {
-            switch (param.SuicideBurnState)
+            switch (param.AutoLandState)
             {
                 case AutoLandStateEnum.Idle:
                     break;
 
                 case AutoLandStateEnum.Align:
                     SoftAbort();
-                    if (AlignToGravity(true)) command.Param.SuicideBurnState = AutoLandStateEnum.Drop;
+                    if (AlignToGravity(true)) command.Param.AutoLandState = AutoLandStateEnum.Drop;
                     break;
 
                 case AutoLandStateEnum.Drop:
-                    if (AutoLand()) command.Param.SuicideBurnState = AutoLandStateEnum.LockGear;
+                    if (SuicideBurn()) command.Param.AutoLandState = AutoLandStateEnum.LockGear;
+                    break;
+
+                case AutoLandStateEnum.LockGear:
+                    if (TryLock()) Abort();
+                    break;
+            }
+        }
+
+        void AutoLandStateSwitch(CommandParam param)
+        {
+            switch (param.AutoLandState)
+            {
+                case AutoLandStateEnum.Idle:
+                    break;
+
+                case AutoLandStateEnum.Align:
+                    SoftAbort();
+                    if (AlignToGravity(true)) command.Param.AutoLandState = AutoLandStateEnum.Drop;
+                    break;
+
+                case AutoLandStateEnum.Drop:
+                    if (AutoLand()) command.Param.AutoLandState = AutoLandStateEnum.LockGear;
                     break;
 
                 case AutoLandStateEnum.LockGear:
@@ -641,18 +668,7 @@ namespace IngameScript
             return worldCoords;
         }
 
-        void GlidingEntry(CommandParam param)
-        {
-            double targeAltitude = param.Number;
-            CruiseControl(__maxSpeed);
-            if (effectiveAlt < targeAltitude)
-            {
-
-            }
-
-        }
-
-        void ManualLimiter()
+        void ManualSpeedLimiter()
         {
             bool allowThrust = forwardVelocity < __maxSpeed;
 
@@ -660,7 +676,13 @@ namespace IngameScript
             foreach (var forwardThruster in forwardThrusters)
             {
                 forwardThruster.ThrustOverridePercentage = 0f;
-                forwardThruster.Enabled = allowThrust;
+
+                bool anyConnected = IsAnyConnectorConnected();
+                bool isGearLocked = gears.Exists(g => g.IsLocked);
+
+                // Enable forward thrusters only when we are allowed to thrust AND 
+                // we are not docked (connectors) AND landing gears are not locked
+                forwardThruster.Enabled = allowThrust && !anyConnected && !isGearLocked;
             }
 
         }
@@ -947,7 +969,7 @@ namespace IngameScript
         {
             surface.ContentType = ContentType.TEXT_AND_IMAGE;
             surface.Font = "DEBUG";
-            surface.FontSize = 1.5f;
+            surface.FontSize = 1.7f;
             surface.Alignment = TextAlignment.LEFT;
             return surface;
         }
@@ -1059,7 +1081,7 @@ namespace IngameScript
             }
 
 
-            if (command.State == MainStateEnum.Land || command.State == MainStateEnum.GEntry)
+            if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
             {
                 stringBuilder.AppendLine($"gravity: {gravity:F2} m²/s");
                 stringBuilder.AppendLine($"Max upward accel: {maxDecel:F2} m²/s");
@@ -1136,10 +1158,10 @@ namespace IngameScript
             netDecel = ComputeNetDecel();
         }
 
-        void StartSuicideBurn()
+        void StartLand()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            command.Param.SuicideBurnState = AutoLandStateEnum.Align;
+            command.Param.AutoLandState = AutoLandStateEnum.Align;
         }
 
         void Abort()
@@ -1225,22 +1247,22 @@ namespace IngameScript
         bool AlignToGravity(bool checkSpeed)
         {
             Vector3D desiredUp = Vector3D.Normalize(naturalGrav);
-            return AlignToGravity(checkSpeed, desiredUp);
+            return AlignToVector(checkSpeed, desiredUp);
         }
 
-        bool AlignToGravity(bool checkSpeed, Vector3D desiredUp)
+        bool AlignToVector(bool checkSpeed, Vector3D desiredUpVector)
         {
             Vector3D shipUp = controller.WorldMatrix.Up;
 
-            return AlignToGravity(shipUp, checkSpeed, desiredUp);
+            return AlignToVector(shipUp, checkSpeed, desiredUpVector);
         }
 
-        bool AlignToGravity(Vector3D shipUp, bool checkSpeed, Vector3D desiredUp)
+        bool AlignToVector(Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
         {
             if (naturalGrav.LengthSquared() < 0.01)
                 return false;
 
-            Vector3D axis = shipUp.Cross(desiredUp);
+            Vector3D axis = shipUp.Cross(desiredUpVector);
             double angle = axis.Length();
 
             if (angle < 0.005 && (checkSpeed ? IsStopped() : true))
@@ -1287,20 +1309,6 @@ namespace IngameScript
             return false;
         }
 
-        /// <summary>
-        /// Rotates the input vector (typically ship's Forward) upward by pitch angle around ship's RIGHT axis.
-        /// Positive angleDeg = nose UP (climb attitude).
-        /// Output: rotated direction vector (normalized).
-        /// </summary>
-        Vector3D RotatePitchUp(Vector3D inputVector, double angleDeg)
-        {
-            double angleRad = MathHelper.ToRadians(angleDeg);
-            Vector3D pitchAxis = controller.WorldMatrix.Right;  // RIGHT axis for pitch (standard)
-            MatrixD rotationMatrix = MatrixD.CreateFromAxisAngle(pitchAxis, angleRad);
-            Vector3D rotated = Vector3D.TransformNormal(inputVector, rotationMatrix);
-            return Vector3D.Normalize(rotated);  // ensure unit vector
-        }
-
         bool IsStopped(double threshold = 0.1)
         {
             return threshold > upVelocity && threshold >= Math.Abs(forwardVelocity) && threshold >= Math.Abs(rightVelocity);
@@ -1309,6 +1317,20 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         /// SAFE DESCENT
         ////////////////////////////////////////////////////////
+        bool SuicideBurn()
+        {
+            if (netDecel - 0.5 < 0)
+            {
+                Abort();
+                command.State = MainStateEnum.Cruise;
+                command.Param.Text = "orbit";
+            }
+
+            AlignToGravity();
+            MatchVerticalSpeed(-104);
+            return effectiveAlt < stopDist + 2 * gridHight;
+        }
+
         bool AutoLand()
         {
             if (netDecel - 0.5 < 0)
@@ -1445,7 +1467,7 @@ namespace IngameScript
             return Vector3D.Normalize(rotatedUp);
         }
 
-        private double GetPitchAngle()
+        private double GetMaxPitchAngle()
         {
             double fwdThrust = 0, upThrust = 0;
             foreach (var t in forwardThrusters)
@@ -1481,6 +1503,7 @@ namespace IngameScript
             __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
             __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
             __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
+            __allowManualSpeedLimiter = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowManualSpeedLimiter);
 
 
             ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
@@ -1489,6 +1512,7 @@ namespace IngameScript
             ini.Set(SectionName, INI_LCD2_TAG, __Lcd2Tag);
             ini.Set(SectionName, MAX_SPEED, __maxSpeed);
             ini.Set(SectionName, DOCK_MODE, __allowDockMode);
+            ini.Set(SectionName, MANUAL_SPEED_LIMITER, __allowManualSpeedLimiter);
 
             string output = ini.ToString();
             me.CustomData = output;
