@@ -1319,7 +1319,7 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         bool SuicideBurn()
         {
-            if (netDecel - 0.5 < 0)
+            if (netDecel - 1 < 0)
             {
                 Abort();
                 command.State = MainStateEnum.Cruise;
