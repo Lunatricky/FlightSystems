@@ -259,6 +259,8 @@ namespace IngameScript
             Echo(scriptInfo.ToString());
             me.GetSurface(0).WriteText(scriptInfo.ToString());
 
+            if (isDockMode) return;
+
             switch (command.State)
             {
                 case MainStateEnum.Reload:
@@ -827,7 +829,7 @@ namespace IngameScript
             foreach (IMyShipConnector connector in connectors)
             {
                 connector.IsParkingEnabled = false;
-                connector.PullStrength = 0.005f;
+                connector.PullStrength = 0.00005f;
             }
         }
 
