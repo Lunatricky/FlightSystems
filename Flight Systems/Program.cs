@@ -107,6 +107,7 @@ namespace IngameScript
         string MAX_SPEED = "Max Speed";
         string DOCK_MODE = "Dock Mode";
         string MANUAL_SPEED_LIMITER = "Manual Speed Limiter";
+        string CONTROL_ANTENNAS = "Control Antennas";
 
         string __overrideBlockTag = "[FS_override]";
         string __ignoreTag = "[FS_ignore]";
@@ -115,6 +116,7 @@ namespace IngameScript
         double __maxSpeed = 99; // m/s
         bool __allowDockMode = false;
         bool __allowManualSpeedLimiter = false;
+        bool __controlAntennas = false;
 
         readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
@@ -123,6 +125,7 @@ namespace IngameScript
         readonly List<IMyGasTank> tanks = new List<IMyGasTank>();
         readonly List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
         readonly List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+        readonly List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
 
 
         IMyBatteryBlock backupBattery;
@@ -307,6 +310,16 @@ namespace IngameScript
 
             if (lcds1.Count > 0) WriteInfo();
             if (lcds2.Count > 0) WriteInfo2();
+
+            if (__controlAntennas)
+            {
+                antennas.ForEach(b => { if (b != null) b.Enabled = false; });
+                if (antennas.Count > 0)
+                {
+                    var firstValid = antennas.FirstOrDefault(b => b != null && !b.Closed);
+                    if (firstValid != null) firstValid.Enabled = true;
+                }
+            }
         }
 
         private void DockToggle(bool anyConnected)
@@ -771,13 +784,6 @@ namespace IngameScript
 
             cachedBlocks.AddRange(temp);
 
-
-            IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName("Auto Managed");
-
-            if (group != null)
-                group.GetBlocksOfType(controlledBlocks, block =>
-                    block.IsSameConstructAs(me));
-
             if (controlledBlocks.Count == 0)
             {
                 ReloadControlledBlocks();
@@ -934,11 +940,21 @@ namespace IngameScript
         {
             lcds1.Clear();
             lcds2.Clear();
+            antennas.Clear();
 
             gridName = me.CubeGrid.CustomName;
 
             AddLCDsToList(lcds1, __Lcd1Tag);
             AddLCDsToList(lcds2, __Lcd2Tag);
+
+            GetOwnGridBlocks(antennas);
+            if (__controlAntennas)
+            {
+                foreach (IMyRadioAntenna antenna in antennas)
+                {
+                    if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = gridName;
+                }
+            }
 
             firstRun = true;
         }
@@ -1495,15 +1511,14 @@ namespace IngameScript
                 ini.AddSection(sectionName);
             }
 
-            String referenceBlockGridCoords;
-
             __overrideBlockTag = ini.Get(sectionName, INI_OVERRIDE_BLOCKS_TAG).ToString(__overrideBlockTag);
             __ignoreTag = ini.Get(sectionName, INI_IGNORE_TAG).ToString(__ignoreTag);
             __Lcd1Tag = ini.Get(sectionName, INI_LCD1_TAG).ToString(__Lcd1Tag);
             __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
             __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
             __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
-            __allowManualSpeedLimiter = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowManualSpeedLimiter);
+            __allowManualSpeedLimiter = ini.Get(sectionName, MANUAL_SPEED_LIMITER).ToBoolean(__allowManualSpeedLimiter);
+            __controlAntennas = ini.Get(sectionName, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
 
 
             ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
@@ -1513,6 +1528,7 @@ namespace IngameScript
             ini.Set(SectionName, MAX_SPEED, __maxSpeed);
             ini.Set(SectionName, DOCK_MODE, __allowDockMode);
             ini.Set(SectionName, MANUAL_SPEED_LIMITER, __allowManualSpeedLimiter);
+            ini.Set(SectionName, CONTROL_ANTENNAS, __controlAntennas);
 
             string output = ini.ToString();
             me.CustomData = output;
