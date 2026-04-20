@@ -63,6 +63,7 @@ namespace IngameScript
 
         double netDecel;
         double maxThrustUp;
+        double H2CapacityPercent;
 
         Vector3D desiredUpVector;
 
@@ -86,6 +87,7 @@ namespace IngameScript
 
         bool cruiseToggle = false;
         bool circumnavToggle = false;
+        bool circumnavCheckAltitude = false;
         bool lastCheckIsOnNatGrav = false;
         bool stopCruiseWhenOutOfGrav = false;
 
@@ -105,6 +107,7 @@ namespace IngameScript
         string INI_LCD1_TAG = "LCD 1";
         string INI_LCD2_TAG = "LCD 2";
         string MAX_SPEED = "Max Speed";
+        string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
         string DOCK_MODE = "Dock Mode";
         string MANUAL_SPEED_LIMITER = "Manual Speed Limiter";
         string CONTROL_ANTENNAS = "Control Antennas";
@@ -114,13 +117,13 @@ namespace IngameScript
         string __Lcd1Tag = "[FS_LCD1]";
         string __Lcd2Tag = "[FS_LCD2]";
         double __maxSpeed = 99; // m/s
+        double __minimumAcceptedFuel = 20; //%
         bool __allowDockMode = false;
         bool __allowManualSpeedLimiter = false;
         bool __controlAntennas = false;
 
-        readonly List<IMyFunctionalBlock> cachedBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
-        readonly HashSet<long> overrideBlocks = new HashSet<long>();
+        readonly List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
         readonly List<IMyGasTank> tanks = new List<IMyGasTank>();
         readonly List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
@@ -252,6 +255,11 @@ namespace IngameScript
                     lastDockState = isDockMode;
                     return;
                 }
+            }
+
+            if (H2CapacityPercent < __minimumAcceptedFuel)
+            {
+                command.State = MainStateEnum.Land;
             }
 
             ScriptInfoBlocks(scriptInfo);
@@ -504,6 +512,12 @@ namespace IngameScript
                     }
                     break;
                 case "climb":
+                    if (circumnavCheckAltitude && effectiveAlt > 2000)
+                    {
+                        Abort();
+                        circumnavCheckAltitude = false;
+                        command.State = MainStateEnum.CNav;
+                    }
                     Vector3D shipUp = controller.WorldMatrix.Up;
                     AlignToVector(desiredUpVector, false, shipUp);
                     CruiseControl(cruiseSpeed);
@@ -530,6 +544,13 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
+                    if (effectiveAlt < 2000)
+                    {
+                        Abort();
+                        circumnavCheckAltitude = true;
+                        command.State = MainStateEnum.Cruise;
+                        command.Param.Text = "orbit";
+                    }
                     CircumNav(cruiseSpeed);
                     break;
                 case "off":
@@ -741,54 +762,31 @@ namespace IngameScript
         {
             overrideBlocks.Clear();
 
-            var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(blocks, b =>
+            var blocks = new List<IMyFunctionalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b =>
                 b.IsSameConstructAs(me) &&
                 b.CustomName.Contains(__overrideBlockTag)
             );
 
-            foreach (var block in blocks)
+            foreach (IMyFunctionalBlock block in blocks)
             {
                 if (block.IsSameConstructAs(me))
-                    overrideBlocks.Add(block.EntityId);
+                    overrideBlocks.Add(block);
             }
         }
 
         void CacheBlocksDock()
         {
-            cachedBlocks.Clear();
             controlledBlocks.Clear();
             connectors.Clear();
             tanks.Clear();
             h2Tanks.Clear();
             batteries.Clear();
 
-            // Functional blocks to power on/off
-            var temp = new List<IMyFunctionalBlock>();
-            GridTerminalSystem.GetBlocksOfType(temp, b =>
-                b.IsSameConstructAs(me) &&
-                !ContainsIgnore(b.CustomName) &&
-                !ContainsIgnore(b.CustomData) &&
-                b != me &&
-                !(b is IMyShipConnector) &&
-                !(b is IMyBatteryBlock) &&
-                !(b is IMyDoor) &&
-                !(b is IMyAirVent) &&
-                !(b is IMyCryoChamber) &&
-                !(b is IMyMedicalRoom) &&
-                !(b is IMyGasTank) &&
-                !(b is IMyTimerBlock) &&
-                !(b is IMyEventControllerBlock) &&
-                !(b is IMyInteriorLight) &&
-                !(b is IMyLandingGear) &&
-                !IsSurvivalKit(b)
-            );
-
-            cachedBlocks.AddRange(temp);
-
             if (controlledBlocks.Count == 0)
             {
                 ReloadControlledBlocks();
+                controlledBlocks.AddList(overrideBlocks);
                 controlledBlocks.Remove(me);
             }
 
@@ -1008,7 +1006,6 @@ namespace IngameScript
             var mass = controller.CalculateShipMass();
 
             // Hydrogen
-            double H2CapacityPercent;
             double h2Cap = 0, h2Fill = 0;
             foreach (var tank in h2Tanks)
             {
@@ -1344,9 +1341,10 @@ namespace IngameScript
                 command.Param.Text = "orbit";
             }
 
+            controller.DampenersOverride = false;
             AlignToGravity();
             MatchVerticalSpeed(-104);
-            return effectiveAlt < stopDist + 2 * gridHight;
+            return effectiveAlt < 1.1 * stopDist + gridHight;
         }
 
         bool AutoLand()
@@ -1518,6 +1516,7 @@ namespace IngameScript
             __Lcd1Tag = ini.Get(sectionName, INI_LCD1_TAG).ToString(__Lcd1Tag);
             __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
             __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
+            __minimumAcceptedFuel = ini.Get(sectionName, MINIMUM_ACCEPTED_FUEL).ToDouble(__minimumAcceptedFuel);
             __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
             __allowManualSpeedLimiter = ini.Get(sectionName, MANUAL_SPEED_LIMITER).ToBoolean(__allowManualSpeedLimiter);
             __controlAntennas = ini.Get(sectionName, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
@@ -1528,6 +1527,7 @@ namespace IngameScript
             ini.Set(SectionName, INI_LCD1_TAG, __Lcd1Tag);
             ini.Set(SectionName, INI_LCD2_TAG, __Lcd2Tag);
             ini.Set(SectionName, MAX_SPEED, __maxSpeed);
+            ini.Set(SectionName, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
             ini.Set(SectionName, DOCK_MODE, __allowDockMode);
             ini.Set(SectionName, MANUAL_SPEED_LIMITER, __allowManualSpeedLimiter);
             ini.Set(SectionName, CONTROL_ANTENNAS, __controlAntennas);
