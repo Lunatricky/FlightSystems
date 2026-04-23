@@ -8,10 +8,10 @@ namespace IngameScript
 {
     enum ParamType
     {
-        None,
+        AutoLandState,
+        AutoPilotState,
         Number,
         Text,
-        AutoLandState
-        // Add more later: Vector3D, BlockName, GPS, etc.
+        Vector3D
     }
 }
