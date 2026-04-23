@@ -314,6 +314,7 @@ namespace IngameScript
                     SuicideBurnStateSwitch(command.Param);
                     break;
                 case MainStateEnum.Gps:
+                    autoPilotToggle = true;
                     CircumNavigateStateSwitch(command.Param);
                     break;
             }
@@ -599,21 +600,8 @@ namespace IngameScript
                     b.circumnavToggle = !b.circumnavToggle;
                     if (b.circumnavToggle) command.Param.Text = "on";
                     else command.Param.Text = "off";
-
-                    autoPilotToggle = b.circumnavToggle;
-
                     break;
                 case "on":
-                    if (autoPilotToggle)
-                    {
-                        AutoPilotYaw(param);
-                        if (IsCloseToGPS(controller, param.TargetCoordinates, __distanceToGPS + stopZDist))
-                        {
-                            command.State = MainStateEnum.Land;
-                            autoPilotToggle = false;
-                            break;
-                        }
-                    }
                     if (effectiveAlt < __cnavAltitude)
                     {
                         SoftAbort();
@@ -621,8 +609,21 @@ namespace IngameScript
                         command.State = MainStateEnum.Cruise;
                         command.Param.Text = "orbit";
                     }
-                    AlignToGravity();
-                    CruiseControl(cruiseSpeed);
+
+                    if (AlignToGravity() && autoPilotToggle && AimYawOnlyAt(param.TargetCoordinates))
+                    {
+                        CruiseControl(cruiseSpeed);
+                        if (IsCloseToGPS(controller, param.TargetCoordinates, __distanceToGPS + stopZDist))
+                        {
+                            command.State = MainStateEnum.Land;
+                            autoPilotToggle = false;
+                            break;
+                        }
+                        break;
+                    } else if (!autoPilotToggle)
+                    {
+                        CruiseControl(cruiseSpeed);
+                    }
                     break;
                 case "off":
                     Abort();
@@ -673,73 +674,74 @@ namespace IngameScript
                     break;
             }
         }
-
-        int autopilot;
-        Vector3D planetCenter;
-        private void AutoPilotYaw(CommandParam param)
+        bool AimYawOnlyAt(Vector3D targetGps)
         {
-            autopilot++;
-            
-            controller.TryGetPlanetPosition(out planetCenter);
-            /*
-            //ApplyGyro(GetRotation(param.TargetCoordinates, planetCenter));
-            Vector3D shipUp = controller.WorldMatrix.Forward;
-            AlignToVector(shipUp, false, GetRotation(param.TargetCoordinates, planetCenter));
-            */
-            Vector3D dir = GetYawDirectionOnPlanet(param.TargetCoordinates, planetCenter);
-            Vector3D yaw = GetYawOnlyRotation(dir);
+            if (controller == null || gyros == null || gyros.Count == 0) return false;
+            if (naturalGrav.LengthSquared() < 0.01) return false;
 
-            Vector3D rotation = naturalGrav + yaw;
+            // Yaw axis: away-from-gravity (up)
+            Vector3D up = Vector3D.Normalize(naturalGrav);
 
-            AlignToVector(param.TargetCoordinates, false, planetCenter);
-            //ApplyGyro(rotation);
-        }
-        Vector3D GetYawDirectionOnPlanet(Vector3D gps, Vector3D planetCenter)
-        {
+            // Ship position and forward (use controller forward in world)
             Vector3D shipPos = controller.GetPosition();
+            Vector3D shipForward = controller.WorldMatrix.Forward;
 
-            Vector3D up = Vector3D.Normalize(shipPos - planetCenter);
+            // Vector to target
+            Vector3D toTarget = targetGps - shipPos;
+            if (toTarget.LengthSquared() < 1e-6) return true; // target at ship
 
-            Vector3D toShip = shipPos - planetCenter;
-            Vector3D toGPS = gps - planetCenter;
+            // Project both onto plane perpendicular to up (horizon plane)
+            Vector3D targetProj = toTarget - up * Vector3D.Dot(toTarget, up);
+            if (targetProj.LengthSquared() < 1e-9) return true; // target exactly above/below — no yaw defined
+            targetProj = Vector3D.Normalize(targetProj);
 
-            Vector3D planeNormal = Vector3D.Cross(toShip, toGPS);
+            Vector3D forwardProj = shipForward - up * Vector3D.Dot(shipForward, up);
+            if (forwardProj.LengthSquared() < 1e-9)
+            {
+                // degenerate forward: pick any perp on plane
+                forwardProj = Vector3D.Cross(up, Math.Abs(up.X) < 0.9 ? Vector3D.UnitX : Vector3D.UnitY);
+            }
+            forwardProj = Vector3D.Normalize(forwardProj);
 
-            if (planeNormal.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
+            // Signed yaw angle from forwardProj -> targetProj around up
+            double cosA = Vector3D.Dot(forwardProj, targetProj);
+            cosA = Math.Max(-1.0, Math.Min(1.0, cosA));
+            double angleMag = Math.Acos(cosA);
+            double sign = Math.Sign(Vector3D.Dot(forwardProj.Cross(targetProj), up));
+            double yawAngle = sign * angleMag; // radians; + = rotate around 'up' by right-hand rule
 
-            planeNormal.Normalize();
+            // Finished if small
+            const double ANGLE_EPS = 0.01; // ~0.57 deg
+            if (Math.Abs(yawAngle) < ANGLE_EPS)
+            {
+                foreach (var g in gyros) g.GyroOverride = false;
+                return true;
+            }
 
-            Vector3D tangent = Vector3D.Cross(planeNormal, up);
+            // Desired angular rate around up only
+            const double MAX_ROT_RATE = 0.6;
+            const double RESPONSE = 1.0;
+            double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
+            Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
 
-            if (tangent.Dot(gps - shipPos) < 0)
-                tangent = -tangent;
+            // PD correction (use full angular velocity but we'll only command yaw to gyros)
+            Vector3D angVel = controller.GetShipVelocities().AngularVelocity;
+            Vector3D correction = desiredRate - angVel;
 
-            return Vector3D.Normalize(tangent);
-        }
+            // Apply to gyros but zero pitch & roll commands so only yaw moves
+            foreach (var g in gyros)
+            {
+                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
+                Vector3D local = Vector3D.TransformNormal(correction, inv);
 
-        Vector3D GetYawOnlyRotation(Vector3D desiredDir)
-        {
-            Vector3D gravity = controller.GetNaturalGravity();
+                g.GyroOverride = true;
+                g.Pitch = 0f;
+                // Some gyros have inverted yaw axis; if direction is reversed, invert local.Y here
+                g.Yaw = (float)MathHelper.Clamp(-local.Y / 2, -3, 3);
+                g.Roll = 0f;
+            }
 
-            if (gravity.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            Vector3D up = -Vector3D.Normalize(gravity);
-
-            Vector3D forward = Vector3D.Reject(controller.WorldMatrix.Forward, up);
-
-            if (forward.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            forward.Normalize();
-
-            double yaw = Math.Atan2(
-                forward.Cross(desiredDir).Dot(up),
-                forward.Dot(desiredDir)
-            );
-
-            return up * yaw;
+            return false;
         }
 
         private void Reload()
@@ -753,7 +755,7 @@ namespace IngameScript
             CacheBlocksLCD();
             b.lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
 
-            SoftAbort();
+            Abort();
         }
 
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
@@ -961,15 +963,13 @@ namespace IngameScript
             batteries.Clear();
 
             IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName(__fsGroupTag);
-            List<IMyFunctionalBlock> blocksGroup = new List<IMyFunctionalBlock>();
-            group.GetBlocksOfType(blocksGroup);
 
-            if (blocksGroup.Count > 0)
+            if (controlledBlocks.Count == 0 && group != null)
             {
+                List<IMyFunctionalBlock> blocksGroup = new List<IMyFunctionalBlock>();
+                group.GetBlocksOfType(blocksGroup);
                 controlledBlocks.AddList(blocksGroup);
-            }
-
-            if (controlledBlocks.Count == 0)
+            } else
             {
                 ReloadControlledBlocks();
                 controlledBlocks.AddList(overrideBlocks);
@@ -1055,12 +1055,6 @@ namespace IngameScript
                 return false;
 
             return text.IndexOf("ignore", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        bool IsSurvivalKit(IMyFunctionalBlock b)
-        {
-            return b.BlockDefinition.SubtypeName
-                .IndexOf("SurvivalKit", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         bool IsHydrogenTank(IMyGasTank tank)
@@ -1367,13 +1361,12 @@ namespace IngameScript
 
         void Abort()
         {
-
-            autopilot = 0;
             b = new booleans();
 
             command = Command.Empty;
 
             controller.DampenersOverride = true;
+            autoPilotToggle = false;
 
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
