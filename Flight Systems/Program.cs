@@ -56,6 +56,7 @@ namespace IngameScript
         double netDecel;
         double maxThrustUp;
         double H2CapacityPercent;
+        double distanceToLine;
 
         Vector3D desiredUpVector;
 
@@ -84,9 +85,9 @@ namespace IngameScript
             public bool circumnavCheckAltitude;
             public bool lastCheckIsOnNatGrav;
             public bool stopCruiseWhenOutOfGrav;
+            public bool autoPilotToggle;
         }
 
-        public bool autoPilotToggle;
 
         booleans b;
 
@@ -314,7 +315,8 @@ namespace IngameScript
                     SuicideBurnStateSwitch(command.Param);
                     break;
                 case MainStateEnum.Gps:
-                    autoPilotToggle = true;
+                    Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                    b.autoPilotToggle = true;
                     CircumNavigateStateSwitch(command.Param);
                     break;
             }
@@ -497,8 +499,6 @@ namespace IngameScript
             return mainStateEnum;
         }
 
-
-
         void DockStateSwitch(CommandParam param)
         {
             switch (param.Text.ToLowerInvariant())
@@ -549,9 +549,10 @@ namespace IngameScript
                     }
                     else
                     {
-                        if (autoPilotToggle)
+                        if (b.autoPilotToggle)
                         {
                             command.State = MainStateEnum.Gps;
+                            command.Param.Text = "on";
                         } else
                         {
                             Abort();
@@ -561,19 +562,23 @@ namespace IngameScript
                 case "align":
                     if (AlignToGravity())
                     {
-                        desiredUpVector = RotateUpTowardForwardForNoseUp(-0.7 * GetMaxPitchAngle());
+                        desiredUpVector = RotateUpTowardForwardForNoseUp(-0.9 * GetMaxPitchAngle());
                         command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
                     if (b.circumnavCheckAltitude && effectiveAlt > __cnavAltitude)
                     {
-                        Abort();
-                        b.circumnavCheckAltitude = false;
-                        command.State = MainStateEnum.CNav;
-                        if (autoPilotToggle)
+                        if (b.autoPilotToggle)
                         {
                             command.State = MainStateEnum.Gps;
+                            command.Param.Text = "on";
+                            break;
+                        }
+                        else
+                        {
+                            Abort();
+                            command.State = MainStateEnum.CNav;
                         }
                     }
                     Vector3D shipUp = controller.WorldMatrix.Up;
@@ -610,19 +615,19 @@ namespace IngameScript
                         command.Param.Text = "orbit";
                     }
 
-                    if (AlignToGravity() && autoPilotToggle && AimYawOnlyAt(param.TargetCoordinates))
+                    CruiseControl(cruiseSpeed);
+                    if (!b.autoPilotToggle)
                     {
-                        CruiseControl(cruiseSpeed);
-                        if (IsCloseToGPS(controller, param.TargetCoordinates, __distanceToGPS + stopZDist))
-                        {
-                            command.State = MainStateEnum.Land;
-                            autoPilotToggle = false;
-                            break;
-                        }
-                        break;
-                    } else if (!autoPilotToggle)
+                        AlignToGravity();
+                    } 
+                    else if (distanceToLine < __distanceToGPS + stopZDist)
                     {
-                        CruiseControl(cruiseSpeed);
+                        command.State = MainStateEnum.Land;
+                        b.autoPilotToggle = false;
+                    } 
+                    else if (AlignToGravity() && b.autoPilotToggle && AimYawOnlyAt(param.TargetCoordinates))
+                    {
+                        Runtime.UpdateFrequency = UpdateFrequency.Update10;
                     }
                     break;
                 case "off":
@@ -674,6 +679,7 @@ namespace IngameScript
                     break;
             }
         }
+
         bool AimYawOnlyAt(Vector3D targetGps)
         {
             if (controller == null || gyros == null || gyros.Count == 0) return false;
@@ -719,7 +725,7 @@ namespace IngameScript
             }
 
             // Desired angular rate around up only
-            const double MAX_ROT_RATE = 0.6;
+            const double MAX_ROT_RATE = 3.0;
             const double RESPONSE = 1.0;
             double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
             Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
@@ -897,46 +903,36 @@ namespace IngameScript
             controller.ClearWaypoints();
         }
 
-        /// <summary>
-        /// Returns true if the ship is within 'threshold' meters of the red line (planet center to GPS point)
-        /// </summary>
-        bool IsCloseToGPS(IMyShipController controller, Vector3D gpsPoint, double threshold)
+        double DistanceToGps(IMyShipController controller, Vector3D gps)
         {
-            if (controller == null) return false;
-
             Vector3D shipPos = controller.GetPosition();
-            Vector3D planetCenter;
+            double vertical;
 
-            // Get planet center
-            if (!controller.TryGetPlanetPosition(out planetCenter))
-                return false; // not near a planet
+            Vector3D up = -Vector3D.Normalize(naturalGrav); // up direction
+            Vector3D toTarget = gps - shipPos;
 
-            // Calculate distance from ship to the infinite line passing through planetCenter and gpsPoint
-            double distanceToLine = DistancePointToLine(shipPos, planetCenter, gpsPoint);
+            // vertical distance along up (signed): positive = target is "above" ship in up direction
+            vertical = Vector3D.Dot(toTarget, up);
 
-            return distanceToLine <= threshold;
+            // horizontal vector: component of toTarget on plane perpendicular to up
+            Vector3D horizVec = toTarget - up * vertical;
+            distanceToLine = horizVec.Length();
+
+            return distanceToLine;
         }
 
-        /// <summary>
-        /// Calculates the shortest distance from a point to an infinite line defined by two points
-        /// </summary>
-        double DistancePointToLine(Vector3D point, Vector3D linePoint1, Vector3D linePoint2)
+        Vector3D TryGetPlanetPosition(IMyShipController controller)
         {
-            Vector3D lineDir = linePoint2 - linePoint1;
-            if (lineDir.LengthSquared() < 0.01)
-                return (point - linePoint1).Length(); // degenerate case
+            Vector3D shipPos = controller.GetPosition();
+            Vector3D planetCenter = new Vector3D();
 
-            Vector3D pointToLineStart = point - linePoint1;
-            double t = Vector3D.Dot(pointToLineStart, lineDir) / lineDir.LengthSquared();
+            // Get planet center
+            controller.TryGetPlanetPosition(out planetCenter);
 
-            // Project point onto the line
-            Vector3D projection = linePoint1 + t * lineDir;
-
-            return (point - projection).Length();
+            return planetCenter;
         }
 
         //Docking Routine
-
         void LoadOverrideGroup()
         {
             overrideBlocks.Clear();
@@ -1242,6 +1238,7 @@ namespace IngameScript
                 lcd1.WriteText(stringBuilder.ToString());
         }
 
+        double oldDistanceToLine;
         void WriteInfo2()
         {
             // Velocity & acceleration
@@ -1268,8 +1265,12 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Stop Z: {stopZDist:F1} m | {timeToStopZ:F1} s");
             }
 
-
-            if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
+            if (b.autoPilotToggle)
+            {
+                stringBuilder.AppendLine($"\nETA: {FormatTime(TimeToDistance(distanceToLine, oldDistanceToLine, Runtime.LastRunTimeMs))}");
+                oldDistanceToLine = distanceToLine;
+            }
+            else if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
             {
                 stringBuilder.AppendLine($"Gravity: {gravity:F1} m²/s");
                 stringBuilder.AppendLine($"Max up accel: {maxYDecel:F1} m²/s");
@@ -1287,6 +1288,14 @@ namespace IngameScript
             foreach (IMyTextSurface lcd2 in lcds2)
                 lcd2.WriteText(stringBuilder.ToString());
         }
+        double TimeToDistance(double distance, double oldDistance, double dt)
+        {
+            if (dt <= 0) return double.PositiveInfinity;
+            double closingSpeed = (oldDistance - distance) / dt;
+            if (closingSpeed <= 1e-9) return double.PositiveInfinity;
+            return distance / closingSpeed;
+        }
+
 
 
         string FormatTime(double time)
@@ -1351,6 +1360,11 @@ namespace IngameScript
             timeToStopZ = Math.Abs(forwardVelocity / maxZDecel);
 
             netDecel = ComputeNetDecel();
+
+            if (b.autoPilotToggle)
+            {
+                distanceToLine = DistanceToGps(controller, command.Param.TargetCoordinates);
+            }
         }
 
         void StartLand()
@@ -1366,14 +1380,13 @@ namespace IngameScript
             command = Command.Empty;
 
             controller.DampenersOverride = true;
-            autoPilotToggle = false;
+            b.autoPilotToggle = false;
 
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
             tickCount = 0;
             ResetGyros();
             ResetThrusters();
-            DisableRemoteControl();
         }
 
         void SoftAbort()
@@ -1383,7 +1396,6 @@ namespace IngameScript
 
             ResetGyros();
             ResetThrusters();
-            controller.DampenersOverride = true;
         }
 
         void ResetGyros()
@@ -1492,107 +1504,6 @@ namespace IngameScript
 
             return false;
         }
-
-        Vector3D GetRotation(Vector3D gps, Vector3D center)
-        {
-            Vector3D align = naturalGrav;
-
-            Vector3D surfaceDir = GetSurfaceDirectionToLine(gps, center);
-            Vector3D yaw = GetYawRotation(surfaceDir);
-
-            return align + yaw * 0.8; // weight yaw a bit lower
-        }
-
-        Vector3D GetSurfaceDirectionToLine(Vector3D gps, Vector3D planetCenter)
-        {
-            Vector3D pos = controller.GetPosition();
-            Vector3D gravity = controller.GetNaturalGravity();
-
-            if (gravity.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            Vector3D up = -Vector3D.Normalize(gravity);
-
-            //----------------------------------
-            // radial directions
-            //----------------------------------
-
-            Vector3D radialShip = Vector3D.Normalize(pos - planetCenter);
-            Vector3D radialGPS = Vector3D.Normalize(gps - planetCenter);
-
-            //----------------------------------
-            // direction along planet surface
-            //----------------------------------
-
-            // This gives the tangent direction from ship toward GPS orbit line
-            Vector3D surfaceDir = Vector3D.Cross(up, Vector3D.Cross(radialGPS, radialShip));
-
-            if (surfaceDir.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            return Vector3D.Normalize(surfaceDir);
-        }
-
-        Vector3D GetYawRotation(Vector3D desiredDir)
-        {
-            Vector3D gravity = controller.GetNaturalGravity();
-
-            if (gravity.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            Vector3D up = -Vector3D.Normalize(gravity);
-
-            //----------------------------------
-            // flatten everything
-            //----------------------------------
-
-            Vector3D forward = Vector3D.Reject(controller.WorldMatrix.Forward, up);
-
-            if (forward.LengthSquared() < 1e-6)
-                return Vector3D.Zero;
-
-            forward.Normalize();
-
-            //----------------------------------
-            // YAW ANGLE
-            //----------------------------------
-
-            double yaw = Math.Atan2(
-                forward.Cross(desiredDir).Dot(up),
-                forward.Dot(desiredDir)
-            );
-
-            return up * yaw;
-        }
-
-        void ApplyGyro(Vector3D rotation)
-        {
-
-            Vector3D angVel = controller.GetShipVelocities().AngularVelocity;
-
-            const double RESPONSE = 0.2;
-            const double MAX_RATE = 0.2;
-
-            Vector3D desiredRate = rotation * RESPONSE;
-
-            if (desiredRate.Length() > MAX_RATE)
-                desiredRate = Vector3D.Normalize(desiredRate) * MAX_RATE;
-
-            Vector3D correction = desiredRate - angVel;
-
-            foreach (var g in gyros)
-            {
-                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D local = Vector3D.TransformNormal(correction, inv);
-
-                g.GyroOverride = true;
-
-                g.Pitch = (float)local.X;
-                g.Yaw = (float)local.Y;
-                g.Roll = (float)local.Z;
-            }
-        }
-
 
         bool IsStopped(double threshold = 0.1)
         {
@@ -1713,13 +1624,6 @@ namespace IngameScript
         }
 
         // Suicide Burn
-
-        // Enhanced Suicide Burn Algorithm - C#6 SE PB Compatible
-        // Handles varying gravity (Pertam atm/low well): Thrust-based net decel prediction
-        // Adaptive target descent V (0-110 m/s): Drops to 0 as net_decel -> 0 (safety!)
-        // Recovery: Optimal climb angle from fwd/up thrust ratio (e.g. 45° if equal)
-        // Drop-in methods: ComputeNetDecel(), GetSafeDescentTargetV(), GetRecoveryClimbAngle()
-
         // ────────────────────────────────────────────────
         // 1. NET DECEL PREDICTION (core - ignores current g spikes)
         // Computes max possible upward accel from thrusters - current_g
@@ -1766,8 +1670,7 @@ namespace IngameScript
 
         // ────────────────────────────────────────────────
         // Load config from CustomData (INI style)
-        // ────────────────────────────────────────────────
-        
+        // ────────────────────────────────────────────────        
         private void ParseIni()
         {
             ini.Clear();
