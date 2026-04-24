@@ -58,6 +58,10 @@ namespace IngameScript
         double H2CapacityPercent;
         double distanceToLine;
 
+        double prevSmoothedSpeed = 0.0; // persistent between ticks
+        const double ALPHA = 0.2;       // 0.1-0.3 is reasonable; lower = smoother/slower response
+        const int SpeedTimeTrackerMaxSize = 100;
+
         Vector3D desiredUpVector;
 
         IMyProgrammableBlock me;
@@ -77,6 +81,9 @@ namespace IngameScript
         readonly List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
         IMyRemoteControl controller ;
+
+
+        readonly SpeedTimeTracker speedTimeTracker;
 
         struct booleans
         {
@@ -205,8 +212,11 @@ namespace IngameScript
         public Program()
         {
             b = new booleans();
+            speedTimeTracker = new SpeedTimeTracker(SpeedTimeTrackerMaxSize);
+
             me = Me;
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
+
             Reload();
             Abort();
 
@@ -916,9 +926,8 @@ namespace IngameScript
 
             // horizontal vector: component of toTarget on plane perpendicular to up
             Vector3D horizVec = toTarget - up * vertical;
-            distanceToLine = horizVec.Length();
 
-            return distanceToLine;
+            return horizVec.Length();
         }
 
         Vector3D TryGetPlanetPosition(IMyShipController controller)
@@ -1238,7 +1247,6 @@ namespace IngameScript
                 lcd1.WriteText(stringBuilder.ToString());
         }
 
-        double oldDistanceToLine;
         void WriteInfo2()
         {
             // Velocity & acceleration
@@ -1262,13 +1270,13 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Rate of climb: {climbRate:F1} m/s");
                 stringBuilder.AppendLine($"Accel: {accel.Length() / 9.81:F1} g");
                 stringBuilder.AppendLine($"Stop Y: {stopYDist:F1} m | {timeToStopY:F1} s");
-                stringBuilder.AppendLine($"Stop Z: {stopZDist:F1} m | {timeToStopZ:F1} s");
             }
+            stringBuilder.AppendLine($"Stop Z: {stopZDist:F1} m | {timeToStopZ:F1} s");
 
             if (b.autoPilotToggle)
             {
-                stringBuilder.AppendLine($"\nETA: {FormatTime(TimeToDistance(distanceToLine, oldDistanceToLine, Runtime.LastRunTimeMs))}");
-                oldDistanceToLine = distanceToLine;
+                stringBuilder.AppendLine($"\nETA: {FormatTime(TimeToDistanceSmoothed(distanceToLine, Runtime.LastRunTimeMs))}");
+
             }
             else if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
             {
@@ -1288,14 +1296,69 @@ namespace IngameScript
             foreach (IMyTextSurface lcd2 in lcds2)
                 lcd2.WriteText(stringBuilder.ToString());
         }
-        double TimeToDistance(double distance, double oldDistance, double dt)
+
+        double TimeToDistanceSmoothed(double distance, double dt)
         {
+            speedTimeTracker.AddValue(forwardVelocity, dt);
+
             if (dt <= 0) return double.PositiveInfinity;
-            double closingSpeed = (oldDistance - distance) / dt;
-            if (closingSpeed <= 1e-9) return double.PositiveInfinity;
-            return distance / closingSpeed;
+            double avgSpeed =speedTimeTracker.GetAverageSpeed();
+
+            if (avgSpeed <= 1e-6) avgSpeed = 0.0;
+
+            // EMA smoothing
+            prevSmoothedSpeed = (ALPHA * avgSpeed) + ((1.0 - ALPHA) * prevSmoothedSpeed);
+
+            if (prevSmoothedSpeed <= 1e-6) return double.PositiveInfinity;
+            return distance / prevSmoothedSpeed;
         }
 
+        public class SpeedTime
+        {
+            public double Speed { get; set; }
+            public double Time { get; set; }
+
+            public SpeedTime(double speed, double time)
+            {
+                Speed = speed;
+                Time = time;
+            }
+        }
+        public class SpeedTimeTracker
+        {
+            private List<SpeedTime> speedTimeValues;
+            private int maxSize;
+
+            public SpeedTimeTracker(int maxSize)
+            {
+                this.maxSize = maxSize;
+                speedTimeValues = new List<SpeedTime>();
+            }
+
+            public void AddValue(double speed, double time)
+            {
+                if (speedTimeValues.Count >= maxSize)
+                {
+                    speedTimeValues.RemoveAt(0); // Remove the oldest
+                }
+                speedTimeValues.Add(new SpeedTime(speed, time));
+            }
+
+            public IEnumerable<SpeedTime> GetValues()
+            {
+                return speedTimeValues;
+            }
+
+            public double GetAverageSpeed()
+            {
+                double avgSpeed = 0;
+                foreach (var value in speedTimeValues)
+                {
+                    avgSpeed += value.Speed;
+                }
+                return avgSpeed / speedTimeValues.Count;
+            }
+        }
 
 
         string FormatTime(double time)
