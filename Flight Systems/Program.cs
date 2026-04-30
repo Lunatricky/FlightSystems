@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using VRage.Game.GUI.TextPanel;
+using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -14,6 +15,10 @@ namespace IngameScript
     {
         // ================= CONFIG =================
         MyIni ini = new MyIni();
+
+        IMyGridTerminalSystem gridTerminalSystem;
+
+        IMyProgrammableBlock me;
 
         /*
          * R e a d m e
@@ -64,8 +69,6 @@ namespace IngameScript
 
         Vector3D desiredUpVector;
 
-        IMyProgrammableBlock me;
-
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
 
@@ -109,6 +112,7 @@ namespace IngameScript
         
         const string SectionName = "Flight Systems";
 
+        string INI_GRID_NAME = "Grid Name";
         string INI_FS_GROUP_TAG = "Group Tag";
         string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks Tag";
         string INI_IGNORE_TAG = "Ignore Tag";
@@ -120,7 +124,9 @@ namespace IngameScript
         string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
         string DOCK_MODE = "Dock Mode";
         string CONTROL_ANTENNAS = "Control Antennas";
+        string RENAME_SUBGRIDS = "Rename Subgrids";
 
+        string __gridName;
         string __fsGroupTag = "Flight Systems";
         string __overrideBlockTag = "[FS_override]";
         string __ignoreTag = "[FS_ignore]";
@@ -132,6 +138,7 @@ namespace IngameScript
         double __minimumAcceptedFuel = 20; //%
         bool __allowDockMode = false;
         bool __controlAntennas = false;
+        bool __renameSubgrids = false;
 
         readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         readonly List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
@@ -153,8 +160,6 @@ namespace IngameScript
         private const string BACKUP_TAG = "backup";
         readonly List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         readonly List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
-
-        string gridName;
 
         Vector3D lastVelocity;
         double lastH2Fill = 0;
@@ -211,10 +216,13 @@ namespace IngameScript
 
         public Program()
         {
+
+            gridTerminalSystem = GridTerminalSystem;
             b = new booleans();
             speedTimeTracker = new SpeedTimeTracker(SpeedTimeTrackerMaxSize);
 
             me = Me;
+            __gridName = me.CubeGrid.CustomName;
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
             Reload();
@@ -232,15 +240,17 @@ namespace IngameScript
                 DockToggle(isDockMode);
             }
         }
-
+        
         Command command = Command.Empty;
 
         public void Main(string argument, UpdateType updateSource)
         {
             tickCount++;
-            if (tickCount % 100 == 0)
+            if (tickCount % 100 == 1)
             {
                 ParseIni();
+                if (!string.IsNullOrWhiteSpace(__gridName) && !__gridName.Contains(" Grid "))
+                    me.CubeGrid.CustomName = __gridName;
             }
 
             FlightSystems(argument);
@@ -438,7 +448,7 @@ namespace IngameScript
 
         public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
         {
-            scriptInfo.AppendLine(gridName);
+            scriptInfo.AppendLine(__gridName);
             scriptInfo.AppendLine(new string('-', 28));
             scriptInfo.Append("State: " + command.State);
 
@@ -770,14 +780,22 @@ namespace IngameScript
             CacheBlocksDock();
             CacheBlocksLCD();
             b.lastCheckIsOnNatGrav = controller.GetNaturalGravity().LengthSquared() > 0;
-
             Abort();
+
+            // Get main grid (where this PB is)
+            IMyCubeGrid mainGrid = controller.CubeGrid;
+            if (mainGrid != null)
+            {
+                RenameSubgrids.GetSubgridsAndRename(gridTerminalSystem, mainGrid);
+            }
+         
+
         }
 
         void GetOwnGridBlocks<T>(List<T> list) where T : class, IMyTerminalBlock
         {
             list.Clear();
-            GridTerminalSystem.GetBlocksOfType(list, block =>
+            gridTerminalSystem.GetBlocksOfType(list, block =>
             (block.IsSameConstructAs(me) && !block.CustomName.Contains(__ignoreTag))
             );
         }
@@ -795,7 +813,7 @@ namespace IngameScript
             GetOwnGridBlocks(remotes);
             GetOwnGridBlocks(cockpits);
 
-            GridTerminalSystem.GetBlocksOfType(controllers, controller =>
+            gridTerminalSystem.GetBlocksOfType(controllers, controller =>
                controller.IsSameConstructAs(me) && controller.IsMainCockpit);
 
             if (controllers.Count == 0)
@@ -947,7 +965,7 @@ namespace IngameScript
             overrideBlocks.Clear();
 
             var blocks = new List<IMyFunctionalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b =>
+            gridTerminalSystem.GetBlocksOfType(blocks, b =>
                 b.IsSameConstructAs(me) &&
                 b.CustomName.Contains(__overrideBlockTag)
             );
@@ -967,7 +985,7 @@ namespace IngameScript
             h2Tanks.Clear();
             batteries.Clear();
 
-            IMyBlockGroup group = GridTerminalSystem.GetBlockGroupWithName(__fsGroupTag);
+            IMyBlockGroup group = gridTerminalSystem.GetBlockGroupWithName(__fsGroupTag);
 
             if (controlledBlocks.Count == 0 && group != null)
             {
@@ -1045,7 +1063,7 @@ namespace IngameScript
         {
             var tempList = new List<T>();
 
-            GridTerminalSystem.GetBlocksOfType(tempList, tempBlock =>
+            gridTerminalSystem.GetBlocksOfType(tempList, tempBlock =>
                 tempBlock.IsSameConstructAs(me) &&
                 !ContainsIgnore(tempBlock.CustomName)
             );
@@ -1132,7 +1150,9 @@ namespace IngameScript
             lcds2.Clear();
             antennas.Clear();
 
-            gridName = me.CubeGrid.CustomName;
+            string tempGridName = me.CubeGrid.CustomName;
+            if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
+                __gridName = tempGridName;
 
             AddLCDsToList(lcds1, __Lcd1Tag);
             AddLCDsToList(lcds2, __Lcd2Tag);
@@ -1142,7 +1162,7 @@ namespace IngameScript
             {
                 foreach (IMyRadioAntenna antenna in antennas)
                 {
-                    if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = gridName;
+                    if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = __gridName;
                 }
             }
 
@@ -1154,7 +1174,7 @@ namespace IngameScript
 
             // LCDs
             var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
+            gridTerminalSystem.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
                 block.IsSameConstructAs(me) &&
                 block.CustomName.Contains(LCD_TAG)
             );
@@ -1261,7 +1281,7 @@ namespace IngameScript
 
             StringBuilder stringBuilder = new StringBuilder();
 
-            stringBuilder.AppendLine(gridName);
+            stringBuilder.AppendLine(__gridName);
             stringBuilder.AppendLine(new string('-', 28));
 
             if (gravity > 0)
@@ -1737,8 +1757,8 @@ namespace IngameScript
         private void ParseIni()
         {
             ini.Clear();
-            string customData = me.CustomData;
-            bool parsed = ini.TryParse(customData);
+
+            if (!ini.TryParse(me.CustomData)) return;
 
             string sectionName = SectionName;
 
@@ -1747,6 +1767,9 @@ namespace IngameScript
                 ini.AddSection(sectionName);
             }
 
+            string tempGridName = ini.Get(sectionName, INI_GRID_NAME).ToString(__gridName);
+
+            __gridName = string.IsNullOrWhiteSpace(tempGridName) ? __gridName : tempGridName;
             __fsGroupTag = ini.Get(sectionName, INI_FS_GROUP_TAG).ToString(__fsGroupTag);
             __overrideBlockTag = ini.Get(sectionName, INI_OVERRIDE_BLOCKS_TAG).ToString(__overrideBlockTag);
             __ignoreTag = ini.Get(sectionName, INI_IGNORE_TAG).ToString(__ignoreTag);
@@ -1758,8 +1781,9 @@ namespace IngameScript
             __minimumAcceptedFuel = ini.Get(sectionName, MINIMUM_ACCEPTED_FUEL).ToDouble(__minimumAcceptedFuel);
             __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
             __controlAntennas = ini.Get(sectionName, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
+            __renameSubgrids = ini.Get(sectionName, RENAME_SUBGRIDS).ToBoolean(__renameSubgrids);
 
-
+            ini.Set(SectionName, INI_GRID_NAME, __gridName);
             ini.Set(SectionName, INI_FS_GROUP_TAG, __fsGroupTag);
             ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
             ini.Set(SectionName, INI_IGNORE_TAG, __ignoreTag);
@@ -1771,13 +1795,9 @@ namespace IngameScript
             ini.Set(SectionName, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
             ini.Set(SectionName, DOCK_MODE, __allowDockMode);
             ini.Set(SectionName, CONTROL_ANTENNAS, __controlAntennas);
+            ini.Set(SectionName, RENAME_SUBGRIDS, __renameSubgrids);
 
-            string output = ini.ToString();
-            me.CustomData = output;
-            if (!string.Equals(output, me.CustomData))
-            {
-                me.CustomData = output;
-            }
+            me.CustomData = ini.ToString();
         }
     }
 }
