@@ -41,6 +41,10 @@
   <Import Project="MDK/MDK.options.props" />
   <Import Project="MDK/MDK.paths.props" Condition="exists('MDK/MDK.paths.props')" />
   <ItemGroup>
+    <Compile Include="VectorHelper.cs" />
+    <Compile Include="GridHelper.cs" />
+    <Compile Include="SC.cs" />
+    <Compile Include="PhysicsValues.cs" />
     <Compile Include="RenameSubgrids.cs" />
     <Compile Include="ParamType.cs" />
     <Compile Include="AutoLandStateEnum.cs" />
