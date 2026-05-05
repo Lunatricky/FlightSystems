@@ -41,6 +41,7 @@
   <Import Project="MDK/MDK.options.props" />
   <Import Project="MDK/MDK.paths.props" Condition="exists('MDK/MDK.paths.props')" />
   <ItemGroup>
+    <Compile Include="ColorMap.cs" />
     <Compile Include="VectorHelper.cs" />
     <Compile Include="GridHelper.cs" />
     <Compile Include="SC.cs" />
