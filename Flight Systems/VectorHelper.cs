@@ -9,7 +9,7 @@ namespace IngameScript
 {
     class VectorHelper
     {
-        public static Vector3D GetLowestPoint(SC sc)
+        public static Vector3D GetLowestPoint(ShipContext sc)
         {
             BoundingBoxD bb = sc.Me.CubeGrid.WorldAABB;
 

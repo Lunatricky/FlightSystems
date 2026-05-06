@@ -44,7 +44,7 @@
     <Compile Include="ColorMap.cs" />
     <Compile Include="VectorHelper.cs" />
     <Compile Include="GridHelper.cs" />
-    <Compile Include="SC.cs" />
+    <Compile Include="ShipContext.cs" />
     <Compile Include="PhysicsValues.cs" />
     <Compile Include="RenameSubgrids.cs" />
     <Compile Include="ParamType.cs" />

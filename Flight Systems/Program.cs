@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
@@ -15,9 +14,11 @@ namespace IngameScript
     {
         // ================= CONFIG =================
         readonly MyIni ini = new MyIni();
-        SC sc;
+        ShipContext sc;
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
+
+        Command command = Command.Empty;
 
         // Descent()
         int tickCount;
@@ -89,6 +90,7 @@ namespace IngameScript
 
         //Ini
         Dictionary<string, string> __snapshot = new Dictionary<string, string>();
+        bool iniAnyChanged = false;
 
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
@@ -110,15 +112,6 @@ namespace IngameScript
         string __Lcd2Tag = "[FS_LCD2]";
         string __backupBatteryTag = "[FS_backup]";
 
-        string __gridNameStringVar = "";
-        string __dockGroupTagStringVar = "";
-        string __controllerTagStringVar = "";
-        string __overrideBlockTagStringVar = "";
-        string __ignoreTagStringVar = "";
-        string __Lcd1TagStringVar = "";
-        string __Lcd2TagStringVar = "";
-        string __backupBatteryTagStringVar = "";
-
         //ParamsSection
         const string ParamsSection = "Params";
 
@@ -131,11 +124,6 @@ namespace IngameScript
         double __cnavAltitude = 1000; // m
         double __distanceToGPS = 500; // m
         double __minimumAcceptedFuel = 20; //%
-
-        string __maxSpeedStringVar = "";
-        string __cnavAltitudeStringVar = "";
-        string __distanceToGPSStringVar = "";
-        string __minimumAcceptedFuelStringVar = "";
 
         //TogglesSection
         const string TogglesSection = "Toggles";
@@ -152,12 +140,6 @@ namespace IngameScript
         bool __renameSubgrids = false;
         bool __paintSurfaces = false;
 
-        string __allowFlightSystemsStringVar = "";
-        string __allowDockModeStringVar = "";
-        string __controlAntennasStringVar = "";
-        string __renameSubgridsStringVar = "";
-        string __paintSurfacesStringVar = "";
-
         //SurfaceColorsSection
         const string SurfaceColorsSection = "Screen Colors";
 
@@ -168,9 +150,6 @@ namespace IngameScript
         string __backgroundColor = "Black";
         string __fontColor = "White";
         string __colors = ColorMap.All.ToString();
-
-        string __backgroundColorStringVar = "";
-        string __fontColorStringVar = "";
 
         class Command
         {
@@ -255,61 +234,22 @@ namespace IngameScript
                 DockToggle(isDockMode);
             }
         }
-        
-        Command command = Command.Empty;
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if (sc.Controller == null
+            if (iniAnyChanged
+                || sc.Controller == null
                 || sc.Controller.Closed
                 || sc.ErrorMessage.Length > 0)
             {
                 Reload();
+                iniAnyChanged = false;
             }
 
             tickCount++;
             if (tickCount % 100 == 1)
             {
-                ini.Clear();
-
-                if (!ini.TryParse(sc.Me.CustomData)) 
-                {
-                    Echo("Could not parse Ini from PB custom data");
-                }
-
-                string sectionName = TogglesSection;
-
-                if (!ini.ContainsSection(sectionName))
-                {
-                    ini.AddSection(sectionName);
-                }
-
-                bool allowFlightSystems = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(__allowFlightSystems);
-                bool allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(__allowDockMode);
-                bool controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
-                bool renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(__renameSubgrids);
-                bool paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(__paintSurfaces);
-
                 ParseIni(sc.Me);
-                
-                if (allowFlightSystems != __allowFlightSystems
-                    || allowDockMode != __allowDockMode
-                    || controlAntennas != __controlAntennas
-                    || renameSubgrids != __renameSubgrids
-                    || paintSurfaces != __paintSurfaces)
-                {
-                    Reload();
-                }
-
-                // for non-string typed vars, keep string form snapshot and parse after:
-                if (IniBool())
-                {
-                    // convert parsed strings to typed variables, e.g.:
-                    bool parsed;
-                    if (bool.TryParse(__allowFlightSystemsStringVar, out parsed)) __allowFlightSystems = parsed;
-                    // ...other parsing
-                    Reload();
-                }
 
                 if (!string.IsNullOrWhiteSpace(sc.GridName) && !sc.GridName.Contains(" Grid "))
                 {
@@ -357,7 +297,6 @@ namespace IngameScript
 
             Echo(scriptInfo.ToString());
             sc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
-            SC.SetupSurface(sc.Me.GetSurface(0), 1.1f);
 
             if (isDockMode) return;
 
@@ -843,7 +782,7 @@ namespace IngameScript
         {
             firstRun = true;
 
-            sc = new SC(gridTerminalSystem, me, __ignoreTag);
+            sc = new ShipContext(gridTerminalSystem, me, __ignoreTag);
 
             ParseIni(sc.Me);
 
@@ -898,7 +837,7 @@ namespace IngameScript
                     Color backgroundColor = ColorMap.GetColorFromString(__backgroundColor);
                     Color fontColor = ColorMap.GetColorFromString(__fontColor);
 
-                    SC.PaintSurface(surface, backgroundColor, fontColor);
+                    ShipContext.PaintSurface(surface, backgroundColor, fontColor);
                 }
             }
         }
@@ -1012,11 +951,12 @@ namespace IngameScript
         void ChargeBatteries()
         {
             if (sc.BackupBattery != null)
-                sc.BackupBattery.ChargeMode = ChargeMode.Auto;
-
-            foreach (IMyBatteryBlock battery in sc.Batteries)
             {
-                battery.ChargeMode = ChargeMode.Recharge;
+                sc.BackupBattery.ChargeMode = ChargeMode.Auto;
+                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
+            } else if (IsAnyConnectorConnected())
+            {
+                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
         }
 
@@ -1582,11 +1522,11 @@ namespace IngameScript
         // ────────────────────────────────────────────────
         // Load config from CustomData (INI style)
         // ────────────────────────────────────────────────        
-        private void ParseIni(IMyProgrammableBlock me)
+        private bool ParseIni(IMyProgrammableBlock me)
         {
             ini.Clear();
 
-            if (!ini.TryParse(me.CustomData)) return;
+            if (!ini.TryParse(me.CustomData)) return iniAnyChanged;
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, TogglesSection };
@@ -1632,77 +1572,50 @@ namespace IngameScript
             me.CustomData = "";
 
             //NamesTagsSection
-            ini.Set(NamesTagsSection, INI_GRID_NAME, sc.GridName);
-            ini.Set(NamesTagsSection, INI_DOCK_GROUP_TAG, __dockGroupTag);
-            ini.Set(NamesTagsSection, INI_CONTROLLER_TAG, __controllerTag);
-            ini.Set(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
-            ini.Set(NamesTagsSection, INI_IGNORE_TAG, __ignoreTag);
-            ini.Set(NamesTagsSection, INI_LCD1_TAG, __Lcd1Tag);
-            ini.Set(NamesTagsSection, INI_LCD2_TAG, __Lcd2Tag);
-            ini.Set(NamesTagsSection, BACKUP_BATTERY_TAG, __backupBatteryTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, sc.GridName);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_GROUP_TAG, __dockGroupTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, __controllerTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_IGNORE_TAG, __ignoreTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, __Lcd1Tag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, __Lcd2Tag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, __backupBatteryTag);
 
             //ParamsSection
-            ini.Set(ParamsSection, MAX_SPEED, __maxSpeed);
-            ini.Set(ParamsSection, CNAV_ALTITUDE, __cnavAltitude);
-            ini.Set(ParamsSection, DISTANCE_TO_GPS, __distanceToGPS);
-            ini.Set(ParamsSection, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, __maxSpeed);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, __cnavAltitude);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, __distanceToGPS);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
 
             //TogglesSection
-            ini.Set(TogglesSection, FLIGHT_SYSTEMS, __allowFlightSystems);
-            ini.Set(TogglesSection, DOCK_MODE, __allowDockMode);
-            ini.Set(TogglesSection, CONTROL_ANTENNAS, __controlAntennas);
-            ini.Set(TogglesSection, RENAME_SUBGRIDS, __renameSubgrids);
-            ini.Set(TogglesSection, PAINT_SURFACES, __paintSurfaces);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, __allowFlightSystems);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, __allowDockMode);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, __controlAntennas);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, __renameSubgrids);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, __paintSurfaces);
 
             //SurfaceColorsSection
-            ini.Set(SurfaceColorsSection, BACKGROUNDCOLOR, __backgroundColor);
-            ini.Set(SurfaceColorsSection, FONTCOLOR, __fontColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, BACKGROUNDCOLOR, __backgroundColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, FONTCOLOR, __fontColor);
             ini.Set(SurfaceColorsSection, COLORS, __colors);
 
             sc.Me.CustomData = ini.ToString();
+
+            return iniAnyChanged;
         }
 
-        private bool IniBool()
+        bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
         {
-            bool anyChanged = false;
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__gridName", ref __gridNameStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__dockGroupTag", ref __dockGroupTagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__controllerTag", ref __controllerTagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__overrideBlockTag", ref __overrideBlockTagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__ignoreTag", ref __ignoreTagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__Lcd1Tag", ref __Lcd1TagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__Lcd2Tag", ref __Lcd2TagStringVar);
-            anyChanged |= ReadAndDetectChange(ini, NamesTagsSection, "__backupBatteryTag", ref __backupBatteryTagStringVar);
+            ini.Set(section, key, newVal.ToString());
 
-            anyChanged |= ReadAndDetectChange(ini, ParamsSection, "__maxSpeed", ref __maxSpeedStringVar);
-            anyChanged |= ReadAndDetectChange(ini, ParamsSection, "__cnavAltitude", ref __cnavAltitudeStringVar);
-            anyChanged |= ReadAndDetectChange(ini, ParamsSection, "__distanceToGPS", ref __distanceToGPSStringVar);
-            anyChanged |= ReadAndDetectChange(ini, ParamsSection, "__minimumAcceptedFuel", ref __minimumAcceptedFuelStringVar);
-
-            anyChanged |= ReadAndDetectChange(ini, TogglesSection, "__controlAntennas", ref __allowFlightSystemsStringVar);
-            anyChanged |= ReadAndDetectChange(ini, TogglesSection, "__allowDockMode", ref __allowDockModeStringVar);
-            anyChanged |= ReadAndDetectChange(ini, TogglesSection, "__controlAntennas", ref __controlAntennasStringVar);
-            anyChanged |= ReadAndDetectChange(ini, TogglesSection, "__renameSubgrids", ref __renameSubgridsStringVar);
-            anyChanged |= ReadAndDetectChange(ini, TogglesSection, "__paintSurfaces", ref __paintSurfacesStringVar);
-
-            anyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, "__backgroundColor", ref __backgroundColorStringVar);
-            anyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, "__fontColor", ref __fontColorStringVar);
-
-            return anyChanged;
-        }
-
-        bool ReadAndDetectChange(MyIni ini, string section, string key, ref string outValue)
-        {
-            string newVal = ini.Get(section, key).ToString(outValue);
             string old;
+            string newValString = newVal.ToString();
             __snapshot.TryGetValue(key, out old);
-            if (old != newVal)
+            if (old != newValString)
             {
-                __snapshot[key] = newVal;
-                outValue = newVal;
+                __snapshot[key] = newValString;
                 return true;
             }
-            outValue = newVal;
             return false;
         }
     }

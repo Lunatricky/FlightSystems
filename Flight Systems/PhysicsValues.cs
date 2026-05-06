@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace IngameScript
 {
-    class PhysicsValues
+    class PhysicsContext
     {
 
     }
