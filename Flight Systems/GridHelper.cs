@@ -10,7 +10,7 @@ namespace IngameScript
     class GridHelper
     {
 
-        public static void GetOwnGridBlocks<T>(List<T> list, SC sc, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        public static void GetOwnGridBlocks<T>(List<T> list, ShipContext sc, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
             list.Clear();
             sc.GridTS.GetBlocksOfType(list, block =>

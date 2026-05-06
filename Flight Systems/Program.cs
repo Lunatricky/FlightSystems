@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
@@ -15,17 +14,11 @@ namespace IngameScript
     {
         // ================= CONFIG =================
         readonly MyIni ini = new MyIni();
-        SC sc;
+        ShipContext sc;
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
 
-        /*
-         * R e a d m e
-         * -----------
-         * 
-         * In this file you can include any instructions or other comments you want to have injected onto the 
-         * top of your final script. You can safely delete this file if you do not want any such comments.
-         */
+        Command command = Command.Empty;
 
         // Descent()
         int tickCount;
@@ -63,6 +56,9 @@ namespace IngameScript
         const double ALPHA = 0.2;       // 0.1-0.3 is reasonable; lower = smoother/slower response
         const int SpeedTimeTrackerMaxSize = 100;
 
+        Vector3D lastVelocity;
+        double lastH2Fill = 0;
+        bool firstRun = true;
 
 
         // Cruise Control
@@ -74,6 +70,10 @@ namespace IngameScript
 
         readonly SpeedTimeTracker speedTimeTracker;
 
+        //Dock Mode
+        bool isDockMode = false;
+        bool lastDockState = false;
+
         struct booleans
         {
             public bool cruiseToggle;
@@ -84,60 +84,72 @@ namespace IngameScript
             public bool autoPilotToggle;
         }
 
-
         booleans b;
 
         double currentOverride = 0.0;
 
-        // Circunavigation
-        // CNav fields
+        //Ini
+        Dictionary<string, string> __snapshot = new Dictionary<string, string>();
+        bool iniAnyChanged = false;
 
+        //NamesTagsSection
+        const string NamesTagsSection = "Names & Tags";
 
-        // Docking Routine
-        // Connector-based Function Block Shutdown Fields
-        
-        const string SectionName = "Flight Systems";
+        const string INI_GRID_NAME = "Grid Name";
+        const string INI_DOCK_GROUP_TAG = "Dock Group";
+        const string INI_CONTROLLER_TAG = "Controller";
+        const string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks";
+        const string INI_IGNORE_TAG = "Ignore";
+        const string INI_LCD1_TAG = "LCD 1";
+        const string INI_LCD2_TAG = "LCD 2";
+        const string BACKUP_BATTERY_TAG = "Backup battery";
 
-        string INI_GRID_NAME = "Grid Name";
-        string INI_FS_GROUP_TAG = "Group Tag";
-        string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks Tag";
-        string INI_IGNORE_TAG = "Ignore Tag";
-        string INI_LCD1_TAG = "LCD 1";
-        string INI_LCD2_TAG = "LCD 2";
-        string MAX_SPEED = "Max Speed";
-        string CNAV_ALTITUDE = "Cnav Altitude";
-        string DISTANCE_TO_GPS = "Distance to GPS";
-        string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
-        string FLIGHT_SYSTEMS = "Flight Systems";
-        string DOCK_MODE = "Dock Mode";
-        string CONTROL_ANTENNAS = "Control Antennas";
-        string RENAME_SUBGRIDS = "Rename Subgrids";
-
-        string __fsGroupTag = "Flight Systems";
+        string __dockGroupTag = "Flight Systems";
+        string __controllerTag = "[FS_reference]";
         string __overrideBlockTag = "[FS_override]";
         string __ignoreTag = "[FS_ignore]";
         string __Lcd1Tag = "[FS_LCD1]";
         string __Lcd2Tag = "[FS_LCD2]";
+        string __backupBatteryTag = "[FS_backup]";
+
+        //ParamsSection
+        const string ParamsSection = "Params";
+
+        const string MAX_SPEED = "Max Speed";
+        const string CNAV_ALTITUDE = "Cnav Altitude";
+        const string DISTANCE_TO_GPS = "Distance to GPS";
+        const string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
+
         double __maxSpeed = 99; // m/s
         double __cnavAltitude = 1000; // m
         double __distanceToGPS = 500; // m
         double __minimumAcceptedFuel = 20; //%
+
+        //TogglesSection
+        const string TogglesSection = "Toggles";
+
+        const string FLIGHT_SYSTEMS = "Flight Systems";
+        const string DOCK_MODE = "Dock Mode";
+        const string CONTROL_ANTENNAS = "Control Antennas";
+        const string RENAME_SUBGRIDS = "Rename Subgrids";
+        const string PAINT_SURFACES = "Change Screen Colors";
+
         bool __allowFlightSystems = true;
         bool __allowDockMode = false;
         bool __controlAntennas = false;
         bool __renameSubgrids = false;
+        bool __paintSurfaces = false;
 
+        //SurfaceColorsSection
+        const string SurfaceColorsSection = "Screen Colors";
 
-        bool isDockMode = false;
-        bool lastDockState = false;
+        const string BACKGROUNDCOLOR = "Background Color";
+        const string FONTCOLOR = "Font Color";
+        const string COLORS = "Available Colors";
 
-        // Info LCDs
-        private const string BACKUP_TAG = "backup";
-
-        Vector3D lastVelocity;
-        double lastH2Fill = 0;
-        bool firstRun = true;
-        // Global config instance
+        string __backgroundColor = "Black";
+        string __fontColor = "White";
+        string __colors = ColorMap.All.ToString();
 
         class Command
         {
@@ -199,9 +211,15 @@ namespace IngameScript
 
             Reload();
 
+            if (sc.ErrorMessage.Length > 0)
+            {
+                Echo(sc.ErrorMessage.ToString());
+                return;
+            }
+
             if (__allowFlightSystems)
             {
-                Abort();
+                AbortShipContext();
 
                 // Info LCDscontroller
                 if (sc.Lcds1.Count > 0) WriteInfo();
@@ -216,46 +234,33 @@ namespace IngameScript
                 DockToggle(isDockMode);
             }
         }
-        
-        Command command = Command.Empty;
 
         public void Main(string argument, UpdateType updateSource)
         {
+            if (iniAnyChanged
+                || sc.Controller == null
+                || sc.Controller.Closed
+                || sc.ErrorMessage.Length > 0)
+            {
+                Reload();
+                iniAnyChanged = false;
+            }
+
             tickCount++;
             if (tickCount % 100 == 1)
             {
-
-                ini.Clear();
-
-                if (!ini.TryParse(sc.Me.CustomData)) return;
-
-                string sectionName = SectionName;
-
-                if (!ini.ContainsSection(sectionName))
-                {
-                    ini.AddSection(sectionName);
-                }
-
-                //TODO find a solution without having to read Ini 2x
-                bool allowFlightSystems = ini.Get(SectionName, FLIGHT_SYSTEMS).ToBoolean(__allowFlightSystems);
-                bool allowDockMode = ini.Get(SectionName, DOCK_MODE).ToBoolean(__allowDockMode);
-                bool controlAntennas = ini.Get(SectionName, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
-                bool renameSubgrids = ini.Get(SectionName, RENAME_SUBGRIDS).ToBoolean(__renameSubgrids);
-
-                ParseIni();
+                ParseIni(sc.Me);
 
                 if (!string.IsNullOrWhiteSpace(sc.GridName) && !sc.GridName.Contains(" Grid "))
                 {
                     sc.Me.CubeGrid.CustomName = sc.GridName;
                 }
-                
-                if (allowFlightSystems != __allowFlightSystems
-                    || allowDockMode != __allowDockMode
-                    || controlAntennas != __controlAntennas
-                    || renameSubgrids != __renameSubgrids)
-                {
-                    Reload();
-                }
+            }
+
+            if (sc.ErrorMessage.Length > 0)
+            {
+                Echo("ErrorMessage: \n" + sc.ErrorMessage.ToString());
+                return;
             }
 
             FlightSystems(argument);
@@ -272,7 +277,6 @@ namespace IngameScript
             if (__allowFlightSystems)
             {
                 UpdatePhysics();
-                ScriptInfoPhysics(scriptInfo);
             }
 
             if (__allowDockMode)
@@ -310,7 +314,6 @@ namespace IngameScript
             List<MainStateEnum> MainStateList = new List<MainStateEnum>(arr);
             if (!__allowFlightSystems && MainStateList.Contains(command.State))
             {
-                WriteEmpty();
                 return;
             }
 
@@ -333,7 +336,7 @@ namespace IngameScript
                     Reload();
                     break;
                 case MainStateEnum.Abort:
-                    Abort();
+                    AbortShipContext();
                     break;
                 case MainStateEnum.Dock:
                     DockStateSwitch(command.Param);
@@ -349,7 +352,7 @@ namespace IngameScript
                 case MainStateEnum.Land: // Auto Land
                     if (gravity == 0)
                     {
-                        Abort();
+                        AbortShipContext();
                         return;
                     }
                     if (command.Param.AutoLandState == AutoLandStateEnum.Idle) StartLand();
@@ -371,7 +374,7 @@ namespace IngameScript
             if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && gravity == 0.0)
             {
                 b.stopCruiseWhenOutOfGrav = b.lastCheckIsOnNatGrav = b.cruiseToggle = false;
-                Abort();
+                AbortShipContext();
             }
             else
             {
@@ -477,50 +480,35 @@ namespace IngameScript
             return scriptInfo;
         }
 
-        public StringBuilder ScriptInfoPhysics(StringBuilder scriptInfo)
-        {
-            scriptInfo.AppendLine();
-
-            if (gravity > 0)
-            {
-                scriptInfo.AppendLine($"Alt: {alt:F1} m");
-                scriptInfo.AppendLine($"Rate of climb: {climbRate:F1} m/s");
-            }
-
-            scriptInfo.AppendLine($"Longitudinal velocity: {forwardVelocity:F1} m/s");
-            scriptInfo.AppendLine($"Lateral velocity: {rightVelocity:F1} m/s");
-            scriptInfo.AppendLine($"Vertical velocity: {upVelocity:F1} m/s");
-
-            switch (command.State)
-            {
-                case MainStateEnum.Land:
-                case MainStateEnum.SBurn:
-                    scriptInfo.AppendLine($"timeToImpact: {timeToImpact:F1} s");
-                    scriptInfo.AppendLine($"gravity: {gravity:F1} m²/s");
-                    scriptInfo.AppendLine($"Max upward accel: {maxYDecel:F1} m²/s");
-                    break;
-            }
-
-            return scriptInfo;
-        }
-
         public StringBuilder ScriptInfoBlocks(StringBuilder scriptInfo)
         {
             scriptInfo.AppendLine();
+            scriptInfo.AppendLine("Toggles");
+            scriptInfo.AppendLine(FLIGHT_SYSTEMS + ": " + __allowFlightSystems);
+            scriptInfo.AppendLine(DOCK_MODE + ": " + __allowDockMode);
+            scriptInfo.AppendLine(CONTROL_ANTENNAS + ": " + __controlAntennas);
+            scriptInfo.AppendLine(RENAME_SUBGRIDS + ": " + __renameSubgrids);
+            scriptInfo.AppendLine(PAINT_SURFACES + ": " + __paintSurfaces);
+            scriptInfo.AppendLine();
+            scriptInfo.AppendLine("Blocks");
+            scriptInfo.AppendLine("Controller: " + sc.Controller.CustomName);
 
             if (__allowFlightSystems)
             {
-                scriptInfo.AppendLine("Controller: " + sc.Controller.CustomName);
-                scriptInfo.AppendLine("LCDs1: " + sc.Lcds1.Count);
-                scriptInfo.AppendLine("LCDs2: " + sc.Lcds2.Count);
                 scriptInfo.AppendLine("Batteries: " + sc.Batteries.Count + " | Tanks: " + sc.Tanks.Count);
                 scriptInfo.AppendLine("Forward thruster: " + sc.ForwardThrusters.Count);
                 scriptInfo.AppendLine("Breaking thruster: " + sc.BreakingThrusters.Count);
                 scriptInfo.AppendLine("Upward thruster: " + sc.UpwardThrusters.Count);
-                scriptInfo.AppendLine("Gears: " + sc.Gears.Count);
             }
+
+            if (__allowDockMode || __allowFlightSystems)
+                scriptInfo.AppendLine("Gears: " + sc.Gears.Count);
+
             if (__allowDockMode)
                 scriptInfo.AppendLine("Dock Mode blocks: " + sc.ControlledBlocks.Count);
+
+            scriptInfo.AppendLine("LCDs1: " + sc.Lcds1.Count);
+            scriptInfo.AppendLine("LCDs2: " + sc.Lcds2.Count);
 
             return scriptInfo;
         }
@@ -577,7 +565,7 @@ namespace IngameScript
                     CruiseControl(cruiseSpeed);
                     break;
                 case "off":
-                    Abort();
+                    AbortShipContext();
                     break;
                 case "orbit":
                     b.cruiseToggle = !b.cruiseToggle;
@@ -595,7 +583,7 @@ namespace IngameScript
                             command.Param.Text = "on";
                         } else
                         {
-                            Abort();
+                            AbortShipContext();
                         }
                     }
                     break;
@@ -617,7 +605,7 @@ namespace IngameScript
                         }
                         else
                         {
-                            Abort();
+                            AbortShipContext();
                             command.State = MainStateEnum.CNav;
                         }
                     }
@@ -629,7 +617,7 @@ namespace IngameScript
                     CruiseControl(cruiseSpeed);
                     if (effectiveAlt < 500 + stopYDist)
                     {
-                        Abort();
+                        AbortShipContext();
                         command.State = MainStateEnum.Land;
                     }
                     break;
@@ -671,7 +659,7 @@ namespace IngameScript
                     }
                     break;
                 case "off":
-                    Abort();
+                    AbortShipContext();
                     break;
             }
         }
@@ -693,7 +681,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandStateEnum.LockGear:
-                    if (TryLock()) Abort();
+                    if (TryLock()) AbortShipContext();
                     break;
             }
         }
@@ -715,7 +703,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandStateEnum.LockGear:
-                    if (TryLock()) Abort();
+                    if (TryLock()) AbortShipContext();
                     break;
             }
         }
@@ -794,38 +782,41 @@ namespace IngameScript
         {
             firstRun = true;
 
-            sc = new SC(gridTerminalSystem, me, __ignoreTag);
+            sc = new ShipContext(gridTerminalSystem, me, __ignoreTag);
 
-            ParseIni();
+            ParseIni(sc.Me);
 
+            sc.ReloadLCDs(__Lcd1Tag, __Lcd2Tag);
+
+            // Flight cached blocks
             if (__allowFlightSystems)
             {
-                sc
-                    // Flight cached blocks
-                    .UpdateControllers()
-                    .UpdateGridHeight()
-                    .UpdateThrusters()
-                    .UpdateGyros()
-                    .UpdateGears()
-                    .UpdateLCDs(__Lcd1Tag, __Lcd2Tag);
+                sc.ReloadControllers(__controllerTag);
+
+                if (sc.ErrorMessage.Length > 0)
+                    return;
+
+                sc.ReloadGridHeight()
+                    .ReloadThrusters()
+                    .ReloadGyros()
+                    .ReloadGears();
 
                 b.lastCheckIsOnNatGrav = sc.Controller.GetNaturalGravity().LengthSquared() > 0;
-                Abort();
+                AbortShipContext();
             }
 
+            // Dock cached blocks
             if (__allowDockMode)
-                sc
-                // Dock cached blocks
-                .UpdateConnectors()
-                .UpdateTanks()
-                .UpdateH2Tanks()
-                .UpdateBatteries(BACKUP_TAG)
-                .UpdateControlledBlocks(__fsGroupTag)
-                // Override group cached blocks
-                .UpdateOverrideGroup(__overrideBlockTag);
+                sc.ReloadConnectors()
+                .ReloadGears()
+                .ReloadTanks()
+                .ReloadH2Tanks()
+                .ReloadBatteries(__backupBatteryTag)
+                .ReloadControlledBlocks(__dockGroupTag)
+                .ReloadOverrideGroup(__overrideBlockTag);
 
             if (__controlAntennas)
-                sc.UpdateAntennas(__controlAntennas);
+                sc.ReloadAntennas(__controlAntennas);
 
             if (__renameSubgrids)
             {
@@ -834,6 +825,19 @@ namespace IngameScript
                 if (mainGrid != null)
                 {
                     RenameSubgrids.GetSubgridsAndRename(sc.GridTS, mainGrid);
+                }
+            }
+
+            if (__paintSurfaces)
+            {
+                sc.ReloadSurfaces();
+
+                foreach(IMyTextSurface surface in sc.Surfaces)
+                {
+                    Color backgroundColor = ColorMap.GetColorFromString(__backgroundColor);
+                    Color fontColor = ColorMap.GetColorFromString(__fontColor);
+
+                    ShipContext.PaintSurface(surface, backgroundColor, fontColor);
                 }
             }
         }
@@ -947,11 +951,12 @@ namespace IngameScript
         void ChargeBatteries()
         {
             if (sc.BackupBattery != null)
-                sc.BackupBattery.ChargeMode = ChargeMode.Auto;
-
-            foreach (IMyBatteryBlock battery in sc.Batteries)
             {
-                battery.ChargeMode = ChargeMode.Recharge;
+                sc.BackupBattery.ChargeMode = ChargeMode.Auto;
+                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
+            } else if (IsAnyConnectorConnected())
+            {
+                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
         }
 
@@ -1058,6 +1063,7 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Stop Y: {stopYDist:F1} m | {timeToStopY:F1} s");
             }
             stringBuilder.AppendLine($"Stop Z: {stopZDist:F1} m | {timeToStopZ:F1} s");
+            stringBuilder.AppendLine($"maxZDecel: {maxZDecel:F1} s");
 
             if (b.autoPilotToggle)
             {
@@ -1081,14 +1087,6 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd2 in sc.Lcds2)
                 lcd2.WriteText(stringBuilder.ToString());
-        }
-        void WriteEmpty()
-        {
-            foreach (IMyTextSurface lcd1 in sc.Lcds1)
-                lcd1.WriteText("");
-
-            foreach (IMyTextSurface lcd2 in sc.Lcds2)
-                lcd2.WriteText("");
         }
 
             double TimeToDistanceSmoothed(double distance, double dt)
@@ -1226,7 +1224,7 @@ namespace IngameScript
             command.Param.AutoLandState = AutoLandStateEnum.Align;
         }
 
-        void Abort()
+        void AbortShipContext()
         {
             b = new booleans();
 
@@ -1370,7 +1368,7 @@ namespace IngameScript
         {
             if (netDecel - 1 < 0)
             {
-                Abort();
+                AbortShipContext();
                 command.State = MainStateEnum.Cruise;
                 command.Param.Text = "orbit";
             }
@@ -1385,7 +1383,7 @@ namespace IngameScript
         {
             if (netDecel - 0.5 < 0)
             {
-                Abort();
+                AbortShipContext();
                 command.State = MainStateEnum.Cruise;
                 command.Param.Text = "orbit";
             }
@@ -1524,52 +1522,101 @@ namespace IngameScript
         // ────────────────────────────────────────────────
         // Load config from CustomData (INI style)
         // ────────────────────────────────────────────────        
-        private void ParseIni()
+        private bool ParseIni(IMyProgrammableBlock me)
         {
             ini.Clear();
 
-            if (!ini.TryParse(sc.Me.CustomData)) return;
+            if (!ini.TryParse(me.CustomData)) return iniAnyChanged;
 
-            string sectionName = SectionName;
+            List<string> sectionsNames = new List<string>();
+            string[] array = { NamesTagsSection, ParamsSection, TogglesSection };
+            sectionsNames.AddArray(array);
 
+            foreach (string sectionName in sectionsNames)
             if (!ini.ContainsSection(sectionName))
             {
                 ini.AddSection(sectionName);
             }
 
-            string tempGridName = ini.Get(sectionName, INI_GRID_NAME).ToString(sc.GridName);
-
+            //NamesTagsSection
+            string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(sc.GridName);
             sc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? sc.GridName : tempGridName;
-            __fsGroupTag = ini.Get(sectionName, INI_FS_GROUP_TAG).ToString(__fsGroupTag);
-            __overrideBlockTag = ini.Get(sectionName, INI_OVERRIDE_BLOCKS_TAG).ToString(__overrideBlockTag);
-            __ignoreTag = ini.Get(sectionName, INI_IGNORE_TAG).ToString(__ignoreTag);
-            __Lcd1Tag = ini.Get(sectionName, INI_LCD1_TAG).ToString(__Lcd1Tag);
-            __Lcd2Tag = ini.Get(sectionName, INI_LCD2_TAG).ToString(__Lcd2Tag);
-            __maxSpeed = (float)ini.Get(sectionName, MAX_SPEED).ToDouble(__maxSpeed);
-            __cnavAltitude = (float)ini.Get(sectionName, CNAV_ALTITUDE).ToDouble(__cnavAltitude);
-            __distanceToGPS = (float)ini.Get(sectionName, DISTANCE_TO_GPS).ToDouble(__distanceToGPS);
-            __minimumAcceptedFuel = ini.Get(sectionName, MINIMUM_ACCEPTED_FUEL).ToDouble(__minimumAcceptedFuel);
-            __allowFlightSystems = ini.Get(sectionName, FLIGHT_SYSTEMS).ToBoolean(__allowFlightSystems);
-            __allowDockMode = ini.Get(sectionName, DOCK_MODE).ToBoolean(__allowDockMode);
-            __controlAntennas = ini.Get(sectionName, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
-            __renameSubgrids = ini.Get(sectionName, RENAME_SUBGRIDS).ToBoolean(__renameSubgrids);
 
-            ini.Set(SectionName, INI_GRID_NAME, sc.GridName);
-            ini.Set(SectionName, INI_FS_GROUP_TAG, __fsGroupTag);
-            ini.Set(SectionName, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
-            ini.Set(SectionName, INI_IGNORE_TAG, __ignoreTag);
-            ini.Set(SectionName, INI_LCD1_TAG, __Lcd1Tag);
-            ini.Set(SectionName, INI_LCD2_TAG, __Lcd2Tag);
-            ini.Set(SectionName, MAX_SPEED, __maxSpeed);
-            ini.Set(SectionName, CNAV_ALTITUDE, __cnavAltitude);
-            ini.Set(SectionName, DISTANCE_TO_GPS, __distanceToGPS);
-            ini.Set(SectionName, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
-            ini.Set(SectionName, FLIGHT_SYSTEMS, __allowFlightSystems);
-            ini.Set(SectionName, DOCK_MODE, __allowDockMode);
-            ini.Set(SectionName, CONTROL_ANTENNAS, __controlAntennas);
-            ini.Set(SectionName, RENAME_SUBGRIDS, __renameSubgrids);
+            __dockGroupTag = ini.Get(NamesTagsSection, INI_DOCK_GROUP_TAG).ToString(__dockGroupTag);
+            __controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(__controllerTag);
+            __overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(__overrideBlockTag);
+            __ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(__ignoreTag);
+            __Lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(__Lcd1Tag);
+            __Lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(__Lcd2Tag);
+            __backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(__backupBatteryTag);
+
+            //ParamsSection
+            __maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(__maxSpeed);
+            __cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(__cnavAltitude);
+            __distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(__distanceToGPS);
+            __minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(__minimumAcceptedFuel);
+
+            //TogglesSection
+            __allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(__allowFlightSystems);
+            __allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(__allowDockMode);
+            __controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(__controlAntennas);
+            __renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(__renameSubgrids);
+            __paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(__paintSurfaces);
+
+            //SurfaceColorsSection
+            __backgroundColor = ini.Get(SurfaceColorsSection, BACKGROUNDCOLOR).ToString(__backgroundColor);
+            __fontColor = ini.Get(SurfaceColorsSection, FONTCOLOR).ToString(__fontColor);
+
+
+            ini.Clear();
+            me.CustomData = "";
+
+            //NamesTagsSection
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, sc.GridName);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_GROUP_TAG, __dockGroupTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, __controllerTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, __overrideBlockTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_IGNORE_TAG, __ignoreTag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, __Lcd1Tag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, __Lcd2Tag);
+            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, __backupBatteryTag);
+
+            //ParamsSection
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, __maxSpeed);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, __cnavAltitude);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, __distanceToGPS);
+            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, __minimumAcceptedFuel);
+
+            //TogglesSection
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, __allowFlightSystems);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, __allowDockMode);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, __controlAntennas);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, __renameSubgrids);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, __paintSurfaces);
+
+            //SurfaceColorsSection
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, BACKGROUNDCOLOR, __backgroundColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, FONTCOLOR, __fontColor);
+            ini.Set(SurfaceColorsSection, COLORS, __colors);
 
             sc.Me.CustomData = ini.ToString();
+
+            return iniAnyChanged;
+        }
+
+        bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
+        {
+            ini.Set(section, key, newVal.ToString());
+
+            string old;
+            string newValString = newVal.ToString();
+            __snapshot.TryGetValue(key, out old);
+            if (old != newValString)
+            {
+                __snapshot[key] = newValString;
+                return true;
+            }
+            return false;
         }
     }
 }

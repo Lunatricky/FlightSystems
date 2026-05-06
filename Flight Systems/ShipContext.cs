@@ -10,13 +10,14 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class SC
+    class ShipContext
     {
 
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
         string gridName;
         string ignoreTag;
+        readonly StringBuilder errorMessage;
 
         double centerGridHight;
         double bottomGridHight;
@@ -45,19 +46,27 @@ namespace IngameScript
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
-        public SC(IMyGridTerminalSystem grid, IMyProgrammableBlock me, string ignoreTag)
+        List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
+
+        public ShipContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me, string ignoreTag)
         {
+            errorMessage = new StringBuilder();
             GridTS = grid;
             Me = me;
-            GridName = me.CubeGrid.CustomName;
+
+            string tempGridName = Me.CubeGrid.CustomName;
+            if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
+                GridName = tempGridName;
+
             this.ignoreTag = ignoreTag;
 
-            SetupSurface(me.GetSurface(0));
+            SetupSurface(me.GetSurface(0), 1.1f);
         }
 
-        public SC UpdateControllers()
+        public ShipContext ReloadControllers(string controllerTag)
         {
             Controllers.Clear();
+            Controller = null;
 
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
@@ -67,12 +76,21 @@ namespace IngameScript
 
             foreach (IMyRemoteControl remote in remotes)
             {
-                if (Controller == null)
+                if (Controller == null && remote.CustomName.Contains(controllerTag.ToLower()))
                     Controller = remote;
                 Controllers.Add(remote);
             }
-            if (Controller == null)
-                throw new Exception("No Remote Control block found!");
+
+            if (Controller == null && remotes.Count > 0)
+                Controller = remotes.First();
+            else
+            {
+                ErrorMessage.AppendLine("===============================");
+                ErrorMessage.AppendLine("No Remote Control block found!");
+                ErrorMessage.AppendLine("Place a RC on the grid facing forward.");
+                ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, in case you need RCs in different directions.");
+                ErrorMessage.AppendLine("===============================");
+            }
 
             foreach (IMyCockpit cockpit in cockpits)
             {
@@ -81,7 +99,7 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateGridHeight()
+        public ShipContext ReloadGridHeight()
         {
             Vector3D gravityDir = Vector3D.Normalize(Controller.GetNaturalGravity());
 
@@ -97,7 +115,7 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateThrusters()
+        public ShipContext ReloadThrusters()
         {
             ForwardThrusters.Clear();
             BreakingThrusters.Clear();
@@ -123,28 +141,20 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateGyros()
+        public ShipContext ReloadGyros()
         {
-            Gyros.Clear();
             GridHelper.GetOwnGridBlocks(Gyros, this, ignoreTag);
             return this;
         }
 
-        public SC UpdateGears()
+        public ShipContext ReloadGears()
         {
-            Gears.Clear();
             GridHelper.GetOwnGridBlocks(Gears, this, ignoreTag);
             return this;
         }
 
-        public SC UpdateAntennas(bool controlAntennas)
+        public ShipContext ReloadAntennas(bool controlAntennas)
         {
-            Antennas.Clear();
-
-            string tempGridName = Me.CubeGrid.CustomName;
-            if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
-                GridName = tempGridName;
-
             GridHelper.GetOwnGridBlocks(Antennas, this, ignoreTag);
             if (controlAntennas)
             {
@@ -153,23 +163,25 @@ namespace IngameScript
                     if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = GridName;
                 }
             }
-
-            GridHelper.GetOwnGridBlocks(Gears, this, ignoreTag);
             return this;
         }
 
-        public SC UpdateLCDs(string lcd1Tag, string lcd2Tag)
+        public ShipContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
-            Lcds1.Clear();
-            Lcds2.Clear();
-
-            Lcds1 = AddLCDsToList(lcd1Tag);
-            Lcds2 = AddLCDsToList(lcd2Tag);
+            Lcds1 = AddLCDsToList(lcd1Tag, true);
+            Lcds2 = AddLCDsToList(lcd2Tag, true);
 
             return this;
         }
 
-        private List<IMyTextSurface> AddLCDsToList(string LCD_TAG)
+        public ShipContext ReloadSurfaces()
+        {
+            Surfaces = AddLCDsToList();
+
+            return this;
+        }
+
+        private List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool setupSurface = false, int surfaceNumber = 0)
         {
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
             // LCDs
@@ -184,27 +196,33 @@ namespace IngameScript
                 // Only take the first surface (index 0)
                 if (surfaceProvider.SurfaceCount > 0)
                 {
-                    var surface = surfaceProvider.GetSurface(0);
-
-                    lcds.Add(SetupSurface(surface));
+                    var surface = surfaceProvider.GetSurface(surfaceNumber);
+                    if (setupSurface) SetupSurface(surface);
+                    lcds.Add(surface);
                 }
             }
             return lcds;
         }
 
-        private static IMyTextSurface SetupSurface(IMyTextSurface surface)
+        public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
         {
             surface.ContentType = ContentType.TEXT_AND_IMAGE;
             surface.Font = "DEBUG";
-            surface.FontSize = 1.7f;
+            surface.FontSize = fontSize;
             surface.Alignment = TextAlignment.LEFT;
             return surface;
         }
 
-        public SC UpdateConnectors()
+        public static void PaintSurface(IMyTextSurface surface, Color BackgroundColor, Color FontColor)
         {
-            Connectors.Clear();
+            surface.BackgroundColor = BackgroundColor;
+            surface.FontColor = FontColor;
+            surface.ScriptBackgroundColor = BackgroundColor;
+            surface.ScriptForegroundColor = FontColor;
+        }
 
+        public ShipContext ReloadConnectors()
+        {
             // Connectors, Tanks & Batteries (own construct only)
             GridHelper.GetOwnGridBlocks(Connectors, this, ignoreTag);
             SetConnectors();
@@ -212,19 +230,15 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateTanks()
+        public ShipContext ReloadTanks()
         {
-            Tanks.Clear();
-
             GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
 
             return this;
         }
 
-        public SC UpdateH2Tanks()
+        public ShipContext ReloadH2Tanks()
         {
-            H2Tanks.Clear();
-
             GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
 
             foreach (IMyGasTank tank in Tanks)
@@ -237,10 +251,8 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateBatteries(string BACKUP_TAG)
+        public ShipContext ReloadBatteries(string backupTag)
         {
-            Batteries.Clear();
-
             GridHelper.GetOwnGridBlocks(Batteries, this, ignoreTag);
 
             // Backup Battery
@@ -248,7 +260,7 @@ namespace IngameScript
             {
                 foreach (var battery in Batteries)
                 {
-                    if (!battery.Closed && battery.CustomName.ToLower().Contains(BACKUP_TAG))
+                    if (!battery.Closed && battery.CustomName.ToLower().Contains(backupTag.ToLower()))
                     {
                         BackupBattery = battery;
                         break;
@@ -256,14 +268,21 @@ namespace IngameScript
                 }
                 Batteries.Remove(BackupBattery);
             }
+
+            if ((BackupBattery == null || BackupBattery.Closed) && Batteries.Count > 1)
+            {
+                BackupBattery = Batteries.First();
+                BackupBattery.CustomName = BackupBattery.CustomName + " " + backupTag;
+            }
+
             return this;
         }
 
-        public SC UpdateControlledBlocks(string fsGroupTag)
+        public ShipContext ReloadControlledBlocks(string dockGroupTag)
         {
             ControlledBlocks.Clear();
 
-            IMyBlockGroup group = GridTS.GetBlockGroupWithName(fsGroupTag);
+            IMyBlockGroup group = GridTS.GetBlockGroupWithName(dockGroupTag);
 
             if (ControlledBlocks.Count == 0 && group != null)
             {
@@ -280,7 +299,7 @@ namespace IngameScript
             return this;
         }
 
-        public SC UpdateOverrideGroup(string __overrideBlockTag)
+        public ShipContext ReloadOverrideGroup(string __overrideBlockTag)
         {
             OverrideBlocks.Clear();
 
@@ -675,6 +694,21 @@ namespace IngameScript
             set
             {
                 lcds2 = value;
+            }
+        }
+
+        public StringBuilder ErrorMessage => errorMessage;
+
+        public List<IMyTextSurface> Surfaces
+        {
+            get
+            {
+                return surfaces;
+            }
+
+            set
+            {
+                surfaces = value;
             }
         }
     }
