@@ -4,15 +4,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
-namespace IngameScript
+namespace IngameScript.Domain
 {
-    class ShipContext
+    class GridContext
     {
-
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
         string gridName;
@@ -48,7 +46,7 @@ namespace IngameScript
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
-        public ShipContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me, string ignoreTag)
+        public GridContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me)
         {
             errorMessage = new StringBuilder();
             GridTS = grid;
@@ -58,12 +56,10 @@ namespace IngameScript
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
 
-            this.ignoreTag = ignoreTag;
-
             SetupSurface(me.GetSurface(0), 1.1f);
         }
 
-        public ShipContext ReloadControllers(string controllerTag)
+        public GridContext ReloadControllers(string controllerTag)
         {
             Controllers.Clear();
             Controller = null;
@@ -71,8 +67,8 @@ namespace IngameScript
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
 
-            GridHelper.GetOwnGridBlocks(remotes, this, ignoreTag);
-            GridHelper.GetOwnGridBlocks(cockpits, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(remotes, this, IgnoreTag);
+            GridManager.GetOwnGridBlocks(cockpits, this, IgnoreTag);
 
             foreach (IMyRemoteControl remote in remotes)
             {
@@ -99,7 +95,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadGridHeight()
+        public GridContext ReloadGridHeight()
         {
             Vector3D gravityDir = Vector3D.Normalize(Controller.GetNaturalGravity());
 
@@ -115,14 +111,14 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadThrusters()
+        public GridContext ReloadThrusters()
         {
             ForwardThrusters.Clear();
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
 
             List<IMyThrust> allThrusters = new List<IMyThrust>();
-            GridHelper.GetOwnGridBlocks(allThrusters, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(allThrusters, this, IgnoreTag);
 
             foreach (var thruster in allThrusters)
             {
@@ -141,21 +137,21 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadGyros()
+        public GridContext ReloadGyros()
         {
-            GridHelper.GetOwnGridBlocks(Gyros, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Gyros, this, IgnoreTag);
             return this;
         }
 
-        public ShipContext ReloadGears()
+        public GridContext ReloadGears()
         {
-            GridHelper.GetOwnGridBlocks(Gears, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Gears, this, IgnoreTag);
             return this;
         }
 
-        public ShipContext ReloadAntennas(bool controlAntennas)
+        public GridContext ReloadAntennas(bool controlAntennas)
         {
-            GridHelper.GetOwnGridBlocks(Antennas, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Antennas, this, IgnoreTag);
             if (controlAntennas)
             {
                 foreach (IMyRadioAntenna antenna in Antennas)
@@ -166,7 +162,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
+        public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
             Lcds1 = AddLCDsToList(lcd1Tag, true);
             Lcds2 = AddLCDsToList(lcd2Tag, true);
@@ -174,7 +170,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadSurfaces()
+        public GridContext ReloadSurfaces()
         {
             Surfaces = AddLCDsToList();
 
@@ -221,25 +217,25 @@ namespace IngameScript
             surface.ScriptForegroundColor = FontColor;
         }
 
-        public ShipContext ReloadConnectors()
+        public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GridHelper.GetOwnGridBlocks(Connectors, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Connectors, this, IgnoreTag);
             SetConnectors();
 
             return this;
         }
 
-        public ShipContext ReloadTanks()
+        public GridContext ReloadTanks()
         {
-            GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             return this;
         }
 
-        public ShipContext ReloadH2Tanks()
+        public GridContext ReloadH2Tanks()
         {
-            GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -251,9 +247,9 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadBatteries(string backupTag)
+        public GridContext ReloadBatteries(string backupTag)
         {
-            GridHelper.GetOwnGridBlocks(Batteries, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Batteries, this, IgnoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -278,7 +274,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadControlledBlocks(string dockGroupTag)
+        public GridContext ReloadControlledBlocks(string dockGroupTag)
         {
             ControlledBlocks.Clear();
 
@@ -299,7 +295,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadOverrideGroup(string __overrideBlockTag)
+        public GridContext ReloadOverrideGroup(string __overrideBlockTag)
         {
             OverrideBlocks.Clear();
 
@@ -709,6 +705,19 @@ namespace IngameScript
             set
             {
                 surfaces = value;
+            }
+        }
+
+        public string IgnoreTag
+        {
+            get
+            {
+                return ignoreTag;
+            }
+
+            set
+            {
+                ignoreTag = value;
             }
         }
     }

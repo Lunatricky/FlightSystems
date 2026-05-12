@@ -14,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot Inventory", "Ingot Inventory\Ingot Inventory.csproj", "{B00D0965-19FF-4A8B-9519-9B46E16487C6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -25,6 +27,8 @@ Global
 		{EF3C284B-49EC-430E-978E-E1B25CCC403E}.Debug|x64.Build.0 = Debug|x64
 		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.ActiveCfg = Debug|x64
 		{C828628F-B828-4804-9220-F50F94EEAB2D}.Debug|x64.Build.0 = Debug|x64
+		{B00D0965-19FF-4A8B-9519-9B46E16487C6}.Debug|x64.ActiveCfg = Debug|x64
+		{B00D0965-19FF-4A8B-9519-9B46E16487C6}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
