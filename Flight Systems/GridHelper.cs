@@ -14,7 +14,9 @@ namespace IngameScript
         {
             list.Clear();
             sc.GridTS.GetBlocksOfType(list, block =>
-            (block.IsSameConstructAs(sc.Me) && !block.CustomName.Contains(__ignoreTag))
+            (block.IsSameConstructAs(sc.Me) 
+            && !block.CustomName.Contains(__ignoreTag)
+            && !block.CustomData.Contains(__ignoreTag))
             );
         }
     }
