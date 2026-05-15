@@ -7,20 +7,20 @@ namespace IngameScript.Physics
         PhysicsContextLastTick physicsContextPersistent;
         PhysicsContextTransient physicsContextTransient;
 
-        public PhysicsContext(GridContext gc, IniContext ic, double timeSinceLastRun)
+        public PhysicsContext(GridContext gc, IniContext ic, SpeedTimeTracker speedTimeTracker, double timeSinceLastRun)
         {
-            physicsContextTransient = new PhysicsContextTransient(gc, ic, timeSinceLastRun);
-            physicsContextPersistent = new PhysicsContextLastTick(physicsContextTransient);
+            physicsContextTransient = new PhysicsContextTransient(gc, ic, speedTimeTracker, timeSinceLastRun);
+            physicsContextPersistent = new PhysicsContextLastTick(physicsContextTransient, speedTimeTracker);
         }
 
         internal PhysicsContextLastTick Persistent => physicsContextPersistent;
 
         internal PhysicsContextTransient Transient => physicsContextTransient;
 
-        public void ResetTransientPhysicsContext(GridContext gc, IniContext ic, double timeSinceLastRun)
+        public void ResetTransientPhysicsContext(GridContext gc, IniContext ic, SpeedTimeTracker speedTimeTracker, double timeSinceLastRun)
         {
-            physicsContextTransient = new PhysicsContextTransient(gc, ic, timeSinceLastRun);
-            physicsContextPersistent = new PhysicsContextLastTick(physicsContextTransient);
+            physicsContextTransient = new PhysicsContextTransient(gc, ic, speedTimeTracker, timeSinceLastRun);
+            physicsContextPersistent = new PhysicsContextLastTick(physicsContextTransient, speedTimeTracker);
         }
     }
 }

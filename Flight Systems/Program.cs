@@ -63,7 +63,7 @@ namespace IngameScript
 
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
-            pc = new PhysicsContext(gc, ic, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc = new PhysicsContext(gc, ic, speedTimeTracker, Runtime.TimeSinceLastRun.TotalSeconds);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
@@ -71,7 +71,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            pc.ResetTransientPhysicsContext(gc, ic, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc.ResetTransientPhysicsContext(gc, ic, speedTimeTracker, Runtime.TimeSinceLastRun.TotalSeconds);
 
             if (ic.IniAnyChanged
                 || gc.Controller == null
@@ -660,10 +660,10 @@ namespace IngameScript
             ScriptInfoHeader(stringBuilder);
             stringBuilder.AppendLine("\n");
 
-            stringBuilder.AppendLine($"Mass: {mass.PhysicalMass / 1000:0.0} t");
+            stringBuilder.AppendLine($"Mass: {pc.Transient.Mass.PhysicalMass / 1000:0.0} t");
             stringBuilder.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
 
-            stringBuilder.AppendLine($"H2: {gc.H2CapacityPercent:0}% - {h2Time}");
+            stringBuilder.AppendLine($"H2: {gc.H2CapacityPercent:0}% - {pc.Transient.H2Time}");
 
             stringBuilder.AppendLine($"Bat:  {batStored / batCap * 100:0}% - {batTime}");
 

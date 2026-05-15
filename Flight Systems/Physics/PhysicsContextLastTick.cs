@@ -11,10 +11,10 @@ namespace IngameScript.Physics
         private Vector3D lastVelocity;
         private readonly double lastH2Fill;
 
-        public PhysicsContextLastTick(PhysicsContextTransient physicsContextTransient)
+        public PhysicsContextLastTick(PhysicsContextTransient physicsContextTransient, SpeedTimeTracker speedTimeTracker)
         {
             oldGravity = physicsContextTransient.Gravity;
-            prevSmoothedSpeed = (physicsContextTransient.Alpha * physicsContextTransient.AvgSpeed) + ((1.0 - physicsContextTransient.Alpha) * prevSmoothedSpeed);
+            prevSmoothedSpeed = (physicsContextTransient.Alpha * speedTimeTracker.GetAverageSpeed()) + ((1.0 - physicsContextTransient.Alpha) * prevSmoothedSpeed);
             lastVelocity = physicsContextTransient.Velocity;
             lastH2Fill = physicsContextTransient.GetLastH2Fill();
         }

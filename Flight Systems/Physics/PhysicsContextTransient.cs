@@ -13,6 +13,7 @@ namespace IngameScript.Physics
         GridContext gc;
         IniContext ic;
         PhysicsContextLastTick pcp;
+        SpeedTimeTracker stt;
 
         // private backing fields
         double timeSinceLastRun;
@@ -43,11 +44,12 @@ namespace IngameScript.Physics
         // constants
         private const double ALPHA = 0.2;
 
-        public PhysicsContextTransient(GridContext gc, IniContext ic, double timeSinceLastRun)
+        public PhysicsContextTransient(GridContext gc, IniContext ic, SpeedTimeTracker stt, double timeSinceLastRun)
         {
-            pcp = new PhysicsContextLastTick(this);
+            pcp = new PhysicsContextLastTick(this, stt);
             this.gc = gc;
             this.ic = ic;
+            this.stt = stt;
             this.timeSinceLastRun = timeSinceLastRun;
         }
 
@@ -74,7 +76,6 @@ namespace IngameScript.Physics
         public double VEffectiveZSpeed => vEffectiveZSpeed;
         public double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
         public double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
-        public double OldGravity => oldGravity;
         public double TimeToImpact => timeToImpact;
         public double TimeToStopY => timeToStopY;
         public double TimeToStopZ => timeToStopZ;
@@ -104,7 +105,7 @@ namespace IngameScript.Physics
         }
         public double H2Rate => (h2Fill - pcp.LastH2Fill) / timeSinceLastRun;
 
-        public static double Alpha => ALPHA;
+        public double Alpha => ALPHA;
 
         private void CalculateH2CapacityAndPercent()
         {
@@ -211,12 +212,12 @@ namespace IngameScript.Physics
             // keep prevSmoothedSpeed, lastVelocity etc. as they persist between ticks
         }
 
-        public double TimeToDistanceSmoothed(double distance, double dt, SpeedTimeTracker speedTimeTracker)
+        public double TimeToDistanceSmoothed(double distance, double dt)
         {
-            speedTimeTracker.AddValue(ForwardVelocity, dt);
+            stt.AddValue(ForwardVelocity, dt);
 
             if (dt <= 0) return double.PositiveInfinity;
-            double avgSpeed = speedTimeTracker.GetAverageSpeed();
+            double avgSpeed = stt.GetAverageSpeed();
 
             if (avgSpeed <= 1e-6) avgSpeed = 0.0;
 
