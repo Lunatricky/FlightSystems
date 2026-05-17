@@ -244,12 +244,13 @@ namespace IngameScript
             {
                 Reload();
                 iniAnyChanged = false;
+                return;
             }
 
             tickCount++;
             if (tickCount % 100 == 1)
             {
-                ParseIni(sc.Me);
+                iniAnyChanged = ParseIni(sc.Me);
 
                 if (!string.IsNullOrWhiteSpace(sc.GridName) && !sc.GridName.Contains(" Grid "))
                 {
@@ -842,7 +843,7 @@ namespace IngameScript
             }
         }
 
-        void CruiseControl(double cruiseSpeed)
+        void CruiseControlOld(double cruiseSpeed)
         {
             double error = cruiseSpeed - forwardVelocity;
 
@@ -868,6 +869,46 @@ namespace IngameScript
             }
 
         }
+
+        double lastError = 0.0;
+        // tune these
+        const double Kp = 0.8;    // proportional gain
+        const double Kd = 0.3;    // derivative gain
+        const double dt = 0.1;    // seconds per tick (10 ticks/sec)
+
+        void CruiseControl(double cruiseSpeed)
+        {
+            const double SPEED_TOLERANCE = 0.5;
+            double error = cruiseSpeed - forwardVelocity;
+
+            if (Math.Abs(error) < SPEED_TOLERANCE)
+            {
+                // small deadzone: optionally zero derivative memory to reduce oscillation
+                lastError = 0.0;
+                return;
+            }
+
+            // PD controller: compute change
+            double derivative = (error - lastError) / dt;
+            double delta = Kp * error + Kd * derivative;
+
+            // scale delta to a reasonable per-tick change (tune Kp/Kd instead of extra scaling)
+            // here we treat delta as direct override increment; divide by cruiseSpeed to normalize if needed
+            currentOverride += delta * dt; // integrate change over dt
+
+            currentOverride = Math.Max(0.0, Math.Min(1.0, currentOverride));
+            lastError = error;
+
+            foreach (var brakingThruster in sc.BreakingThrusters)
+                brakingThruster.Enabled = false;
+
+            foreach (var forwardThruster in sc.ForwardThrusters)
+            {
+                forwardThruster.Enabled = true;
+                forwardThruster.ThrustOverridePercentage = (float)currentOverride;
+            }
+        }
+
 
         // -------------------- Remote control helpers --------------------
         void FlyToTarget(Vector3D target)
@@ -1524,6 +1565,7 @@ namespace IngameScript
         // ────────────────────────────────────────────────        
         private bool ParseIni(IMyProgrammableBlock me)
         {
+            bool iniAnyChanged = false;
             ini.Clear();
 
             if (!ini.TryParse(me.CustomData)) return iniAnyChanged;
