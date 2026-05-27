@@ -63,7 +63,7 @@ namespace IngameScript
 
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
-            pc = new PhysicsContext(gc, ic, speedTimeTracker, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc = new PhysicsContext(gc, ic, speedTimeTracker, command, Runtime.TimeSinceLastRun.TotalSeconds);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
@@ -71,7 +71,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            pc.ResetTransientPhysicsContext(gc, ic, speedTimeTracker, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc.NewRun(Runtime.TimeSinceLastRun.TotalSeconds);
 
             if (ic.IniAnyChanged
                 || gc.Controller == null
@@ -114,7 +114,6 @@ namespace IngameScript
             if (ic.AllowFlightSystems)
             {
                 double timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
-                pc.Transient.UpdatePhysics(gc, ic, command, tickCount);
             }
 
             if (ic.AllowDockMode)
@@ -155,13 +154,13 @@ namespace IngameScript
                 return;
             }
 
-            if (pc.Transient.Gravity > 0)
+            if (pc.Gravity > 0)
             {
-                if (gc.H2CapacityPercent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
+                if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
                 {
                     command.State = MainStateEnum.Land;
                 }
-                else if (gc.H2CapacityPercent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
+                else if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
                 {
                     command.State = MainStateEnum.Cruise;
                     command.Param.Text = "orbit";
@@ -188,7 +187,7 @@ namespace IngameScript
                     CircumNavigateStateSwitch(gc, ic, command.Param);
                     break;
                 case MainStateEnum.Land: // Auto Land
-                    if (pc.Transient.Gravity == 0)
+                    if (pc.Gravity == 0)
                     {
                         AbortShipContext(gc);
                         return;
@@ -209,14 +208,14 @@ namespace IngameScript
 
             // Stop cruise control when leaves atmosphere?
 
-            if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Transient.Gravity == 0.0)
+            if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
             {
                 b.stopCruiseWhenOutOfGrav = b.lastCheckIsOnNatGrav = b.cruiseToggle = false;
                 AbortShipContext(gc);
             }
             else
             {
-                b.lastCheckIsOnNatGrav = pc.Transient.Gravity > 0.0;
+                b.lastCheckIsOnNatGrav = pc.Gravity > 0.0;
             }
 
             // Info LCDs
@@ -322,7 +321,7 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
-                    CruiseControl(pc.Transient.CruiseSpeed);
+                    CruiseControl(pc.CruiseSpeed);
                     break;
                 case "off":
                     AbortShipContext(gc);
@@ -333,7 +332,7 @@ namespace IngameScript
                     {
                         command.Param.Text = "align";
                         b.stopCruiseWhenOutOfGrav = true;
-                        CruiseControl(pc.Transient.CruiseSpeed);
+                        CruiseControl(pc.CruiseSpeed);
                     }
                     else
                     {
@@ -354,7 +353,7 @@ namespace IngameScript
                     }
                     break;
                 case "climb":
-                    if (b.circumnavCheckAltitude && pc.Transient.EffectiveAlt > ic.CnavAltitude)
+                    if (b.circumnavCheckAltitude && pc.EffectiveAlt > ic.CnavAltitude)
                     {
                         if (b.autoPilotToggle)
                         {
@@ -369,12 +368,12 @@ namespace IngameScript
                         }
                     }
                     Vector3D shipUp = gc.Controller.WorldMatrix.Up;
-                    AlignToVector(gc, pc.Transient.DesiredUpVector, false, shipUp);
-                    CruiseControl(pc.Transient.CruiseSpeed);
+                    AlignToVector(gc, pc.DesiredUpVector, false, shipUp);
+                    CruiseControl(pc.CruiseSpeed);
                     break;
                 case "glide":
-                    CruiseControl(pc.Transient.CruiseSpeed);
-                    if (pc.Transient.EffectiveAlt < 500 + pc.Transient.StopYDist)
+                    CruiseControl(pc.CruiseSpeed);
+                    if (pc.EffectiveAlt < 500 + pc.StopYDist)
                     {
                         AbortShipContext(gc);
                         command.State = MainStateEnum.Land;
@@ -394,7 +393,7 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
-                    if (pc.Transient.EffectiveAlt < ic.CnavAltitude)
+                    if (pc.EffectiveAlt < ic.CnavAltitude)
                     {
                         SoftAbort(gc);
                         b.circumnavCheckAltitude = true;
@@ -402,12 +401,12 @@ namespace IngameScript
                         command.Param.Text = "orbit";
                     }
 
-                    CruiseControl(pc.Transient.CruiseSpeed);
+                    CruiseControl(pc.CruiseSpeed);
                     if (!b.autoPilotToggle)
                     {
                         AlignToGravity(gc);
                     } 
-                    else if (pc.Transient.DistanceToLine < ic.DistanceToGPS + pc.Transient.StopZDist)
+                    else if (pc.DistanceToLine < ic.DistanceToGPS + pc.StopZDist)
                     {
                         command.State = MainStateEnum.Land;
                         b.autoPilotToggle = false;
@@ -470,10 +469,10 @@ namespace IngameScript
         bool AimYawOnlyAt(GridContext gc, Vector3D targetGps)
         {
             if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
-            if (pc.Transient.NaturalGravity.LengthSquared() < 0.01) return false;
+            if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
 
             // Yaw axis: away-from-gravity (up)
-            Vector3D up = Vector3D.Normalize(pc.Transient.NaturalGravity);
+            Vector3D up = Vector3D.Normalize(pc.NaturalGravity);
 
             // Ship position and forward (use ShipContext.Controller forward in world)
             Vector3D shipPos = gc.Controller.GetPosition();
@@ -601,7 +600,7 @@ namespace IngameScript
         {
             const double SPEED_TOLERANCE = 0.5;  // m/s deadzone
             const double OVERRIDE_STEP = 0.05;   // cruise adjustment rate
-            double error = cruiseSpeed - pc.Transient.ForwardVelocity;
+            double error = cruiseSpeed - pc.ForwardVelocity;
 
             if (Math.Abs(error) < SPEED_TOLERANCE)
                 return;
@@ -635,7 +634,7 @@ namespace IngameScript
         void CruiseControl(double cruiseSpeed)
         {
             const double SPEED_TOLERANCE = 0.5;
-            double error = cruiseSpeed - pc.Transient.ForwardVelocity;
+            double error = cruiseSpeed - pc.ForwardVelocity;
 
             if (Math.Abs(error) < SPEED_TOLERANCE)
             {
@@ -702,12 +701,12 @@ namespace IngameScript
             ScriptInfoHeader(stringBuilder);
             stringBuilder.AppendLine("\n");
 
-            stringBuilder.AppendLine($"Mass: {pc.Transient.Mass.PhysicalMass / 1000:0.0} t");
-            stringBuilder.AppendLine($"Empty Mass: {mass.BaseMass / 1000:0.0} t");
+            stringBuilder.AppendLine($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
+            stringBuilder.AppendLine($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
-            stringBuilder.AppendLine($"H2: {gc.H2CapacityPercent:0}% - {pc.Transient.H2Time}");
+            stringBuilder.AppendLine($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
-            stringBuilder.AppendLine($"Bat:  {batStored / batCap * 100:0}% - {batTime}");
+            stringBuilder.AppendLine($"Bat:  {pc.BatCache.Filled / pc.BatCache.Capacity * 100:0}% - {pc.BatCache.Time}");
 
             foreach (IMyTextSurface lcd1 in gc.Lcds1)
                 lcd1.WriteText(stringBuilder.ToString());
@@ -720,31 +719,31 @@ namespace IngameScript
             stringBuilder.AppendLine(gc.GridName);
             stringBuilder.AppendLine(new string('-', 28));
 
-            if (pc.Transient.Gravity > 0)
+            if (pc.Gravity > 0)
             {
-                stringBuilder.AppendLine($"Ground level : {pc.Transient.Alt:F1} m");
-                stringBuilder.AppendLine($"Rate of climb: {pc.Transient.ClimbRate:F1} m/s");
-                stringBuilder.AppendLine($"Accel: {pc.Transient.Accel.Length() / 9.81:F1} g");
-                stringBuilder.AppendLine($"Stop Y: {pc.Transient.StopZDist:F1} m | {pc.Transient.TimeToStopY:F1} s");
+                stringBuilder.AppendLine($"Ground level : {pc.GroundLevel:F1} m");
+                stringBuilder.AppendLine($"Rate of climb: {pc.ClimbRate:F1} m/s");
+                stringBuilder.AppendLine($"Accel: {pc.Accel.Length() / 9.81:F1} g");
+                stringBuilder.AppendLine($"Stop Y: {pc.StopZDist:F1} m | {pc.TimeToStopY:F1} s");
             }
-            stringBuilder.AppendLine($"Stop Z: {pc.Transient.StopZDist:F1} m | {pc.Transient.TimeToStopZ:F1} s");
-            stringBuilder.AppendLine($"maxZDecel: {pc.Transient.MaxZDecel:F1} s");
+            stringBuilder.AppendLine($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
+            stringBuilder.AppendLine($"maxZDecel: {pc.MaxZDecel:F1} s");
 
             if (b.autoPilotToggle)
             {
-                stringBuilder.AppendLine($"\nETA: {UtilsHelpder.FormatTime(pc.Transient.TimeToDistanceSmoothed(pc.Transient.DistanceToLine, Runtime.LastRunTimeMs, speedTimeTracker))}");
+                stringBuilder.AppendLine($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
             else if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
             {
-                stringBuilder.AppendLine($"Gravity: {pc.Transient.Gravity:F1} m²/s");
-                stringBuilder.AppendLine($"Max up accel: {pc.Transient.MaxYDecel:F1} m²/s");
-                stringBuilder.AppendLine($"TTI: {pc.Transient.TimeToImpact:F1} s");
+                stringBuilder.AppendLine($"Gravity: {pc.Gravity:F1} m²/s");
+                stringBuilder.AppendLine($"Max up accel: {pc.MaxYDecel:F1} m²/s");
+                stringBuilder.AppendLine($"TTI: {pc.TimeToImpact:F1} s");
             }
             else
             {
-                stringBuilder.AppendLine($"Longitudinal v: {pc.Transient.ForwardVelocity:F1} m/s");
-                stringBuilder.AppendLine($"Lateral v: {pc.Transient.RightVelocity:F1} m/s");
-                stringBuilder.AppendLine($"Vertical v: {pc.Transient.UpVelocity:F1} m/s");
+                stringBuilder.AppendLine($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
+                stringBuilder.AppendLine($"Lateral v: {pc.RightVelocity:F1} m/s");
+                stringBuilder.AppendLine($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
 
             stringBuilder.AppendLine();
@@ -801,7 +800,7 @@ namespace IngameScript
 
         bool AlignToGravity(GridContext sc, bool checkSpeed)
         {
-            Vector3D desiredUp = Vector3D.Normalize(pc.Transient.NaturalGravity);
+            Vector3D desiredUp = Vector3D.Normalize(pc.NaturalGravity);
             return AlignToVector(sc, checkSpeed, desiredUp);
         }
 
@@ -814,7 +813,7 @@ namespace IngameScript
 
         bool AlignToVector(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
         {
-            if (pc.Transient.NaturalGravity.LengthSquared() < 0.01)
+            if (pc.NaturalGravity.LengthSquared() < 0.01)
                 return false;
 
             Vector3D axis = shipUp.Cross(desiredUpVector);
@@ -866,7 +865,7 @@ namespace IngameScript
 
         bool IsStopped(double threshold = 0.1)
         {
-            return threshold > pc.Transient.UpVelocity && threshold >= Math.Abs(pc.Transient.ForwardVelocity) && threshold >= Math.Abs(pc.Transient.RightVelocity);
+            return threshold > pc.UpVelocity && threshold >= Math.Abs(pc.ForwardVelocity) && threshold >= Math.Abs(pc.RightVelocity);
         }
 
         ////////////////////////////////////////////////////////
@@ -874,7 +873,7 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         bool SuicideBurn(GridContext gc)
         {
-            if (pc.Transient.NetDecel - 1 < 0)
+            if (pc.NetDecel - 1 < 0)
             {
                 AbortShipContext(gc);
                 command.State = MainStateEnum.Cruise;
@@ -883,13 +882,13 @@ namespace IngameScript
 
             gc.Controller.DampenersOverride = false;
             AlignToGravity(gc);
-            pc.Transient.MatchVerticalSpeed(gc, -104);
-            return pc.Transient.EffectiveAlt < 1.1 * pc.Transient.StopYDist + gc.GridHeight;
+            VectorHelper.MatchVerticalSpeed(gc, pc, -104);
+            return pc.EffectiveAlt < 1.1 * pc.StopYDist + gc.GridHeight;
         }
 
         bool AutoLand(GridContext gc)
         {
-            if (pc.Transient.NetDecel - 0.5 < 0)
+            if (pc.NetDecel - 0.5 < 0)
             {
                 AbortShipContext(gc);
                 command.State = MainStateEnum.Cruise;
@@ -899,18 +898,18 @@ namespace IngameScript
             gc.Controller.DampenersOverride = false;
             AlignToGravity(gc);
 
-            double speedFromAlt = (100 + pc.Transient.Alt) * 0.08;
-            double speedFromAccel = 20 * pc.Transient.NetDecel;
+            double speedFromAlt = (100 + pc.GroundLevel) * 0.08;
+            double speedFromAccel = 20 * pc.NetDecel;
             double speedMin = -Math.Min(speedFromAlt, speedFromAccel);
 
-            if (speedMin > -104) pc.Transient.MatchVerticalSpeed(gc, speedMin);
-            return pc.Transient.EffectiveAlt < 10 + 2 * gc.GridHeight;
+            if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
+            return pc.EffectiveAlt < 10 + 2 * gc.GridHeight;
         }
 
         bool TryLock(GridContext gc)
         {
             AlignToGravity(gc);
-            pc.Transient.MatchVerticalSpeed(gc, -2);
+            VectorHelper.MatchVerticalSpeed(gc, pc, -2);
             gc.Controller.DampenersOverride = true;
 
             foreach (var g in gc.Gears)

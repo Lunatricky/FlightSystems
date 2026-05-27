@@ -1,4 +1,5 @@
 ﻿using IngameScript.Domain;
+using IngameScript.Physics;
 using VRageMath;
 
 namespace IngameScript
@@ -36,6 +37,38 @@ namespace IngameScript
 
             Vector3D rotatedUp = Vector3D.TransformNormal(currentUp, rotation);
             return Vector3D.Normalize(rotatedUp);
+        }
+
+        public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)
+        {
+            double hover = (pc.Mass.PhysicalMass * pc.Gravity) / SumThrust(gc);
+
+            double current = GetGravityAlignedVerticalVelocity(gc, pc);
+            double error = target - current;
+
+            double minThrustOverride = (pc.ClimbRate < 10 ? 0.001 : 0);
+            double output = MathHelper.Clamp(hover + error * 0.5, 0.01, 1);
+
+            foreach (var t in gc.UpwardThrusters)
+                t.ThrustOverridePercentage = (float)output;
+        }
+
+        public static double GetGravityAlignedVerticalVelocity(GridContext gc, PhysicsContext pc)
+        {
+            Vector3D gNorm = Vector3D.Normalize(pc.NaturalGravity);
+
+            return -gc.Controller.GetShipVelocities()
+                .LinearVelocity.Dot(gNorm);
+        }
+
+        private static double SumThrust(GridContext gc)
+        {
+            double total = 0;
+
+            foreach (var t in gc.UpwardThrusters)
+                total += t.MaxEffectiveThrust;
+
+            return total;
         }
     }
 }

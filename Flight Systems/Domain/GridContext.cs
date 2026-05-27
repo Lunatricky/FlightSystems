@@ -11,40 +11,39 @@ namespace IngameScript.Domain
 {
     class GridContext
     {
-        IMyGridTerminalSystem gridTS;
-        IMyProgrammableBlock me;
-        string gridName;
-        string ignoreTag;
-        readonly StringBuilder errorMessage;
+        private IMyGridTerminalSystem gridTS;
+        private IMyProgrammableBlock me;
+        private string gridName;
+        private string ignoreTag;
+        private readonly StringBuilder errorMessage;
 
-        double centerGridHight;
-        double bottomGridHight;
-        double gridHeight;
-        double h2CapacityPercent;
+        private double centerGridHight;
+        private double bottomGridHight;
+        private double gridHeight;
 
-        IMyRemoteControl controller;
-        IMyBatteryBlock backupBattery;
+        private IMyRemoteControl controller;
+        private IMyBatteryBlock backupBattery;
 
-        List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
-        List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
-        List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
-        List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-        List<IMyGasTank> tanks = new List<IMyGasTank>();
-        List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
-        List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
-        List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
-        List<IMyShipController> controllers = new List<IMyShipController>();
+        private List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
+        private List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
+        private List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
+        private List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+        private List<IMyGasTank> tanks = new List<IMyGasTank>();
+        private List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
+        private List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+        private List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
+        private List<IMyShipController> controllers = new List<IMyShipController>();
 
-        List<IMyThrust> breakingThrusters = new List<IMyThrust>();
-        List<IMyThrust> forwardThrusters = new List<IMyThrust>();
-        List<IMyThrust> upwardThrusters = new List<IMyThrust>();
+        private List<IMyThrust> breakingThrusters = new List<IMyThrust>();
+        private List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+        private List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
-        List<IMyGyro> gyros = new List<IMyGyro>();
-        List<IMyLandingGear> gears = new List<IMyLandingGear>();
-        List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
-        List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
+        private List<IMyGyro> gyros = new List<IMyGyro>();
+        private List<IMyLandingGear> gears = new List<IMyLandingGear>();
+        private List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
+        private List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
-        List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
+        private List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
         public GridContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me)
         {
@@ -458,19 +457,6 @@ namespace IngameScript.Domain
             set
             {
                 gridHeight = value;
-            }
-        }
-
-        public double H2CapacityPercent
-        {
-            get
-            {
-                return h2CapacityPercent;
-            }
-
-            set
-            {
-                h2CapacityPercent = value;
             }
         }
 

@@ -43,9 +43,8 @@
   <ItemGroup>
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniContext.cs" />
-    <Compile Include="Physics\PhysicsContextLastTick.cs" />
+    <Compile Include="Physics\Cached.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
-    <Compile Include="Physics\PhysicsContextTransient.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />
     <Compile Include="UseCases\Command.cs" />
