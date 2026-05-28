@@ -14,10 +14,5 @@ namespace IngameScript.Physics
             timeStamp = currentTime;
             return value;
         }
-
-        public void Invalidate()
-        {
-            timeStamp = double.NaN;
-        }
     }
 }

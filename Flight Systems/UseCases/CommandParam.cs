@@ -15,6 +15,8 @@ namespace IngameScript.UseCases
         // Constructors — one per type
         // ────────────────────────────────────────────────
 
+        public CommandParam(){}
+
         public CommandParam(double n)
         {
             Type = ParamType.Number;

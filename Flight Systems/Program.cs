@@ -68,15 +68,15 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            pc.NewRun(Runtime.TimeSinceLastRun.TotalSeconds);
-
             if (ic.IniAnyChanged
                 || gc.Controller == null
                 || gc.Controller.Closed
                 || gc.ErrorMessage.Length > 0)
             {
-                ReloadGridContext(gc, ic);
+                ReloadGridContext(ref gc, ref ic);
             }
+
+            pc.NewRun(Runtime.TimeSinceLastRun.TotalSeconds);
 
             tickCount++;
             if (tickCount % 100 == 1)
@@ -96,6 +96,8 @@ namespace IngameScript
             }
 
             FlightSystems(gc, ic, pc, argument);
+
+            pc.CacheValues();
         }
 
         private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc, string argument)
@@ -165,7 +167,7 @@ namespace IngameScript
             switch (command.State)
             {
                 case MainStateEnum.Reload:
-                    ReloadGridContext(gc, ic);
+                    ReloadGridContext(ref gc, ref ic);
                     break;
                 case MainStateEnum.Abort:
                     AbortShipContext(gc);
@@ -531,11 +533,13 @@ namespace IngameScript
             return false;
         }
 
-        private void ReloadGridContext(GridContext gc, IniContext ic)
+        private void ReloadGridContext(ref GridContext gc, ref IniContext ic)
         {
             InicializeContexts();
 
-            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag);
+            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag)
+                    .ReloadH2Tanks()
+                    .ReloadBatteries(ic.BackupBatteryTag);
 
             // Flight cached blocks
             if (ic.AllowFlightSystems)
@@ -559,8 +563,6 @@ namespace IngameScript
                 gc.ReloadConnectors()
                 .ReloadGears()
                 .ReloadTanks()
-                .ReloadH2Tanks()
-                .ReloadBatteries(ic.BackupBatteryTag)
                 .ReloadControlledBlocks(ic.DockGroupTag)
                 .ReloadOverrideGroup(ic.OverrideBlockTag);
 
@@ -701,7 +703,7 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Ground level : {pc.GroundLevel:F1} m");
                 stringBuilder.AppendLine($"Rate of climb: {pc.ClimbRate:F1} m/s");
                 stringBuilder.AppendLine($"Accel: {pc.Accel.Length() / 9.81:F1} g");
-                stringBuilder.AppendLine($"Stop Y: {pc.StopZDist:F1} m | {pc.TimeToStopY:F1} s");
+                stringBuilder.AppendLine($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
             }
             stringBuilder.AppendLine($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
             stringBuilder.AppendLine($"maxZDecel: {pc.MaxZDecel:F1} s");

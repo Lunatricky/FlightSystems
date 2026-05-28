@@ -29,10 +29,10 @@ namespace IngameScript.UseCases
 
             // First word = command (lowercase)
             State = TryParseArgument(parts[0].ToLowerInvariant());
+            Param = new CommandParam();
 
             // No second part → no parameter
-            if (parts.Length == 1)
-                return;
+            if (parts.Length == 1) return;
 
             // Second part: try number, then string
             string second = parts[1].Trim();

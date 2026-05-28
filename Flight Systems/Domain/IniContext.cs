@@ -69,7 +69,7 @@ namespace IngameScript.Domain
 
         string backgroundColor = "Black";
         string fontColor = "White";
-        string __Colors = ColorMap.All.ToString();
+        string colors = ColorMap.All.ToString();
 
         public IniContext(GridContext gc)
         {
@@ -95,7 +95,7 @@ namespace IngameScript.Domain
         public bool PaintSurfaces => paintSurfaces;
         public string BackgroundColor => backgroundColor;
         public string FontColor => fontColor;
-        public string Color => __Colors;
+        public string Color => colors;
 
 
         // ───────────────────────────────────────
@@ -187,7 +187,7 @@ namespace IngameScript.Domain
             //SurfaceColorsSection
             iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, BACKGROUNDCOLOR, BackgroundColor);
             iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, FONTCOLOR, FontColor);
-            ini.Set(SurfaceColorsSection, COLORS, __Colors);
+            ini.Set(SurfaceColorsSection, COLORS, colors);
 
 
 

@@ -16,45 +16,42 @@ namespace IngameScript.Physics
         Command command;
 
         double accumulatedTime = 0.0;
-        double timeSinceLastRun;
+        public double timeSinceLastRun = 0.00001;
 
-        Cached<MatrixD> worldMatrix;
+        Cached<MatrixD> worldMatrix = new Cached<MatrixD>();
+        Cached<MyShipMass> mass = new Cached<MyShipMass>();
 
-        // backing fields
-        Cached<Vector3D> naturalGravity;
-        Cached<Vector3D> velocity;
-        Cached<Vector3D> accel;
-        Cached<Vector3D> desiredUpVector;
-        Cached<MyShipMass> mass;
+        Cached<Vector3D> naturalGravity = new Cached<Vector3D>();
+        Cached<Vector3D> velocity = new Cached<Vector3D>();
+        Cached<Vector3D> accel = new Cached<Vector3D>();
+        Cached<Vector3D> desiredUpVector = new Cached<Vector3D>();
 
-        Cached<H2Totals> h2Cache;
-        Cached<BatTotals> batCache;
+        Cached<H2Totals> h2Cache = new Cached<H2Totals>();
+        Cached<BatTotals> batCache = new Cached<BatTotals>();
 
-        Cached<double> avgSpeed;
-        Cached<double> groundLevel;
-        Cached<double> gravity;
-        Cached<double> climbRate;
-        Cached<double> vEffectiveYSpeed;
-        Cached<double> vEffectiveZSpeed;
-        Cached<double> timeToImpact;
-        Cached<double> timeToStopY;
-        Cached<double> timeToStopZ;
-        Cached<double> timeToDistanceSmoothed;
-        Cached<double> forwardVelocity;
-        Cached<double> rightVelocity;
-        Cached<double> upVelocity;
-        Cached<double> netDecel;
-        Cached<double> distanceToLine;
+        Cached<double> groundLevel = new Cached<double>();
+        Cached<double> gravity = new Cached<double>();
+        Cached<double> climbRate = new Cached<double>();
+        Cached<double> vEffectiveYSpeed = new Cached<double>();
+        Cached<double> vEffectiveZSpeed = new Cached<double>();
+        Cached<double> timeToImpact = new Cached<double>();
+        Cached<double> timeToStopY = new Cached<double>();
+        Cached<double> timeToStopZ = new Cached<double>();
+        Cached<double> timeToDistanceSmoothed = new Cached<double>();
+        Cached<double> forwardVelocity = new Cached<double>();
+        Cached<double> rightVelocity = new Cached<double>();
+        Cached<double> upVelocity = new Cached<double>();
+        Cached<double> netDecel = new Cached<double>();
+        Cached<double> distanceToLine = new Cached<double>();
 
-        Vector3D prevVelocity;
-        double prevGravity;
-        double prevSmoothedSpeed;
-        double prevH2Fill;
+        Vector3D prevVelocity = new Vector3D();
+        double prevGravity = 0;
+        double smoothedSpeed = 0;
+        double prevH2Fill = 0;
 
-        public struct H2Totals { public double Capacity; public double Filled; public double Percent; public double Rate; public string Time; }
+        public struct H2Totals { public double Capacity; public double Filled; public double Percent; public string Time; }
         public struct BatTotals { public double Capacity; public double Filled; public string Time; }
 
-        // constants
         const double ALPHA = 0.2;
 
         public PhysicsContext(GridContext gc, IniContext ic, SpeedTimeTracker stt, Command command, double timeSinceLastRun)
@@ -63,27 +60,25 @@ namespace IngameScript.Physics
             this.ic = ic;
             this.stt = stt;
             this.command = command;
-            this.timeSinceLastRun = timeSinceLastRun;
 
-            //previousVelocity = Velocity;
+            if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
         }
 
         // Call at start of each Program.Run with Runtime.TimeSinceLastRun.TotalSeconds
-        public void NewRun(double dt)
+        public void NewRun(double timeSinceLastRun)
         {
-            if (dt <= 0) dt = 1e-6;
-            accumulatedTime += dt;
+            if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
+            accumulatedTime += timeSinceLastRun;
+        }
 
-            // advance velocity snapshots once per Run
+        public void CacheValues()
+        {
             prevVelocity = Velocity;
             prevGravity = Gravity;
             prevH2Fill = H2Cache.Filled;
-            prevSmoothedSpeed = (ALPHA * AvgSpeed) + ((1.0 - ALPHA) * PrevSmoothedSpeed);
-
-            // Note: do not call Get on caches here; they will compute lazily on demand using the same 'now' timestamp
         }
 
-        double Now => accumulatedTime;
+        public double Now => accumulatedTime;
 
         public MatrixD WorldMatrix => worldMatrix.Get(Now, () => gc.Controller.WorldMatrix);
         public MyShipMass Mass => mass.Get(Now, () => gc.Controller.CalculateShipMass());
@@ -94,13 +89,14 @@ namespace IngameScript.Physics
         public double Gravity => gravity.Get(Now, () => NaturalGravity.Length());
         public double GroundLevel => groundLevel.Get(Now, () => GetPlanetElevation());
         public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun) / Gravity / PrevGravity;
-        public double AvgSpeed => avgSpeed.Get(Now, () => (ALPHA * AvgSpeed) + ((1.0 - ALPHA) * PrevSmoothedSpeed));
-        public double StopYDist => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
-        public double StopZDist => Math.Abs((VEffectiveZSpeed * VEffectiveZSpeed) / (2 * MaxZDecel));
+        public double VEffectiveYSpeed => vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun);
+        public double VEffectiveZSpeed => vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun);
+        double StopYDistTemp => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
+        double StopZDistTemp => Math.Abs((VEffectiveZSpeed * VEffectiveZSpeed) / (2 * MaxZDecel));
+        public double StopYDist => (StopYDistTemp < 0.4 ? 0 : StopYDistTemp);
+        public double StopZDist => (StopZDistTemp < 0.4 ? 0 : StopZDistTemp);
         public double CruiseSpeed => ic.MaxSpeed;
-        public double ClimbRate => climbRate.Get(Now, ()=> VectorHelper.GetGravityAlignedVerticalVelocity(gc, this));
-        public double VEffectiveYSpeed => vEffectiveYSpeed.Get(Now, ()=> ClimbRate + MaxYDecel * timeSinceLastRun);
-        public double VEffectiveZSpeed => vEffectiveZSpeed.Get(Now, ()=> ForwardVelocity + MaxZDecel * timeSinceLastRun);
+        public double ClimbRate => climbRate.Get(Now, () => VectorHelper.GetGravityAlignedVerticalVelocity(gc, this));
         public double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
         public double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
         public double TimeToImpact => timeToImpact.Get(Now, () => GroundLevel / Math.Abs(VEffectiveYSpeed));
@@ -118,7 +114,7 @@ namespace IngameScript.Physics
 
         public Vector3D PrevVelocity => prevVelocity;
         public double PrevGravity => prevGravity;
-        public double PrevSmoothedSpeed => prevSmoothedSpeed;
+        public double SmoothedSpeed => smoothedSpeed;
         public double PrevH2Fill => prevH2Fill;
 
         H2Totals ComputeH2Totals()
@@ -131,26 +127,22 @@ namespace IngameScript.Physics
                 filled += tank.Capacity * tank.FilledRatio;
             }
 
-            percent = 100 * H2Cache.Filled / H2Cache.Capacity;
-            rate = (H2Cache.Filled - PrevH2Fill) / timeSinceLastRun;
+            percent = 100 * filled / cap;
+            rate = (filled - PrevH2Fill) / timeSinceLastRun;
 
-            if (Math.Abs(H2Cache.Rate) > 1e-6)
+            if (Math.Abs(rate) > 1e-6)
             {
-                if (H2Cache.Rate > 0)
-                    time = UtilsHelpder.FormatTime((H2Cache.Capacity - H2Cache.Filled) / H2Cache.Rate) + " /\\";
-                else if (H2Cache.Rate < 0)
-                    time = UtilsHelpder.FormatTime(H2Cache.Filled / -H2Cache.Rate) + " \\/";
+                if (rate > 0)
+                    time = UtilsHelpder.FormatTime((cap - filled) / rate) + " /\\";
+                else if (rate < 0)
+                    time = UtilsHelpder.FormatTime(filled / -rate) + " \\/";
             }
 
-            return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Rate = rate, Time = time };
+            return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Time = time };
         }
 
-        // TODO Add these local vars to PhysicsContext properties
-        // TODO Put each of these calculations in the properties get =>
-        // TODO Make a method to call in Program for each cicle where instead of pre loading all PhysicsCcontext properties delete all except the "old/last" properties.
         BatTotals ComputeBatTotals()
         {
-            // Batteries
             double batCap = 0, batStored = 0;
             double batIn = 0, batOut = 0;
 
@@ -182,11 +174,6 @@ namespace IngameScript.Physics
             return alt;
         }
 
-        void UpdateSmoothedSpeed(double avgSpeed)
-        {
-            prevSmoothedSpeed = (ALPHA * avgSpeed) + ((1.0 - ALPHA) * prevSmoothedSpeed);
-        }
-
         double GetTimeToDistanceSmoothed(double distance, double dt)
         {
             stt.AddValue(ForwardVelocity, dt);
@@ -196,8 +183,11 @@ namespace IngameScript.Physics
 
             if (avgSpeed <= 1e-6) avgSpeed = 0.0;
 
-            if (PrevSmoothedSpeed <= 1e-6) return double.PositiveInfinity;
-            return distance / PrevSmoothedSpeed;
+            // EMA smoothing
+            smoothedSpeed = (ALPHA * avgSpeed) + ((1.0 - ALPHA) * smoothedSpeed);
+
+            if (smoothedSpeed <= 1e-6) return double.PositiveInfinity;
+            return distance / smoothedSpeed;
         }
 
         double GetMaxDecel(List<IMyThrust> thrusters)
