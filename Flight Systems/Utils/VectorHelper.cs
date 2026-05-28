@@ -61,7 +61,7 @@ namespace IngameScript
                 .LinearVelocity.Dot(gNorm);
         }
 
-        private static double SumThrust(GridContext gc)
+        static double SumThrust(GridContext gc)
         {
             double total = 0;
 

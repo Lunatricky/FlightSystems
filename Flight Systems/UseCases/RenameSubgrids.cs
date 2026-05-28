@@ -1,9 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.ModAPI.Ingame;
 
 namespace IngameScript
@@ -40,7 +36,7 @@ namespace IngameScript
 
 
         // Recursive helper to find all connected grids via mechanical connections
-        private static void CollectConnectedGrids(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid current, HashSet<IMyCubeGrid> visited)
+        static void CollectConnectedGrids(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid current, HashSet<IMyCubeGrid> visited)
         {
             if (visited.Contains(current))
                 return;

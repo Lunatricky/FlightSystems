@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace IngameScript.Physics
 {
     public class SpeedTimeTracker
     {
-        private List<SpeedTime> speedTimeValues;
-        private const int SpeedTimeTrackerMaxSize = 100;
+        List<SpeedTime> speedTimeValues;
+        const int SpeedTimeTrackerMaxSize = 100;
 
         public SpeedTimeTracker()
         {

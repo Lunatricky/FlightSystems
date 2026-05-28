@@ -3,14 +3,14 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 
 namespace IngameScript.Domain
 {
-    class IniContext
+    public class IniContext
     {
         readonly MyIni ini = new MyIni();
         readonly GridContext gc;
 
         //Ini
         Dictionary<string, string> __snapshot = new Dictionary<string, string>();
-        private bool iniAnyChanged;
+        bool iniAnyChanged;
 
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
@@ -24,13 +24,13 @@ namespace IngameScript.Domain
         const string INI_LCD2_TAG = "LCD 2";
         const string BACKUP_BATTERY_TAG = "Backup battery";
 
-        string __DockGroupTag = "Flight Systems";
-        string __ControllerTag = "[FS_reference]";
-        string __OverrideBlockTag = "[FS_override]";
-        string __IgnoreTag = "[FS_ignore]";
-        string __Lcd1Tag = "[FS_LCD1]";
-        string __Lcd2Tag = "[FS_LCD2]";
-        string __BackupBatteryTag = "[FS_backup]";
+        string dockGroupTag = "Flight Systems";
+        string controllerTag = "[FS_reference]";
+        string overrideBlockTag = "[FS_override]";
+        string ignoreTag = "[FS_ignore]";
+        string lcd1Tag = "[FS_LCD1]";
+        string lcd2Tag = "[FS_LCD2]";
+        string backupBatteryTag = "[FS_backup]";
 
         //ParamsSection
         const string ParamsSection = "Params";
@@ -40,10 +40,10 @@ namespace IngameScript.Domain
         const string DISTANCE_TO_GPS = "Distance to GPS";
         const string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
 
-        double __MaxSpeed = 99; // m/s
-        double __CnavAltitude = 1000; // m
-        double __DistanceToGPS = 500; // m
-        double __MinimumAcceptedFuel = 20; //%
+        double maxSpeed = 99; // m/s
+        double cnavAltitude = 1000; // m
+        double distanceToGPS = 500; // m
+        double minimumAcceptedFuel = 20; //%
 
         //TogglesSection
         const string TogglesSection = "Toggles";
@@ -54,11 +54,11 @@ namespace IngameScript.Domain
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
 
-        bool __AllowFlightSystems = true;
-        bool __AllowDockMode = false;
-        bool __ControlAntennas = false;
-        bool __RenameSubgrids = false;
-        bool __PaintSurfaces = false;
+        bool allowFlightSystems = true;
+        bool allowDockMode = false;
+        bool controlAntennas = false;
+        bool renameSubgrids = false;
+        bool paintSurfaces = false;
 
         //SurfaceColorsSection
         const string SurfaceColorsSection = "Screen Colors";
@@ -67,8 +67,8 @@ namespace IngameScript.Domain
         const string FONTCOLOR = "Font Color";
         const string COLORS = "Available Colors";
 
-        string __BackgroundColor = "Black";
-        string __FontColor = "White";
+        string backgroundColor = "Black";
+        string fontColor = "White";
         string __Colors = ColorMap.All.ToString();
 
         public IniContext(GridContext gc)
@@ -77,24 +77,24 @@ namespace IngameScript.Domain
         }
 
         public bool IniAnyChanged => iniAnyChanged;
-        public string DockGroupTag => __DockGroupTag;
-        public string ControllerTag => __ControllerTag;
-        public string OverrideBlockTag => __OverrideBlockTag;
-        public string IgnoreTag => __IgnoreTag;
-        public string Lcd1Tag => __Lcd1Tag;
-        public string Lcd2Tag => __Lcd2Tag;
-        public string BackupBatteryTag => __BackupBatteryTag;
-        public double MaxSpeed => __MaxSpeed;
-        public double CnavAltitude => __CnavAltitude;
-        public double DistanceToGPS => __DistanceToGPS;
-        public double MinimumAcceptedFuel => __MinimumAcceptedFuel;
-        public bool AllowFlightSystems => __AllowFlightSystems;
-        public bool AllowDockMode => __AllowDockMode;
-        public bool ControlAntennas => __ControlAntennas;
-        public bool RenameSubgrids => __RenameSubgrids;
-        public bool PaintSurfaces => __PaintSurfaces;
-        public string BackgroundColor => __BackgroundColor;
-        public string FontColor => __FontColor;
+        public string DockGroupTag => dockGroupTag;
+        public string ControllerTag => controllerTag;
+        public string OverrideBlockTag => overrideBlockTag;
+        public string IgnoreTag => ignoreTag;
+        public string Lcd1Tag => lcd1Tag;
+        public string Lcd2Tag => lcd2Tag;
+        public string BackupBatteryTag => backupBatteryTag;
+        public double MaxSpeed => maxSpeed;
+        public double CnavAltitude => cnavAltitude;
+        public double DistanceToGPS => distanceToGPS;
+        public double MinimumAcceptedFuel => minimumAcceptedFuel;
+        public bool AllowFlightSystems => allowFlightSystems;
+        public bool AllowDockMode => allowDockMode;
+        public bool ControlAntennas => controlAntennas;
+        public bool RenameSubgrids => renameSubgrids;
+        public bool PaintSurfaces => paintSurfaces;
+        public string BackgroundColor => backgroundColor;
+        public string FontColor => fontColor;
         public string Color => __Colors;
 
 
@@ -126,30 +126,30 @@ namespace IngameScript.Domain
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
             gc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? gc.GridName : tempGridName;
 
-            __DockGroupTag = ini.Get(NamesTagsSection, INI_DOCK_GROUP_TAG).ToString(DockGroupTag);
-            __ControllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
-            __OverrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
-            __IgnoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
-            __Lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1Tag);
-            __Lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2Tag);
-            __BackupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
+            dockGroupTag = ini.Get(NamesTagsSection, INI_DOCK_GROUP_TAG).ToString(DockGroupTag);
+            controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
+            overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
+            ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
+            lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1Tag);
+            lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2Tag);
+            backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
 
             //ParamsSection
-            __MaxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
-            __CnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(CnavAltitude);
-            __DistanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
-            __MinimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
+            maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
+            cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(CnavAltitude);
+            distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
+            minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
             //TogglesSection
-            __AllowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
-            __AllowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
-            __ControlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
-            __RenameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
-            __PaintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
+            allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
+            allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
+            controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
+            renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
+            paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
 
             //SurfaceColorsSection
-            __BackgroundColor = ini.Get(SurfaceColorsSection, BACKGROUNDCOLOR).ToString(BackgroundColor);
-            __FontColor = ini.Get(SurfaceColorsSection, FONTCOLOR).ToString(FontColor);
+            backgroundColor = ini.Get(SurfaceColorsSection, BACKGROUNDCOLOR).ToString(BackgroundColor);
+            fontColor = ini.Get(SurfaceColorsSection, FONTCOLOR).ToString(FontColor);
 
 
             // ───────────────────── 
@@ -197,7 +197,7 @@ namespace IngameScript.Domain
             return IniAnyChanged;
         }
 
-        private bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
+        bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
         {
             ini.Set(section, key, newVal.ToString());
 

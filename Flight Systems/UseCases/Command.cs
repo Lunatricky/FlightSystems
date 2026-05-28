@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRageMath;
 
 namespace IngameScript.UseCases
@@ -53,7 +49,7 @@ namespace IngameScript.UseCases
                 Param = new CommandParam(second.ToLowerInvariant());
         }
 
-        private MainStateEnum TryParseArgument(string input)
+        MainStateEnum TryParseArgument(string input)
         {
             try
             {

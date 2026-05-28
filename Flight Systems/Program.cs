@@ -23,7 +23,6 @@ namespace IngameScript
 
         Command command = Command.Empty;
         int tickCount;
-        bool firstRun = true;
 
         readonly SpeedTimeTracker speedTimeTracker;
 
@@ -59,8 +58,6 @@ namespace IngameScript
 
         private void InicializeContexts()
         {
-            firstRun = true;
-
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
             pc = new PhysicsContext(gc, ic, speedTimeTracker, command, Runtime.TimeSinceLastRun.TotalSeconds);
@@ -80,8 +77,6 @@ namespace IngameScript
             {
                 ReloadGridContext(gc, ic);
             }
-
-
 
             tickCount++;
             if (tickCount % 100 == 1)
@@ -664,24 +659,6 @@ namespace IngameScript
             }
         }
 
-
-        // -------------------- Remote control helpers --------------------
-        void FlyToTarget(Vector3D target)
-        {
-            gc.Controller.FlightMode = FlightMode.OneWay;
-            gc.Controller.ClearWaypoints();
-            gc.Controller.AddWaypoint(target, "Target");
-            if (!gc.Controller.IsAutoPilotEnabled)
-                gc.Controller.SetAutoPilotEnabled(true);
-        }
-
-        void DisableRemoteControl()
-        {
-            if (gc.Controller.IsAutoPilotEnabled)
-                gc.Controller.SetAutoPilotEnabled(false);
-            gc.Controller.ClearWaypoints();
-        }
-
         Vector3D TryGetPlanetPosition(IMyShipController controller)
         {
             Vector3D shipPos = controller.GetPosition();
@@ -751,12 +728,6 @@ namespace IngameScript
             foreach (IMyTextSurface lcd2 in gc.Lcds2)
                 lcd2.WriteText(stringBuilder.ToString());
         }
-
-        ////////////////////////////////////////////////////////
-        /// SETUP
-        ////////////////////////////////////////////////////////
-
-        
 
         void StartLand()
         {

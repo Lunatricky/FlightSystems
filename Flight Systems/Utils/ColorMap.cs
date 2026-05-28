@@ -5,7 +5,7 @@ namespace IngameScript
 {
     class ColorMap
     {
-        private static Dictionary<Color, string> ByColor;
+        static Dictionary<Color, string> ByColor;
 
         public static Color GetColorFromString(string nameString)
         {
@@ -27,7 +27,7 @@ namespace IngameScript
             foreach (var kv in ByName) ByColor[kv.Value] = kv.Key;
         }
 
-        private static readonly Dictionary<string, Color> ByName = new Dictionary<string, Color>
+        static readonly Dictionary<string, Color> ByName = new Dictionary<string, Color>
         {
             {"Transparent", Color.Transparent},
             {"AliceBlue", Color.AliceBlue},

@@ -4,7 +4,7 @@ namespace IngameScript.Physics
 {
     public struct Cached<T>
     {
-        private T value;
+        T value;
         public double timeStamp;
 
         public T Get(double currentTime, Func<T> provider)

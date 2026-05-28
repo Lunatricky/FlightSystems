@@ -1,9 +1,5 @@
 ﻿using IngameScript.UseCases;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRageMath;
 
 namespace IngameScript.Utils
@@ -48,7 +44,7 @@ namespace IngameScript.Utils
             return new Command(cmd, param);
         }
 
-        private static MainStateEnum TryParseArgument(string input)
+        static MainStateEnum TryParseArgument(string input)
         {
             MainStateEnum mainStateEnum;
             try
@@ -80,6 +76,7 @@ namespace IngameScript.Utils
             result = new Vector3D(x, y, z);
             return true;
         }
+
         public static string FormatTime(double time)
         {
             if (double.IsInfinity(time) || time < 0)

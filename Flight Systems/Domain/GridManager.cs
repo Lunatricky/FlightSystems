@@ -105,7 +105,7 @@ namespace IngameScript.Domain
             }
         }
 
-        private void TurnOFfBreakingThrust(GridContext sc)
+        void TurnOFfBreakingThrust(GridContext sc)
         {
             foreach (IMyThrust thruster in sc.BreakingThrusters)
             {

@@ -9,41 +9,41 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    class GridContext
+    public class GridContext
     {
-        private IMyGridTerminalSystem gridTS;
-        private IMyProgrammableBlock me;
-        private string gridName;
-        private string ignoreTag;
-        private readonly StringBuilder errorMessage;
+        IMyGridTerminalSystem gridTS;
+        IMyProgrammableBlock me;
+        string gridName;
+        string ignoreTag;
+        readonly StringBuilder errorMessage;
 
-        private double centerGridHight;
-        private double bottomGridHight;
-        private double gridHeight;
+        double centerGridHight;
+        double bottomGridHight;
+        double gridHeight;
 
-        private IMyRemoteControl controller;
-        private IMyBatteryBlock backupBattery;
+        IMyRemoteControl controller;
+        IMyBatteryBlock backupBattery;
 
-        private List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
-        private List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
-        private List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
-        private List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-        private List<IMyGasTank> tanks = new List<IMyGasTank>();
-        private List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
-        private List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
-        private List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
-        private List<IMyShipController> controllers = new List<IMyShipController>();
+        List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
+        List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
+        List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
+        List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+        List<IMyGasTank> tanks = new List<IMyGasTank>();
+        List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
+        List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+        List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
+        List<IMyShipController> controllers = new List<IMyShipController>();
 
-        private List<IMyThrust> breakingThrusters = new List<IMyThrust>();
-        private List<IMyThrust> forwardThrusters = new List<IMyThrust>();
-        private List<IMyThrust> upwardThrusters = new List<IMyThrust>();
+        List<IMyThrust> breakingThrusters = new List<IMyThrust>();
+        List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+        List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
-        private List<IMyGyro> gyros = new List<IMyGyro>();
-        private List<IMyLandingGear> gears = new List<IMyLandingGear>();
-        private List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
-        private List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
+        List<IMyGyro> gyros = new List<IMyGyro>();
+        List<IMyLandingGear> gears = new List<IMyLandingGear>();
+        List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
+        List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
-        private List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
+        List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
         public GridContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me)
         {
@@ -176,7 +176,7 @@ namespace IngameScript.Domain
             return this;
         }
 
-        private List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool isIgnoreTag = false, bool setupSurface = false)
+        List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool isIgnoreTag = false, bool setupSurface = false)
         {
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
             // LCDs
@@ -327,7 +327,7 @@ namespace IngameScript.Domain
             return this;
         }
 
-        private void SetConnectors()
+        void SetConnectors()
         {
             foreach (IMyShipConnector connector in Connectors)
             {
