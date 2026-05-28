@@ -89,10 +89,10 @@ namespace IngameScript.Physics
         public double Gravity => gravity.Get(Now, () => NaturalGravity.Length());
         public double GroundLevel => groundLevel.Get(Now, () => GetPlanetElevation());
         public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun) / Gravity / PrevGravity;
-        public double VEffectiveYSpeed => vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun);
-        public double VEffectiveZSpeed => vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun);
+        public double VEffectiveYSpeed => (UpVelocity == 0 ? 0 : vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun));
+        public double VEffectiveZSpeed => (ForwardVelocity == 0 ? 0 : vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun));
         double StopYDistTemp => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
-        double StopZDistTemp => Math.Abs((VEffectiveZSpeed * VEffectiveZSpeed) / (2 * MaxZDecel));
+        double StopZDistTemp => Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
         public double StopYDist => (StopYDistTemp < 0.4 ? 0 : StopYDistTemp);
         public double StopZDist => (StopZDistTemp < 0.4 ? 0 : StopZDistTemp);
         public double CruiseSpeed => ic.MaxSpeed;

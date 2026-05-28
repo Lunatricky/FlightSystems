@@ -203,8 +203,7 @@ namespace IngameScript
                     break;
             }
 
-            // Stop cruise control when leaves atmosphere?
-
+            // Stop cruise control when leaves gravity well
             if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
             {
                 b.stopCruiseWhenOutOfGrav = b.lastCheckIsOnNatGrav = b.cruiseToggle = false;
@@ -706,7 +705,6 @@ namespace IngameScript
                 stringBuilder.AppendLine($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
             }
             stringBuilder.AppendLine($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            stringBuilder.AppendLine($"maxZDecel: {pc.MaxZDecel:F1} s");
 
             if (b.autoPilotToggle)
             {
@@ -715,7 +713,6 @@ namespace IngameScript
             else if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
             {
                 stringBuilder.AppendLine($"Gravity: {pc.Gravity:F1} m²/s");
-                stringBuilder.AppendLine($"Max up accel: {pc.MaxYDecel:F1} m²/s");
                 stringBuilder.AppendLine($"TTI: {pc.TimeToImpact:F1} s");
             }
             else
