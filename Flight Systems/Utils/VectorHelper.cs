@@ -24,19 +24,19 @@ namespace IngameScript
         /// Rotates the ship's Up vector toward the ship's Forward vector (nose-UP pitch).
         /// Positive angleDeg = nose UP.
         /// </summary>
-        public static Vector3D RotateUpTowardForwardForNoseUp(GridContext sc, double angleDeg)
+        public static Vector3D PitchUp(GridContext sc, double angleDeg)
         {
             if (sc.Controller == null)
                 return Vector3D.Up;
 
-            Vector3D currentUp = sc.Controller.WorldMatrix.Up;
+            Vector3D currentForward = sc.Controller.WorldMatrix.Forward;
             Vector3D rightAxis = sc.Controller.WorldMatrix.Right;  // pitch axis
 
             double angleRad = MathHelper.ToRadians(angleDeg);
             MatrixD rotation = MatrixD.CreateFromAxisAngle(rightAxis, -angleRad);  // NEGATIVE = nose UP!
 
-            Vector3D rotatedUp = Vector3D.TransformNormal(currentUp, rotation);
-            return Vector3D.Normalize(rotatedUp);
+            Vector3D rotatedForward = Vector3D.TransformNormal(currentForward, rotation);
+            return Vector3D.Normalize(rotatedForward);
         }
 
         public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)

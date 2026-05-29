@@ -163,15 +163,15 @@ namespace IngameScript.Domain
 
         public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
-            Lcds1 = AddLCDsToList(lcd1Tag, false, true);
-            Lcds2 = AddLCDsToList(lcd2Tag, false, true);
+            Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
+            Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
 
             return this;
         }
 
         public GridContext ReloadSurfaces()
         {
-            Surfaces = AddLCDsToList(ignoreTag, true);
+            Surfaces.AddList(AddLCDsToList(ignoreTag, true));
 
             return this;
         }
@@ -288,7 +288,7 @@ namespace IngameScript.Domain
             return this;
         }
 
-        public GridContext ReloadControlledBlocks(string dockGroupTag)
+        public GridContext ReloadControlledBlocks(string dockGroupTag, string overrideBlockTag = "")
         {
             ControlledBlocks.Clear();
 
@@ -303,28 +303,21 @@ namespace IngameScript.Domain
             else
             {
                 ReloadControlledBlocks();
-                ControlledBlocks.AddList(OverrideBlocks);
+                ControlledBlocks.AddList(ReloadOverrideGroup(overrideBlockTag));
                 ControlledBlocks.Remove(Me);
             }
             return this;
         }
 
-        public GridContext ReloadOverrideGroup(string __overrideBlockTag)
+        public List<IMyFunctionalBlock> ReloadOverrideGroup(string overrideBlockTag)
         {
-            OverrideBlocks.Clear();
-
-            var blocks = new List<IMyFunctionalBlock>();
-            GridTS.GetBlocksOfType(blocks, b =>
-                b.IsSameConstructAs(Me) &&
-                b.CustomName.Contains(__overrideBlockTag)
+            List<IMyFunctionalBlock> OverrideBlocks = new List<IMyFunctionalBlock>();
+            GridTS.GetBlocksOfType(OverrideBlocks, block =>
+                block.IsSameConstructAs(Me) && (!block.CustomData.Contains("Flight Systems")) &&
+                (block.CustomName.Contains(overrideBlockTag) || block.CustomData.Contains(overrideBlockTag))
+                //TODO improve this!
             );
-
-            foreach (IMyFunctionalBlock block in blocks)
-            {
-                if (block.IsSameConstructAs(Me))
-                    OverrideBlocks.Add(block);
-            }
-            return this;
+            return OverrideBlocks;
         }
 
         void SetConnectors()
@@ -380,6 +373,19 @@ namespace IngameScript.Domain
         {
             return tank.BlockDefinition.SubtypeName
                 .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public string IgnoreTag
+        {
+            get
+            {
+                return ignoreTag;
+            }
+
+            set
+            {
+                ignoreTag = value;
+            }
         }
 
         public IMyGridTerminalSystem GridTS
@@ -486,240 +492,23 @@ namespace IngameScript.Domain
             }
         }
 
-        public List<IMyFunctionalBlock> ControlledBlocks
-        {
-            get
-            {
-                return controlledBlocks;
-            }
+        public List<IMyFunctionalBlock> ControlledBlocks => controlledBlocks;
+        public List<IMyFunctionalBlock> ControlledToolBlocks => controlledToolBlocks;
+        public List<IMyShipConnector> Connectors => connectors;
+        public List<IMyGasTank> Tanks => tanks;
+        public List<IMyGasTank> H2Tanks => h2Tanks;
+        public List<IMyBatteryBlock> Batteries => batteries;
+        public List<IMyRadioAntenna> Antennas => antennas;
+        public List<IMyShipController> Controllers => controllers;
+        public List<IMyThrust> BreakingThrusters => breakingThrusters;
+        public List<IMyThrust> ForwardThrusters => forwardThrusters;
+        public List<IMyThrust> UpwardThrusters => upwardThrusters;
+        public List<IMyGyro> Gyros => gyros;
+        public List<IMyLandingGear> Gears => gears;
+        public List<IMyTextSurface> Lcds1 => lcds1;
+        public List<IMyTextSurface> Lcds2 => lcds2;
 
-            set
-            {
-                controlledBlocks = value;
-            }
-        }
-
-        public List<IMyFunctionalBlock> ControlledToolBlocks
-        {
-            get
-            {
-                return controlledToolBlocks;
-            }
-
-            set
-            {
-                controlledToolBlocks = value;
-            }
-        }
-
-        public List<IMyFunctionalBlock> OverrideBlocks
-        {
-            get
-            {
-                return overrideBlocks;
-            }
-
-            set
-            {
-                overrideBlocks = value;
-            }
-        }
-
-        public List<IMyShipConnector> Connectors
-        {
-            get
-            {
-                return connectors;
-            }
-
-            set
-            {
-                connectors = value;
-            }
-        }
-
-        public List<IMyGasTank> Tanks
-        {
-            get
-            {
-                return tanks;
-            }
-
-            set
-            {
-                tanks = value;
-            }
-        }
-
-        public List<IMyGasTank> H2Tanks
-        {
-            get
-            {
-                return h2Tanks;
-            }
-
-            set
-            {
-                h2Tanks = value;
-            }
-        }
-
-        public List<IMyBatteryBlock> Batteries
-        {
-            get
-            {
-                return batteries;
-            }
-
-            set
-            {
-                batteries = value;
-            }
-        }
-
-        public List<IMyRadioAntenna> Antennas
-        {
-            get
-            {
-                return antennas;
-            }
-
-            set
-            {
-                antennas = value;
-            }
-        }
-
-        public List<IMyShipController> Controllers
-        {
-            get
-            {
-                return controllers;
-            }
-
-            set
-            {
-                controllers = value;
-            }
-        }
-
-        public List<IMyThrust> BreakingThrusters
-        {
-            get
-            {
-                return breakingThrusters;
-            }
-
-            set
-            {
-                breakingThrusters = value;
-            }
-        }
-
-        public List<IMyThrust> ForwardThrusters
-        {
-            get
-            {
-                return forwardThrusters;
-            }
-
-            set
-            {
-                forwardThrusters = value;
-            }
-        }
-
-        public List<IMyThrust> UpwardThrusters
-        {
-            get
-            {
-                return upwardThrusters;
-            }
-
-            set
-            {
-                upwardThrusters = value;
-            }
-        }
-
-        public List<IMyGyro> Gyros
-        {
-            get
-            {
-                return gyros;
-            }
-
-            set
-            {
-                gyros = value;
-            }
-        }
-
-        public List<IMyLandingGear> Gears
-        {
-            get
-            {
-                return gears;
-            }
-
-            set
-            {
-                gears = value;
-            }
-        }
-
-        public List<IMyTextSurface> Lcds1
-        {
-            get
-            {
-                return lcds1;
-            }
-
-            set
-            {
-                lcds1 = value;
-            }
-        }
-
-        public List<IMyTextSurface> Lcds2
-        {
-            get
-            {
-                return lcds2;
-            }
-
-            set
-            {
-                lcds2 = value;
-            }
-        }
-
+        public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;
-
-        public List<IMyTextSurface> Surfaces
-        {
-            get
-            {
-                return surfaces;
-            }
-
-            set
-            {
-                surfaces = value;
-            }
-        }
-
-        public string IgnoreTag
-        {
-            get
-            {
-                return ignoreTag;
-            }
-
-            set
-            {
-                ignoreTag = value;
-            }
-        }
     }
 }

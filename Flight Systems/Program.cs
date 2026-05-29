@@ -28,6 +28,7 @@ namespace IngameScript
         //Dock Mode
         bool isDockMode = false;
         bool lastDockState = false;
+        Vector3D desiredUp;
 
         struct booleans
         {
@@ -265,13 +266,16 @@ namespace IngameScript
                 scriptInfo.AppendLine("Forward thruster: " + gc.ForwardThrusters.Count);
                 scriptInfo.AppendLine("Breaking thruster: " + gc.BreakingThrusters.Count);
                 scriptInfo.AppendLine("Upward thruster: " + gc.UpwardThrusters.Count);
+                scriptInfo.AppendLine("Gyros: " + gc.Gyros.Count);
             }
 
             if (ic.AllowDockMode || ic.AllowFlightSystems)
                 scriptInfo.AppendLine("Gears: " + gc.Gears.Count);
 
             if (ic.AllowDockMode)
+            {
                 scriptInfo.AppendLine("Dock Mode blocks: " + gc.ControlledBlocks.Count);
+            }
 
             scriptInfo.AppendLine("LCDs1: " + gc.Lcds1.Count);
             scriptInfo.AppendLine("LCDs2: " + gc.Lcds2.Count);
@@ -345,6 +349,7 @@ namespace IngameScript
                     if (AlignToGravity(gc))
                     {
                         command.Param.Text = "climb";
+                        desiredUp = pc.DesiredUpVector;
                     }
                     break;
                 case "climb":
@@ -363,7 +368,7 @@ namespace IngameScript
                         }
                     }
                     Vector3D shipUp = gc.Controller.WorldMatrix.Up;
-                    AlignToVector(gc, pc.DesiredUpVector, false, shipUp);
+                    AlignToVector(gc, shipUp, false, desiredUp);
                     CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     break;
                 case "glide":
@@ -562,8 +567,7 @@ namespace IngameScript
                 gc.ReloadConnectors()
                 .ReloadGears()
                 .ReloadTanks()
-                .ReloadControlledBlocks(ic.DockGroupTag)
-                .ReloadOverrideGroup(ic.OverrideBlockTag);
+                .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
 
             if (ic.ControlAntennas)
                 gc.ReloadAntennas(ic.ControlAntennas);
@@ -608,7 +612,12 @@ namespace IngameScript
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
-            if (dt <= 0) return;
+            if (pc.ForwardVelocity > ic.MaxSpeed)
+            {
+                GridManager.ResetThrusters(gc);
+                GridManager.TurnOFfBreakingThrust(gc);
+                return;
+            }
 
             // error: positive => need more forward thrust
             double error = cruiseSpeed - pc.ForwardVelocity;
@@ -790,8 +799,7 @@ namespace IngameScript
 
         bool AlignToGravity(GridContext sc, bool checkSpeed)
         {
-            Vector3D desiredUp = Vector3D.Normalize(pc.NaturalGravity);
-            return AlignToVector(sc, checkSpeed, desiredUp);
+            return AlignToVector(sc, checkSpeed, Vector3D.Normalize(pc.NaturalGravity));
         }
 
         bool AlignToVector(GridContext gc, bool checkSpeed, Vector3D desiredUpVector)
@@ -803,7 +811,7 @@ namespace IngameScript
 
         bool AlignToVector(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
         {
-            if (pc.NaturalGravity.LengthSquared() < 0.01)
+            if (pc.Gravity < 0.01)
                 return false;
 
             Vector3D axis = shipUp.Cross(desiredUpVector);

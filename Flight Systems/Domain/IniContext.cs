@@ -194,7 +194,7 @@ namespace IngameScript.Domain
 
 
 
-            gc.Me.CustomData = ini.ToString();
+            gc.Me.CustomData = $"[Flight Systems: {gc.Me.EntityId}]\n\n" + ini.ToString();
 
             return IniAnyChanged;
         }

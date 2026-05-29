@@ -45,7 +45,6 @@ namespace IngameScript.Physics
         Cached<double> distanceToLine = new Cached<double>();
 
         Vector3D prevVelocity = new Vector3D();
-        double prevGravity = 0;
         double smoothedSpeed = 0;
         double prevH2Fill = 0;
 
@@ -74,7 +73,6 @@ namespace IngameScript.Physics
         public void CacheValues()
         {
             prevVelocity = Velocity;
-            prevGravity = Gravity;
             prevH2Fill = H2Cache.Filled;
         }
 
@@ -84,11 +82,11 @@ namespace IngameScript.Physics
         public MyShipMass Mass => mass.Get(Now, () => gc.Controller.CalculateShipMass());
         public Vector3D NaturalGravity => naturalGravity.Get(Now, () => gc.Controller.GetNaturalGravity());
         public Vector3D Velocity => velocity.Get(Now, () => gc.Controller.GetShipVelocities().LinearVelocity);
-        public Vector3D Accel => accel.Get(Now, () => ((Velocity - PrevVelocity) / timeSinceLastRun));
-        public Vector3D DesiredUpVector => desiredUpVector.Get(Now, () => VectorHelper.RotateUpTowardForwardForNoseUp(gc, -0.9 * GetMaxPitchAngle(gc)));
+        public Vector3D Accel => accel.Get(Now, () => ((Velocity - prevVelocity) / timeSinceLastRun));
+        public Vector3D DesiredUpVector => desiredUpVector.Get(Now, () => VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc)));
         public double Gravity => gravity.Get(Now, () => NaturalGravity.Length());
         public double GroundLevel => groundLevel.Get(Now, () => GetPlanetElevation());
-        public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun) / Gravity / PrevGravity;
+        public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun);
         public double VEffectiveYSpeed => (UpVelocity == 0 ? 0 : vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun));
         public double VEffectiveZSpeed => (ForwardVelocity == 0 ? 0 : vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun));
         double StopYDistTemp => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
@@ -110,12 +108,6 @@ namespace IngameScript.Physics
         public H2Totals H2Cache => h2Cache.Get(Now, () => ComputeH2Totals());
         public BatTotals BatCache => batCache.Get(Now, () => ComputeBatTotals());
 
-
-        public Vector3D PrevVelocity => prevVelocity;
-        public double PrevGravity => prevGravity;
-        public double SmoothedSpeed => smoothedSpeed;
-        public double PrevH2Fill => prevH2Fill;
-
         H2Totals ComputeH2Totals()
         {
             double cap = 0.0, filled = 0.0, percent, rate;
@@ -127,7 +119,7 @@ namespace IngameScript.Physics
             }
 
             percent = 100 * filled / cap;
-            rate = (filled - PrevH2Fill) / timeSinceLastRun;
+            rate = (filled - prevH2Fill) / timeSinceLastRun;
 
             if (Math.Abs(rate) > 1e-6)
             {

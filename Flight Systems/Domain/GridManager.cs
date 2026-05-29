@@ -5,21 +5,21 @@ namespace IngameScript.Domain
 {
     class GridManager
     {
-        public static void GetOwnGridBlocks<T>(List<T> list, GridContext sc, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        public static void GetOwnGridBlocks<T>(List<T> list, GridContext gc, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
             list.Clear();
             bool hasIgnore = !string.IsNullOrEmpty(__ignoreTag);
-            sc.GridTS.GetBlocksOfType(list, block =>
-                block.IsSameConstructAs(sc.Me)
+            gc.GridTS.GetBlocksOfType(list, block =>
+                block.IsSameConstructAs(gc.Me)
                 && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
                 && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
             );
         }
 
 
-        public static bool IsAnyConnectorConnected(GridContext sc)
+        public static bool IsAnyConnectorConnected(GridContext gc)
         {
-            foreach (IMyShipConnector connector in sc.Connectors)
+            foreach (IMyShipConnector connector in gc.Connectors)
             {
                 if (connector.Status == MyShipConnectorStatus.Connected)
                     return true;
@@ -27,13 +27,13 @@ namespace IngameScript.Domain
             return false;
         }
 
-        public static void SetBlocks(GridContext sc, bool enabled, out bool isDockMode)
+        public static void SetBlocks(GridContext gc, bool enabled, out bool isDockMode)
         {
             //Always turn tools OFF when dock/undock
-            sc.ControlledToolBlocks.ForEach(b => b.Enabled = false);
+            gc.ControlledToolBlocks.ForEach(b => b.Enabled = false);
 
             //Toggle other blocks when dock/undock
-            foreach (IMyFunctionalBlock cachedBlock in sc.ControlledBlocks)
+            foreach (IMyFunctionalBlock cachedBlock in gc.ControlledBlocks)
             {
                 if (cachedBlock != null && cachedBlock.IsFunctional)
                     cachedBlock.Enabled = enabled;
@@ -41,30 +41,30 @@ namespace IngameScript.Domain
 
             isDockMode = !enabled;
         }
-        public static void ResetGyros(GridContext sc)
+        public static void ResetGyros(GridContext gc)
         {
-            foreach (var g in sc.Gyros)
+            foreach (var g in gc.Gyros)
             {
                 g.GyroOverride = false;
                 g.Enabled = true;
             }
         }
 
-        public static void ResetThrusters(GridContext sc)
+        public static void ResetThrusters(GridContext gc)
         {
-            foreach (var forwardThruster in sc.ForwardThrusters)
+            foreach (var forwardThruster in gc.ForwardThrusters)
             {
                 forwardThruster.ThrustOverridePercentage = 0f;
                 forwardThruster.Enabled = true;
             }
 
-            foreach (var brakingThruster in sc.BreakingThrusters)
+            foreach (var brakingThruster in gc.BreakingThrusters)
             {
                 brakingThruster.ThrustOverridePercentage = 0f;
                 brakingThruster.Enabled = true;
             }
 
-            foreach (var upThruster in sc.UpwardThrusters)
+            foreach (var upThruster in gc.UpwardThrusters)
             {
                 upThruster.ThrustOverridePercentage = 0f;
                 upThruster.Enabled = true;
@@ -72,42 +72,42 @@ namespace IngameScript.Domain
 
         }
 
-        public static void StockpileTanks(GridContext sc, bool stockpile)
+        public static void StockpileTanks(GridContext gc, bool stockpile)
         {
-            foreach (IMyGasTank tank in sc.Tanks)
+            foreach (IMyGasTank tank in gc.Tanks)
             {
                 if (tank != null && tank.IsFunctional)
                     tank.Stockpile = stockpile;
             }
         }
 
-        public static void ChargeBatteries(GridContext sc)
+        public static void ChargeBatteries(GridContext gc)
         {
-            if (sc.BackupBattery != null)
+            if (gc.BackupBattery != null)
             {
-                sc.BackupBattery.ChargeMode = ChargeMode.Auto;
-                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
+                gc.BackupBattery.ChargeMode = ChargeMode.Auto;
+                foreach (IMyBatteryBlock battery in gc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
-            else if (IsAnyConnectorConnected(sc))
+            else if (IsAnyConnectorConnected(gc))
             {
-                foreach (IMyBatteryBlock battery in sc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
+                foreach (IMyBatteryBlock battery in gc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
         }
 
-        public static void AutoBatteries(GridContext sc)
+        public static void AutoBatteries(GridContext gc)
         {
-            if (sc.BackupBattery != null)
-                sc.BackupBattery.ChargeMode = ChargeMode.Recharge;
+            if (gc.BackupBattery != null)
+                gc.BackupBattery.ChargeMode = ChargeMode.Recharge;
 
-            foreach (IMyBatteryBlock battery in sc.Batteries)
+            foreach (IMyBatteryBlock battery in gc.Batteries)
             {
                 battery.ChargeMode = ChargeMode.Auto;
             }
         }
 
-        void TurnOFfBreakingThrust(GridContext sc)
+        public static void TurnOFfBreakingThrust(GridContext gc)
         {
-            foreach (IMyThrust thruster in sc.BreakingThrusters)
+            foreach (IMyThrust thruster in gc.BreakingThrusters)
             {
                 thruster.Enabled = false;
             }
