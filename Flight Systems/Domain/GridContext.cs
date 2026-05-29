@@ -4,15 +4,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
-namespace IngameScript
+namespace IngameScript.Domain
 {
-    class ShipContext
+    public class GridContext
     {
-
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
         string gridName;
@@ -22,7 +20,6 @@ namespace IngameScript
         double centerGridHight;
         double bottomGridHight;
         double gridHeight;
-        double h2CapacityPercent;
 
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
@@ -48,7 +45,7 @@ namespace IngameScript
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
-        public ShipContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me, string ignoreTag)
+        public GridContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me)
         {
             errorMessage = new StringBuilder();
             GridTS = grid;
@@ -58,12 +55,10 @@ namespace IngameScript
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
 
-            this.ignoreTag = ignoreTag;
-
             SetupSurface(me.GetSurface(0), 1.1f);
         }
 
-        public ShipContext ReloadControllers(string controllerTag)
+        public GridContext ReloadControllers(string controllerTag)
         {
             Controllers.Clear();
             Controller = null;
@@ -71,8 +66,8 @@ namespace IngameScript
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
 
-            GridHelper.GetOwnGridBlocks(remotes, this, ignoreTag);
-            GridHelper.GetOwnGridBlocks(cockpits, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(remotes, this, IgnoreTag);
+            GridManager.GetOwnGridBlocks(cockpits, this, IgnoreTag);
 
             foreach (IMyRemoteControl remote in remotes)
             {
@@ -99,7 +94,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadGridHeight()
+        public GridContext ReloadGridHeight()
         {
             Vector3D gravityDir = Vector3D.Normalize(Controller.GetNaturalGravity());
 
@@ -115,14 +110,14 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadThrusters()
+        public GridContext ReloadThrusters()
         {
             ForwardThrusters.Clear();
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
 
             List<IMyThrust> allThrusters = new List<IMyThrust>();
-            GridHelper.GetOwnGridBlocks(allThrusters, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(allThrusters, this, IgnoreTag);
 
             foreach (var thruster in allThrusters)
             {
@@ -141,21 +136,21 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadGyros()
+        public GridContext ReloadGyros()
         {
-            GridHelper.GetOwnGridBlocks(Gyros, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Gyros, this, IgnoreTag);
             return this;
         }
 
-        public ShipContext ReloadGears()
+        public GridContext ReloadGears()
         {
-            GridHelper.GetOwnGridBlocks(Gears, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Gears, this, IgnoreTag);
             return this;
         }
 
-        public ShipContext ReloadAntennas(bool controlAntennas)
+        public GridContext ReloadAntennas(bool controlAntennas)
         {
-            GridHelper.GetOwnGridBlocks(Antennas, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Antennas, this, IgnoreTag);
             if (controlAntennas)
             {
                 foreach (IMyRadioAntenna antenna in Antennas)
@@ -166,39 +161,54 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
+        public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
-            Lcds1 = AddLCDsToList(lcd1Tag, true);
-            Lcds2 = AddLCDsToList(lcd2Tag, true);
+            Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
+            Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
 
             return this;
         }
 
-        public ShipContext ReloadSurfaces()
+        public GridContext ReloadSurfaces()
         {
-            Surfaces = AddLCDsToList();
+            Surfaces.AddList(AddLCDsToList(ignoreTag, true));
 
             return this;
         }
 
-        private List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool setupSurface = false, int surfaceNumber = 0)
+        List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool isIgnoreTag = false, bool setupSurface = false)
         {
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
             // LCDs
             var blocks = new List<IMyTerminalBlock>();
-            GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
-                block.IsSameConstructAs(Me) &&
-                block.CustomName.Contains(LCD_TAG)
-            );
+            if (isIgnoreTag)
+            {
+                GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
+                    block.IsSameConstructAs(Me) &&
+                    !block.CustomName.Contains(LCD_TAG) &&
+                    !block.CustomData.Contains(LCD_TAG)
+                );
+            }
+            else
+            {
+                GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
+                    block.IsSameConstructAs(Me) &&
+                    (block.CustomName.Contains(LCD_TAG) ||
+                    block.CustomData.Contains(LCD_TAG))
+                );
+            }
 
             foreach (IMyTextSurfaceProvider surfaceProvider in blocks)
             {
                 // Only take the first surface (index 0)
                 if (surfaceProvider.SurfaceCount > 0)
                 {
-                    var surface = surfaceProvider.GetSurface(surfaceNumber);
-                    if (setupSurface) SetupSurface(surface);
-                    lcds.Add(surface);
+                    for (int i = 0; i < surfaceProvider.SurfaceCount; i++)
+                    {
+                        IMyTextSurface surface = surfaceProvider.GetSurface(i);
+                        if (setupSurface) SetupSurface(surface);
+                        lcds.Add(surface);
+                    }
                 }
             }
             return lcds;
@@ -221,25 +231,25 @@ namespace IngameScript
             surface.ScriptForegroundColor = FontColor;
         }
 
-        public ShipContext ReloadConnectors()
+        public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GridHelper.GetOwnGridBlocks(Connectors, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Connectors, this, IgnoreTag);
             SetConnectors();
 
             return this;
         }
 
-        public ShipContext ReloadTanks()
+        public GridContext ReloadTanks()
         {
-            GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             return this;
         }
 
-        public ShipContext ReloadH2Tanks()
+        public GridContext ReloadH2Tanks()
         {
-            GridHelper.GetOwnGridBlocks(Tanks, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -251,9 +261,9 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadBatteries(string backupTag)
+        public GridContext ReloadBatteries(string backupTag)
         {
-            GridHelper.GetOwnGridBlocks(Batteries, this, ignoreTag);
+            GridManager.GetOwnGridBlocks(Batteries, this, IgnoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -278,7 +288,7 @@ namespace IngameScript
             return this;
         }
 
-        public ShipContext ReloadControlledBlocks(string dockGroupTag)
+        public GridContext ReloadControlledBlocks(string dockGroupTag, string overrideBlockTag = "")
         {
             ControlledBlocks.Clear();
 
@@ -293,31 +303,24 @@ namespace IngameScript
             else
             {
                 ReloadControlledBlocks();
-                ControlledBlocks.AddList(OverrideBlocks);
+                ControlledBlocks.AddList(ReloadOverrideGroup(overrideBlockTag));
                 ControlledBlocks.Remove(Me);
             }
             return this;
         }
 
-        public ShipContext ReloadOverrideGroup(string __overrideBlockTag)
+        public List<IMyFunctionalBlock> ReloadOverrideGroup(string overrideBlockTag)
         {
-            OverrideBlocks.Clear();
-
-            var blocks = new List<IMyFunctionalBlock>();
-            GridTS.GetBlocksOfType(blocks, b =>
-                b.IsSameConstructAs(Me) &&
-                b.CustomName.Contains(__overrideBlockTag)
+            List<IMyFunctionalBlock> OverrideBlocks = new List<IMyFunctionalBlock>();
+            GridTS.GetBlocksOfType(OverrideBlocks, block =>
+                block.IsSameConstructAs(Me) && (!block.CustomData.Contains("Flight Systems")) &&
+                (block.CustomName.Contains(overrideBlockTag) || block.CustomData.Contains(overrideBlockTag))
+                //TODO improve this!
             );
-
-            foreach (IMyFunctionalBlock block in blocks)
-            {
-                if (block.IsSameConstructAs(Me))
-                    OverrideBlocks.Add(block);
-            }
-            return this;
+            return OverrideBlocks;
         }
 
-        private void SetConnectors()
+        void SetConnectors()
         {
             foreach (IMyShipConnector connector in Connectors)
             {
@@ -370,6 +373,19 @@ namespace IngameScript
         {
             return tank.BlockDefinition.SubtypeName
                 .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public string IgnoreTag
+        {
+            get
+            {
+                return ignoreTag;
+            }
+
+            set
+            {
+                ignoreTag = value;
+            }
         }
 
         public IMyGridTerminalSystem GridTS
@@ -450,19 +466,6 @@ namespace IngameScript
             }
         }
 
-        public double H2CapacityPercent
-        {
-            get
-            {
-                return h2CapacityPercent;
-            }
-
-            set
-            {
-                h2CapacityPercent = value;
-            }
-        }
-
         public IMyRemoteControl Controller
         {
             get
@@ -489,227 +492,23 @@ namespace IngameScript
             }
         }
 
-        public List<IMyFunctionalBlock> ControlledBlocks
-        {
-            get
-            {
-                return controlledBlocks;
-            }
+        public List<IMyFunctionalBlock> ControlledBlocks => controlledBlocks;
+        public List<IMyFunctionalBlock> ControlledToolBlocks => controlledToolBlocks;
+        public List<IMyShipConnector> Connectors => connectors;
+        public List<IMyGasTank> Tanks => tanks;
+        public List<IMyGasTank> H2Tanks => h2Tanks;
+        public List<IMyBatteryBlock> Batteries => batteries;
+        public List<IMyRadioAntenna> Antennas => antennas;
+        public List<IMyShipController> Controllers => controllers;
+        public List<IMyThrust> BreakingThrusters => breakingThrusters;
+        public List<IMyThrust> ForwardThrusters => forwardThrusters;
+        public List<IMyThrust> UpwardThrusters => upwardThrusters;
+        public List<IMyGyro> Gyros => gyros;
+        public List<IMyLandingGear> Gears => gears;
+        public List<IMyTextSurface> Lcds1 => lcds1;
+        public List<IMyTextSurface> Lcds2 => lcds2;
 
-            set
-            {
-                controlledBlocks = value;
-            }
-        }
-
-        public List<IMyFunctionalBlock> ControlledToolBlocks
-        {
-            get
-            {
-                return controlledToolBlocks;
-            }
-
-            set
-            {
-                controlledToolBlocks = value;
-            }
-        }
-
-        public List<IMyFunctionalBlock> OverrideBlocks
-        {
-            get
-            {
-                return overrideBlocks;
-            }
-
-            set
-            {
-                overrideBlocks = value;
-            }
-        }
-
-        public List<IMyShipConnector> Connectors
-        {
-            get
-            {
-                return connectors;
-            }
-
-            set
-            {
-                connectors = value;
-            }
-        }
-
-        public List<IMyGasTank> Tanks
-        {
-            get
-            {
-                return tanks;
-            }
-
-            set
-            {
-                tanks = value;
-            }
-        }
-
-        public List<IMyGasTank> H2Tanks
-        {
-            get
-            {
-                return h2Tanks;
-            }
-
-            set
-            {
-                h2Tanks = value;
-            }
-        }
-
-        public List<IMyBatteryBlock> Batteries
-        {
-            get
-            {
-                return batteries;
-            }
-
-            set
-            {
-                batteries = value;
-            }
-        }
-
-        public List<IMyRadioAntenna> Antennas
-        {
-            get
-            {
-                return antennas;
-            }
-
-            set
-            {
-                antennas = value;
-            }
-        }
-
-        public List<IMyShipController> Controllers
-        {
-            get
-            {
-                return controllers;
-            }
-
-            set
-            {
-                controllers = value;
-            }
-        }
-
-        public List<IMyThrust> BreakingThrusters
-        {
-            get
-            {
-                return breakingThrusters;
-            }
-
-            set
-            {
-                breakingThrusters = value;
-            }
-        }
-
-        public List<IMyThrust> ForwardThrusters
-        {
-            get
-            {
-                return forwardThrusters;
-            }
-
-            set
-            {
-                forwardThrusters = value;
-            }
-        }
-
-        public List<IMyThrust> UpwardThrusters
-        {
-            get
-            {
-                return upwardThrusters;
-            }
-
-            set
-            {
-                upwardThrusters = value;
-            }
-        }
-
-        public List<IMyGyro> Gyros
-        {
-            get
-            {
-                return gyros;
-            }
-
-            set
-            {
-                gyros = value;
-            }
-        }
-
-        public List<IMyLandingGear> Gears
-        {
-            get
-            {
-                return gears;
-            }
-
-            set
-            {
-                gears = value;
-            }
-        }
-
-        public List<IMyTextSurface> Lcds1
-        {
-            get
-            {
-                return lcds1;
-            }
-
-            set
-            {
-                lcds1 = value;
-            }
-        }
-
-        public List<IMyTextSurface> Lcds2
-        {
-            get
-            {
-                return lcds2;
-            }
-
-            set
-            {
-                lcds2 = value;
-            }
-        }
-
+        public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;
-
-        public List<IMyTextSurface> Surfaces
-        {
-            get
-            {
-                return surfaces;
-            }
-
-            set
-            {
-                surfaces = value;
-            }
-        }
     }
 }
