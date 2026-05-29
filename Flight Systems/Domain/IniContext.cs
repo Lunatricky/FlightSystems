@@ -12,6 +12,21 @@ namespace IngameScript.Domain
         Dictionary<string, string> __snapshot = new Dictionary<string, string>();
         bool iniAnyChanged;
 
+        //TogglesSection
+        const string TogglesSection = "Toggles";
+
+        public const string FLIGHT_SYSTEMS = "Flight Systems";
+        public const string DOCK_MODE = "Dock Mode";
+        public const string CONTROL_ANTENNAS = "Control Antennas";
+        public const string RENAME_SUBGRIDS = "Rename Subgrids";
+        public const string PAINT_SURFACES = "Change Screen Colors";
+
+        bool allowFlightSystems = true;
+        bool allowDockMode = false;
+        bool controlAntennas = false;
+        bool renameSubgrids = false;
+        bool paintSurfaces = false;
+
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
 
@@ -44,21 +59,6 @@ namespace IngameScript.Domain
         double cnavAltitude = 1000; // m
         double distanceToGPS = 500; // m
         double minimumAcceptedFuel = 20; //%
-
-        //TogglesSection
-        const string TogglesSection = "Toggles";
-
-        public const string FLIGHT_SYSTEMS = "Flight Systems";
-        public const string DOCK_MODE = "Dock Mode";
-        public const string CONTROL_ANTENNAS = "Control Antennas";
-        public const string RENAME_SUBGRIDS = "Rename Subgrids";
-        public const string PAINT_SURFACES = "Change Screen Colors";
-
-        bool allowFlightSystems = true;
-        bool allowDockMode = false;
-        bool controlAntennas = false;
-        bool renameSubgrids = false;
-        bool paintSurfaces = false;
 
         //SurfaceColorsSection
         const string SurfaceColorsSection = "Screen Colors";
@@ -122,6 +122,14 @@ namespace IngameScript.Domain
             // ───────────────────────────────────────────
             // Read PB Custom Data and populate properties
             // ───────────────────────────────────────────
+
+            //TogglesSection
+            allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
+            allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
+            controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
+            renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
+            paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
+
             //NamesTagsSection
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
             gc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? gc.GridName : tempGridName;
@@ -140,13 +148,6 @@ namespace IngameScript.Domain
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
-            //TogglesSection
-            allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
-            allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
-            controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
-            renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
-            paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
-
             //SurfaceColorsSection
             backgroundColor = ini.Get(SurfaceColorsSection, BACKGROUNDCOLOR).ToString(BackgroundColor);
             fontColor = ini.Get(SurfaceColorsSection, FONTCOLOR).ToString(FontColor);
@@ -161,6 +162,14 @@ namespace IngameScript.Domain
             // ───────────────────────────────────────────────────────────────────────────────────────
             // Populate PB Custom Data whilst checking if any value changed to force ReloadGridContext
             // ───────────────────────────────────────────────────────────────────────────────────────
+
+            //TogglesSection
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
+
             //NamesTagsSection
             iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
             iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_GROUP_TAG, DockGroupTag);
@@ -176,13 +185,6 @@ namespace IngameScript.Domain
             iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, CnavAltitude);
             iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
             iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
-
-            //TogglesSection
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
 
             //SurfaceColorsSection
             iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, BACKGROUNDCOLOR, BackgroundColor);

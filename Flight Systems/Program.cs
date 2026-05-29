@@ -17,14 +17,13 @@ namespace IngameScript
         GridContext gc;
         IniContext ic;
         PhysicsContext pc;
+        SpeedTimeTracker stt;
 
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
 
         Command command = Command.Empty;
         int tickCount;
-
-        readonly SpeedTimeTracker speedTimeTracker;
 
         //Dock Mode
         bool isDockMode = false;
@@ -41,8 +40,6 @@ namespace IngameScript
         }
 
         booleans b;
-
-        double currentOverride = 0.0;
                 
         public Program()
         {
@@ -50,7 +47,7 @@ namespace IngameScript
             me = Me;
 
             b = new booleans();
-            speedTimeTracker = new SpeedTimeTracker();
+            stt = new SpeedTimeTracker();
 
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
             InicializeContexts();
@@ -60,7 +57,7 @@ namespace IngameScript
         {
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
-            pc = new PhysicsContext(gc, ic, speedTimeTracker, command, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc = new PhysicsContext(gc, ic, stt, command, Runtime.TimeSinceLastRun.TotalSeconds);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
@@ -144,8 +141,8 @@ namespace IngameScript
                 }
             }
 
-            MainStateEnum[] arr = {MainStateEnum.CNav, MainStateEnum.Cruise, MainStateEnum.Land, MainStateEnum.SBurn, MainStateEnum.Gps};
-            List<MainStateEnum> MainStateList = new List<MainStateEnum>(arr);
+            MainState[] arr = {MainState.CNav, MainState.Cruise, MainState.Land, MainState.SBurn, MainState.Gps};
+            List<MainState> MainStateList = new List<MainState>(arr);
             if (!ic.AllowFlightSystems && MainStateList.Contains(command.State))
             {
                 return;
@@ -155,48 +152,48 @@ namespace IngameScript
             {
                 if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
                 {
-                    command.State = MainStateEnum.Land;
+                    command.State = MainState.Land;
                 }
                 else if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
                 {
-                    command.State = MainStateEnum.Cruise;
+                    command.State = MainState.Cruise;
                     command.Param.Text = "orbit";
                 }
             }
 
             switch (command.State)
             {
-                case MainStateEnum.Reload:
+                case MainState.Reload:
                     ReloadGridContext(ref gc, ref ic);
                     break;
-                case MainStateEnum.Abort:
+                case MainState.Abort:
                     AbortShipContext(gc);
                     break;
-                case MainStateEnum.Dock:
+                case MainState.Dock:
                     DockStateSwitch(gc, command.Param);
                     return;
-                case MainStateEnum.Cruise:
+                case MainState.Cruise:
                     gc.Controller.DampenersOverride = true;
                     CruiseControlStateSwitch(gc, ic, command.Param);
                     break;
-                case MainStateEnum.CNav: // Circumnavigation
+                case MainState.CNav: // Circumnavigation
                     gc.Controller.DampenersOverride = true;
                     CircumNavigateStateSwitch(gc, ic, command.Param);
                     break;
-                case MainStateEnum.Land: // Auto Land
+                case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
                     {
                         AbortShipContext(gc);
                         return;
                     }
-                    if (command.Param.AutoLandState == AutoLandStateEnum.Idle) StartLand();
+                    if (command.Param.AutoLandState == AutoLandState.Idle) StartLand();
                     AutoLandStateSwitch(gc, command.Param);
                     break;
-                case MainStateEnum.SBurn: // Suicide Burn
-                    if (command.Param.AutoLandState == AutoLandStateEnum.Idle) StartLand();
+                case MainState.SBurn: // Suicide Burn
+                    if (command.Param.AutoLandState == AutoLandState.Idle) StartLand();
                     SuicideBurnStateSwitch(gc, command.Param);
                     break;
-                case MainStateEnum.Gps:
+                case MainState.Gps:
                     Runtime.UpdateFrequency = UpdateFrequency.Update1;
                     b.autoPilotToggle = true;
                     CircumNavigateStateSwitch(gc, ic, command.Param);
@@ -243,7 +240,7 @@ namespace IngameScript
                 scriptInfo.Append(" - " + command.Param.Text);
             if (command.Param.Number != 0)
                 scriptInfo.Append(" - " + command.Param.Number);
-            if (command.Param.AutoLandState != AutoLandStateEnum.Idle)
+            if (command.Param.AutoLandState != AutoLandState.Idle)
                 scriptInfo.Append(" - " + command.Param.AutoLandState);
 
             return scriptInfo;
@@ -308,6 +305,8 @@ namespace IngameScript
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, CommandParam param)
         {
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed);
+
             switch (param.Text.ToLowerInvariant())
             {
                 case "toggle":
@@ -317,7 +316,7 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
-                    CruiseControl(pc.CruiseSpeed);
+                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     break;
                 case "off":
                     AbortShipContext(gc);
@@ -328,13 +327,13 @@ namespace IngameScript
                     {
                         command.Param.Text = "align";
                         b.stopCruiseWhenOutOfGrav = true;
-                        CruiseControl(pc.CruiseSpeed);
+                        CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     }
                     else
                     {
                         if (b.autoPilotToggle)
                         {
-                            command.State = MainStateEnum.Gps;
+                            command.State = MainState.Gps;
                             command.Param.Text = "on";
                         } else
                         {
@@ -353,26 +352,26 @@ namespace IngameScript
                     {
                         if (b.autoPilotToggle)
                         {
-                            command.State = MainStateEnum.Gps;
+                            command.State = MainState.Gps;
                             command.Param.Text = "on";
                             break;
                         }
                         else
                         {
                             AbortShipContext(gc);
-                            command.State = MainStateEnum.CNav;
+                            command.State = MainState.CNav;
                         }
                     }
                     Vector3D shipUp = gc.Controller.WorldMatrix.Up;
                     AlignToVector(gc, pc.DesiredUpVector, false, shipUp);
-                    CruiseControl(pc.CruiseSpeed);
+                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     break;
                 case "glide":
-                    CruiseControl(pc.CruiseSpeed);
+                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     if (pc.EffectiveAlt < 500 + pc.StopYDist)
                     {
                         AbortShipContext(gc);
-                        command.State = MainStateEnum.Land;
+                        command.State = MainState.Land;
                     }
                     break;
             }
@@ -380,6 +379,7 @@ namespace IngameScript
 
         void CircumNavigateStateSwitch(GridContext gc, IniContext ic, CommandParam param)
         {
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed);
             switch (param.Text.ToLowerInvariant())
             {
                 case "toggle":
@@ -393,18 +393,18 @@ namespace IngameScript
                     {
                         SoftAbort(gc);
                         b.circumnavCheckAltitude = true;
-                        command.State = MainStateEnum.Cruise;
+                        command.State = MainState.Cruise;
                         command.Param.Text = "orbit";
                     }
 
-                    CruiseControl(pc.CruiseSpeed);
+                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
                     if (!b.autoPilotToggle)
                     {
                         AlignToGravity(gc);
                     } 
                     else if (pc.DistanceToLine < ic.DistanceToGPS + pc.StopZDist)
                     {
-                        command.State = MainStateEnum.Land;
+                        command.State = MainState.Land;
                         b.autoPilotToggle = false;
                     } 
                     else if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates))
@@ -422,19 +422,19 @@ namespace IngameScript
         {
             switch (param.AutoLandState)
             {
-                case AutoLandStateEnum.Idle:
+                case AutoLandState.Idle:
                     break;
 
-                case AutoLandStateEnum.Align:
+                case AutoLandState.Align:
                     SoftAbort(gc);
-                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandStateEnum.Drop;
+                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
-                case AutoLandStateEnum.Drop:
-                    if (SuicideBurn(gc)) command.Param.AutoLandState = AutoLandStateEnum.LockGear;
+                case AutoLandState.Drop:
+                    if (SuicideBurn(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
-                case AutoLandStateEnum.LockGear:
+                case AutoLandState.LockGear:
                     if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
@@ -444,19 +444,19 @@ namespace IngameScript
         {
             switch (param.AutoLandState)
             {
-                case AutoLandStateEnum.Idle:
+                case AutoLandState.Idle:
                     break;
 
-                case AutoLandStateEnum.Align:
+                case AutoLandState.Align:
                     SoftAbort(gc);
-                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandStateEnum.Drop;
+                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
-                case AutoLandStateEnum.Drop:
-                    if (AutoLand(gc)) command.Param.AutoLandState = AutoLandStateEnum.LockGear;
+                case AutoLandState.Drop:
+                    if (AutoLand(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
-                case AutoLandStateEnum.LockGear:
+                case AutoLandState.LockGear:
                     if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
@@ -592,72 +592,91 @@ namespace IngameScript
             }
         }
 
-        void CruiseControlOld(double cruiseSpeed)
-        {
-            const double SPEED_TOLERANCE = 0.5;  // m/s deadzone
-            const double OVERRIDE_STEP = 0.05;   // cruise adjustment rate
-            double error = cruiseSpeed - pc.ForwardVelocity;
-
-            if (Math.Abs(error) < SPEED_TOLERANCE)
-                return;
-
-            if (error > 0)
-                currentOverride += OVERRIDE_STEP;
-            else
-                currentOverride -= OVERRIDE_STEP;
-
-            currentOverride = MathHelper.Clamp(currentOverride, 0f, 1f);
-
-            // Disable braking thrusters so they don't fight cruise
-            foreach (var brakingThruster in gc.BreakingThrusters)
-                brakingThruster.Enabled = false;
-
-            // Control forward thrust smoothly
-            foreach (var forwardThruster in gc.ForwardThrusters)
-            {
-                forwardThruster.Enabled = true;
-                forwardThruster.ThrustOverridePercentage = (float)currentOverride;
-            }
-
-        }
-
+        double currentOverride = 0.0;   // 0..1 forward thrust command
+        double currentBrake = 0.0;      // 0..1 braking command
+        double integral = 0.0;
         double lastError = 0.0;
-        // tune these
-        const double Kp = 0.8;    // proportional gain
-        const double Kd = 0.3;    // derivative gain
-        const double dt = 0.1;    // seconds per tick (10 ticks/sec)
 
-        void CruiseControl(double cruiseSpeed)
+        // tuning
+        const double Kp = 0.4;
+        const double Ki = 0.03;
+        const double Kd = 0.5;
+
+        const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
+        const double OVERRIDE_STEP = 0.05;     // max absolute change per tick (smoothness)
+        const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
+
+        void CruiseControl(double cruiseSpeed, double dt)
         {
-            const double SPEED_TOLERANCE = 0.5;
+            if (dt <= 0) return;
+
+            // error: positive => need more forward thrust
             double error = cruiseSpeed - pc.ForwardVelocity;
 
+            // small deadzone: don't integrate or react strongly inside it
             if (Math.Abs(error) < SPEED_TOLERANCE)
             {
-                // small deadzone: optionally zero derivative memory to reduce oscillation
-                lastError = 0.0;
+                // gently decay integral to avoid wind-up and reduce chatter
+                integral *= 0.9;
+                lastError = error;
                 return;
             }
 
-            // PD controller: compute change
+            // PID terms
+            integral += error * dt;
+            integral = Math.Max(-MAX_INTEGRAL, Math.Min(MAX_INTEGRAL, integral));
             double derivative = (error - lastError) / dt;
-            double delta = Kp * error + Kd * derivative;
 
-            // scale delta to a reasonable per-tick change (tune Kp/Kd instead of extra scaling)
-            // here we treat delta as direct override increment; divide by cruiseSpeed to normalize if needed
-            currentOverride += delta * dt; // integrate change over dt
+            double pid = Kp * error + Ki * integral + Kd * derivative;
 
-            currentOverride = Math.Max(0.0, Math.Min(1.0, currentOverride));
-            lastError = error;
+            // map pid to desired forward/brake targets (complementary)
+            double desiredForward = Math.Max(0.0, Math.Min(1.0, pid));   // if pid>0 -> forward
+            double desiredBrake = Math.Max(0.0, Math.Min(1.0, -pid));  // if pid<0 -> brake
 
-            foreach (var brakingThruster in gc.BreakingThrusters)
-                brakingThruster.Enabled = false;
+            // step limiter per tick to keep smooth visuals (OVERRIDE_STEP controls smoothness)
+            // The step is applied independently to forward and brake, but we keep them complementary.
+            double step = OVERRIDE_STEP; // fixed per tick step (tune for desired smoothness)
 
-            foreach (var forwardThruster in gc.ForwardThrusters)
+            // move currentOverride toward desiredForward by at most step
+            double diffF = desiredForward - currentOverride;
+            if (diffF > step) diffF = step;
+            else if (diffF < -step) diffF = -step;
+            currentOverride += diffF;
+
+            // move currentBrake toward desiredBrake by at most step
+            double diffB = desiredBrake - currentBrake;
+            if (diffB > step) diffB = step;
+            else if (diffB < -step) diffB = -step;
+            currentBrake += diffB;
+
+            // Prevent both fighting: if both non-zero, reduce them proportionally so they don't sum >1
+            if (currentOverride > 0 && currentBrake > 0)
             {
-                forwardThruster.Enabled = true;
-                forwardThruster.ThrustOverridePercentage = (float)currentOverride;
+                double sum = currentOverride + currentBrake;
+                if (sum > 1.0)
+                {
+                    currentOverride /= sum;
+                    currentBrake /= sum;
+                }
             }
+
+            // Apply thrusters: enable brake thrusters only when brake significant
+            bool useBrakes = currentBrake > 1e-4;
+            foreach (var bt in gc.BreakingThrusters)
+            {
+                bt.Enabled = useBrakes;
+                bt.ThrustOverridePercentage = (float)currentBrake;
+            }
+
+            // Apply forward thrusters
+            bool useForward = currentOverride > 1e-4;
+            foreach (var ft in gc.ForwardThrusters)
+            {
+                ft.Enabled = useForward;
+                ft.ThrustOverridePercentage = (float)currentOverride;
+            }
+
+            lastError = error;
         }
 
         Vector3D TryGetPlanetPosition(IMyShipController controller)
@@ -708,9 +727,10 @@ namespace IngameScript
 
             if (b.autoPilotToggle)
             {
+                Echo("stt: " + stt.GetAverageSpeed());
                 stringBuilder.AppendLine($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
-            else if (command.State == MainStateEnum.Land || command.State == MainStateEnum.SBurn)
+            else if (command.State == MainState.Land || command.State == MainState.SBurn)
             {
                 stringBuilder.AppendLine($"Gravity: {pc.Gravity:F1} m²/s");
                 stringBuilder.AppendLine($"TTI: {pc.TimeToImpact:F1} s");
@@ -731,7 +751,7 @@ namespace IngameScript
         void StartLand()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            command.Param.AutoLandState = AutoLandStateEnum.Align;
+            command.Param.AutoLandState = AutoLandState.Align;
         }
 
         void AbortShipContext(GridContext gc)
@@ -846,7 +866,7 @@ namespace IngameScript
             if (pc.NetDecel - 1 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainStateEnum.Cruise;
+                command.State = MainState.Cruise;
                 command.Param.Text = "orbit";
             }
 
@@ -861,7 +881,7 @@ namespace IngameScript
             if (pc.NetDecel - 0.5 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainStateEnum.Cruise;
+                command.State = MainState.Cruise;
                 command.Param.Text = "orbit";
             }
 

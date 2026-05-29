@@ -5,16 +5,16 @@ namespace IngameScript.UseCases
 {
     class Command
     {
-        public MainStateEnum State { get; set; }
+        public MainState State { get; set; }
         public CommandParam Param { get; set; }
 
-        public Command(MainStateEnum cmd, CommandParam p)
+        public Command(MainState cmd, CommandParam p)
         {
-            if (Enum.IsDefined(typeof(MainStateEnum), cmd)) State = cmd;
+            if (Enum.IsDefined(typeof(MainState), cmd)) State = cmd;
             Param = p;
         }
 
-        public static Command Empty => new Command(MainStateEnum.Idle, CommandParam.Empty);
+        public static Command Empty => new Command(MainState.Idle, CommandParam.Empty);
 
 
         public Command(string argument)
@@ -49,15 +49,15 @@ namespace IngameScript.UseCases
                 Param = new CommandParam(second.ToLowerInvariant());
         }
 
-        MainStateEnum TryParseArgument(string input)
+        MainState TryParseArgument(string input)
         {
             try
             {
-                State = (MainStateEnum)Enum.Parse(typeof(MainStateEnum), input, true);
+                State = (MainState)Enum.Parse(typeof(MainState), input, true);
             }
             catch
             {
-                State = MainStateEnum.Abort;
+                State = MainState.Abort;
             }
             return State;
         }

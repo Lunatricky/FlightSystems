@@ -18,7 +18,7 @@ namespace IngameScript.Utils
                 return command;
 
             // First word = command (lowercase)
-            MainStateEnum cmd = TryParseArgument(parts[0].ToLowerInvariant());
+            MainState cmd = TryParseArgument(parts[0].ToLowerInvariant());
 
             // No second part → no parameter
             if (parts.Length == 1)
@@ -44,16 +44,16 @@ namespace IngameScript.Utils
             return new Command(cmd, param);
         }
 
-        static MainStateEnum TryParseArgument(string input)
+        static MainState TryParseArgument(string input)
         {
-            MainStateEnum mainStateEnum;
+            MainState mainStateEnum;
             try
             {
-                mainStateEnum = (MainStateEnum)Enum.Parse(typeof(MainStateEnum), input, true);
+                mainStateEnum = (MainState)Enum.Parse(typeof(MainState), input, true);
             }
             catch
             {
-                mainStateEnum = MainStateEnum.Abort;
+                mainStateEnum = MainState.Abort;
             }
             return mainStateEnum;
         }

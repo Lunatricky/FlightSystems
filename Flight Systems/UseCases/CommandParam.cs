@@ -5,7 +5,7 @@ namespace IngameScript.UseCases
     class CommandParam
     {
         public ParamType Type;
-        public AutoLandStateEnum AutoLandState = AutoLandStateEnum.Idle;
+        public AutoLandState AutoLandState = AutoLandState.Idle;
 
         public double Number;
         public string Text = "";

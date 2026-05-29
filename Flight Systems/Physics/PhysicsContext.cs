@@ -95,7 +95,6 @@ namespace IngameScript.Physics
         double StopZDistTemp => Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
         public double StopYDist => (StopYDistTemp < 0.4 ? 0 : StopYDistTemp);
         public double StopZDist => (StopZDistTemp < 0.4 ? 0 : StopZDistTemp);
-        public double CruiseSpeed => ic.MaxSpeed;
         public double ClimbRate => climbRate.Get(Now, () => VectorHelper.GetGravityAlignedVerticalVelocity(gc, this));
         public double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
         public double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);

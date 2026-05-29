@@ -54,9 +54,9 @@
     <Compile Include="Utils\VectorHelper.cs" />
     <Compile Include="Domain\GridContext.cs" />
     <Compile Include="UseCases\RenameSubgrids.cs" />
-    <Compile Include="ParamType.cs" />
-    <Compile Include="AutoLandStateEnum.cs" />
-    <Compile Include="MainStateEnum.cs" />
+    <Compile Include="Enums\ParamType.cs" />
+    <Compile Include="Enums\AutoLandState.cs" />
+    <Compile Include="Enums\MainState.cs" />
     <Compile Include="MDK\Bootstrapper.cs" />
     <AdditionalFiles Include="MDK\MDK.options.props">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
