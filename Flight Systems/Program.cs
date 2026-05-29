@@ -24,6 +24,7 @@ namespace IngameScript
 
         Command command = Command.Empty;
         int tickCount;
+        double timeSinceLastRun;
 
         //Dock Mode
         bool isDockMode = false;
@@ -58,7 +59,7 @@ namespace IngameScript
         {
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
-            pc = new PhysicsContext(gc, ic, stt, command, Runtime.TimeSinceLastRun.TotalSeconds);
+            pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
@@ -66,6 +67,8 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
+
             if (ic.IniAnyChanged
                 || gc.Controller == null
                 || gc.Controller.Closed
@@ -74,7 +77,7 @@ namespace IngameScript
                 ReloadGridContext(ref gc, ref ic);
             }
 
-            pc.NewRun(Runtime.TimeSinceLastRun.TotalSeconds);
+            pc.NewRun(timeSinceLastRun);
 
             tickCount++;
             if (tickCount % 100 == 1)
@@ -106,10 +109,6 @@ namespace IngameScript
 
             ScriptInfoHeader(scriptInfo);
             scriptInfo.AppendLine("");
-            if (ic.AllowFlightSystems)
-            {
-                double timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
-            }
 
             if (ic.AllowDockMode)
             {
@@ -320,7 +319,7 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
-                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
+                    CruiseControl(CruiseSpeed, timeSinceLastRun);
                     break;
                 case "off":
                     AbortShipContext(gc);
@@ -331,7 +330,7 @@ namespace IngameScript
                     {
                         command.Param.Text = "align";
                         b.stopCruiseWhenOutOfGrav = true;
-                        CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
+                        CruiseControl(CruiseSpeed, timeSinceLastRun);
                     }
                     else
                     {
@@ -369,10 +368,10 @@ namespace IngameScript
                     }
                     Vector3D shipUp = gc.Controller.WorldMatrix.Up;
                     AlignToVector(gc, shipUp, false, desiredUp);
-                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
+                    CruiseControl(CruiseSpeed, timeSinceLastRun);
                     break;
                 case "glide":
-                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
+                    CruiseControl(CruiseSpeed, timeSinceLastRun);
                     if (pc.EffectiveAlt < 500 + pc.StopYDist)
                     {
                         AbortShipContext(gc);
@@ -402,7 +401,7 @@ namespace IngameScript
                         command.Param.Text = "orbit";
                     }
 
-                    CruiseControl(CruiseSpeed, pc.timeSinceLastRun);
+                    CruiseControl(CruiseSpeed, timeSinceLastRun);
                     if (!b.autoPilotToggle)
                     {
                         AlignToGravity(gc);
@@ -688,17 +687,6 @@ namespace IngameScript
             lastError = error;
         }
 
-        Vector3D TryGetPlanetPosition(IMyShipController controller)
-        {
-            Vector3D shipPos = controller.GetPosition();
-            Vector3D planetCenter = new Vector3D();
-
-            // Get planet center
-            controller.TryGetPlanetPosition(out planetCenter);
-
-            return planetCenter;
-        }
-
         void WriteInfo()
         {
             // Output
@@ -799,14 +787,9 @@ namespace IngameScript
 
         bool AlignToGravity(GridContext sc, bool checkSpeed)
         {
-            return AlignToVector(sc, checkSpeed, Vector3D.Normalize(pc.NaturalGravity));
-        }
-
-        bool AlignToVector(GridContext gc, bool checkSpeed, Vector3D desiredUpVector)
-        {
             Vector3D shipUp = gc.Controller.WorldMatrix.Up;
 
-            return AlignToVector(gc, shipUp, checkSpeed, desiredUpVector);
+            return AlignToVector(gc, shipUp, checkSpeed, Vector3D.Normalize(pc.NaturalGravity));
         }
 
         bool AlignToVector(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
@@ -817,7 +800,7 @@ namespace IngameScript
             Vector3D axis = shipUp.Cross(desiredUpVector);
             double angle = axis.Length();
 
-            if (angle < 0.005 && (checkSpeed ? IsStopped() : true))
+            if (angle < 0.005 && (checkSpeed ? pc.IsStopped : true))
             {
                 foreach (var g in gc.Gyros)
                     g.GyroOverride = false;
@@ -859,11 +842,6 @@ namespace IngameScript
             }
 
             return false;
-        }
-
-        bool IsStopped(double threshold = 0.1)
-        {
-            return threshold > pc.UpVelocity && threshold >= Math.Abs(pc.ForwardVelocity) && threshold >= Math.Abs(pc.RightVelocity);
         }
 
         ////////////////////////////////////////////////////////

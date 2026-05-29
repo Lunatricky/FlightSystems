@@ -1,5 +1,6 @@
 ﻿using IngameScript.Domain;
 using IngameScript.Physics;
+using Sandbox.ModAPI.Ingame;
 using VRageMath;
 
 namespace IngameScript
@@ -69,6 +70,16 @@ namespace IngameScript
                 total += t.MaxEffectiveThrust;
 
             return total;
+        }
+
+        Vector3D TryGetPlanetPosition(IMyShipController controller)
+        {
+            Vector3D planetCenter;
+
+            // Get planet center
+            controller.TryGetPlanetPosition(out planetCenter);
+
+            return planetCenter;
         }
     }
 }

@@ -11,12 +11,12 @@ namespace IngameScript.Physics
     class PhysicsContext
     {
         GridContext gc;
-        IniContext ic;
         SpeedTimeTracker stt;
         Command command;
 
         double accumulatedTime = 0.0;
-        public double timeSinceLastRun = 0.00001;
+        double timeSinceLastRun = 0.00001;
+        double threshold = 0.1;
 
         Cached<MatrixD> worldMatrix = new Cached<MatrixD>();
         Cached<MyShipMass> mass = new Cached<MyShipMass>();
@@ -44,6 +44,8 @@ namespace IngameScript.Physics
         Cached<double> netDecel = new Cached<double>();
         Cached<double> distanceToLine = new Cached<double>();
 
+        Cached<bool> isStopped = new Cached<bool>();
+
         Vector3D prevVelocity = new Vector3D();
         double smoothedSpeed = 0;
         double prevH2Fill = 0;
@@ -53,10 +55,9 @@ namespace IngameScript.Physics
 
         const double ALPHA = 0.2;
 
-        public PhysicsContext(GridContext gc, IniContext ic, SpeedTimeTracker stt, Command command, double timeSinceLastRun)
+        public PhysicsContext(GridContext gc, SpeedTimeTracker stt, Command command, double timeSinceLastRun)
         {
             this.gc = gc;
-            this.ic = ic;
             this.stt = stt;
             this.command = command;
 
@@ -78,24 +79,24 @@ namespace IngameScript.Physics
 
         public double Now => accumulatedTime;
 
-        public MatrixD WorldMatrix => worldMatrix.Get(Now, () => gc.Controller.WorldMatrix);
+        MatrixD WorldMatrix => worldMatrix.Get(Now, () => gc.Controller.WorldMatrix);
         public MyShipMass Mass => mass.Get(Now, () => gc.Controller.CalculateShipMass());
         public Vector3D NaturalGravity => naturalGravity.Get(Now, () => gc.Controller.GetNaturalGravity());
-        public Vector3D Velocity => velocity.Get(Now, () => gc.Controller.GetShipVelocities().LinearVelocity);
+        Vector3D Velocity => velocity.Get(Now, () => gc.Controller.GetShipVelocities().LinearVelocity);
         public Vector3D Accel => accel.Get(Now, () => ((Velocity - prevVelocity) / timeSinceLastRun));
         public Vector3D DesiredUpVector => desiredUpVector.Get(Now, () => VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc)));
         public double Gravity => gravity.Get(Now, () => NaturalGravity.Length());
         public double GroundLevel => groundLevel.Get(Now, () => GetPlanetElevation());
         public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun);
-        public double VEffectiveYSpeed => (UpVelocity == 0 ? 0 : vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun));
-        public double VEffectiveZSpeed => (ForwardVelocity == 0 ? 0 : vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun));
+        double VEffectiveYSpeed => (UpVelocity == 0 ? 0 : vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun));
+         double VEffectiveZSpeed => (ForwardVelocity == 0 ? 0 : vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun));
         double StopYDistTemp => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
         double StopZDistTemp => Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
         public double StopYDist => (StopYDistTemp < 0.4 ? 0 : StopYDistTemp);
         public double StopZDist => (StopZDistTemp < 0.4 ? 0 : StopZDistTemp);
         public double ClimbRate => climbRate.Get(Now, () => VectorHelper.GetGravityAlignedVerticalVelocity(gc, this));
-        public double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
-        public double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
+        double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
+        double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
         public double TimeToImpact => timeToImpact.Get(Now, () => GroundLevel / Math.Abs(VEffectiveYSpeed));
         public double TimeToStopY => timeToStopY.Get(Now, () => Math.Abs(ClimbRate / MaxYDecel));
         public double TimeToStopZ => timeToStopZ.Get(Now, () => Math.Abs(ForwardVelocity / MaxZDecel));
@@ -105,6 +106,7 @@ namespace IngameScript.Physics
         public double UpVelocity => upVelocity.Get(Now, () => Vector3D.Dot(Velocity, WorldMatrix.Up));
         public double NetDecel => netDecel.Get(Now, () => ComputeNetDecel(gc));
         public double DistanceToLine => distanceToLine.Get(Now, () => DistanceToGps(gc.Controller, command.Param.TargetCoordinates));
+        public bool IsStopped => isStopped.Get(Now, () => threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity));
         public H2Totals H2Cache => h2Cache.Get(Now, () => ComputeH2Totals());
         public BatTotals BatCache => batCache.Get(Now, () => ComputeBatTotals());
 
