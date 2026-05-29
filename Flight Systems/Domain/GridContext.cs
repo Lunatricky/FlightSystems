@@ -163,8 +163,8 @@ namespace IngameScript.Domain
 
         public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
-            Lcds1 = AddLCDsToList(lcd1Tag, true);
-            Lcds2 = AddLCDsToList(lcd2Tag, true);
+            Lcds1 = AddLCDsToList(lcd1Tag, false, true);
+            Lcds2 = AddLCDsToList(lcd2Tag, false, true);
 
             return this;
         }
