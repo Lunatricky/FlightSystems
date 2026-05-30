@@ -22,162 +22,121 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        // Simple LCD boxes display for Space Engineers (uses MySpriteDrawFrame)
-        // Put this in a Programmable Block. Set run frequency (e.g., Update100).
+        // C#6 / Space Engineers compatible dynamic sprite generator
 
-        const string LCD_NAME = "LCD Panel"; // change to your LCD name or leave empty to use first surface
-
-        double currentOverride = 0.0; // unused here but kept if you extend
-        public Program()
+        // Simple container (no Tuple)
+        public class InfoItem
         {
-            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+            public string Label;
+            public string Value;
+            public InfoItem(string label, string value) { Label = label; Value = value; }
         }
 
-        public void Save() { }
-
-        public void Main(string argument, UpdateType updateSource)
+        // Helper: create a MySprite rectangle
+        MySprite MakeRectSprite(Vector2 center, Vector2 size, Color color)
         {
-            var panel = GetTextSurface();
-            if (panel == null) return;
+            var s = new MySprite();
+            s.Type = SpriteType.TEXTURE;
+            s.Data = "SquareSimple";
+            s.Position = center;
+            s.Size = size;
+            s.Color = color;
+            s.Alignment = TextAlignment.CENTER;
+            return s;
+        }
 
-            panel.ContentType = ContentType.SCRIPT;
-            panel.Alignment = TextAlignment.LEFT;
+        // Helper: create a MySprite text
+        MySprite MakeTextSprite(string text, Vector2 pos, float scale, Color color, TextAlignment align)
+        {
+            var s = new MySprite();
+            s.Type = SpriteType.TEXT;
+            s.Data = text;
+            s.Position = pos;
+            s.Color = color;
+            s.RotationOrScale = scale;
+            s.FontId = "White";
+            s.Alignment = align;
+            return s;
+        }
 
+        // Build sprites for a list of InfoItem
+        List<MySprite> BuildInfoSprites(List<InfoItem> items, Vector2 panelSize, int cols)
+        {
             var sprites = new List<MySprite>();
-
-            // Background full
-            var bg = new MySprite()
+            if (items == null || items.Count == 0)
             {
-                Type = SpriteType.TEXTURE,
-                Data = "SquareSimple",
-                Position = panel.SurfaceSize * 0.5f,
-                Size = panel.SurfaceSize,
-                Color = new Color(10, 10, 10, 220),
-                Alignment = TextAlignment.CENTER
-            };
-            sprites.Add(bg);
-
-            // Header box
-            Vector2 headerSize = new Vector2(panel.SurfaceSize.X, 40f);
-            var header = new MySprite()
-            {
-                Type = SpriteType.TEXTURE,
-                Data = "SquareSimple",
-                Position = new Vector2(panel.SurfaceSize.X * 0.5f, 20f),
-                Size = headerSize,
-                Color = new Color(30, 144, 255, 220),
-                Alignment = TextAlignment.CENTER
-            };
-            sprites.Add(header);
-
-            var headerText = new MySprite()
-            {
-                Type = SpriteType.TEXT,
-                Data = "Status Overview",
-                Position = new Vector2(panel.SurfaceSize.X * 0.5f, 20f),
-                Color = Color.White,
-                RotationOrScale = 1.2f,
-                FontId = "White"
-            };
-            sprites.Add(headerText);
-
-            // Info boxes
-            float margin = 8f;
-            float boxWidth = (panel.SurfaceSize.X - margin * 4) / 3f;
-            float boxHeight = 80f;
-            float top = 60f + margin;
-
-            string[] labels = { "Power", "Cargo", "Crew" };
-            string[] values = { GetPowerString(), GetCargoString(), GetCrewString() };
-
-            for (int i = 0; i < 3; i++)
-            {
-                float x = margin + boxWidth * 0.5f + i * (boxWidth + margin);
-                var box = new MySprite()
-                {
-                    Type = SpriteType.TEXTURE,
-                    Data = "SquareSimple",
-                    Position = new Vector2(x, top + boxHeight * 0.5f),
-                    Size = new Vector2(boxWidth, boxHeight),
-                    Color = new Color(40, 40, 40, 220),
-                    Alignment = TextAlignment.CENTER
-                };
-                sprites.Add(box);
-
-                var label = new MySprite()
-                {
-                    Type = SpriteType.TEXT,
-                    Data = labels[i],
-                    Position = new Vector2(x - boxWidth * 0.35f + 6f, top + 12f),
-                    Color = Color.LightGray,
-                    RotationOrScale = 0.8f,
-                    FontId = "White"
-                };
-                sprites.Add(label);
-
-                var val = new MySprite()
-                {
-                    Type = SpriteType.TEXT,
-                    Data = values[i],
-                    Position = new Vector2(x, top + boxHeight * 0.6f),
-                    Color = Color.White,
-                    RotationOrScale = 1.2f,
-                    FontId = "White"
-                };
-                sprites.Add(val);
+                sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, new Color(10, 10, 10, 220)));
+                sprites.Add(MakeTextSprite("No data", panelSize * 0.5f, 1.2f, Color.LightGray, TextAlignment.CENTER));
+                return sprites;
             }
 
-            // Draw with frame API
+            // background
+            sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, new Color(10, 10, 10, 220)));
+
+            int n = items.Count;
+            if (cols <= 0)
+            {
+                if (n <= 3) cols = n;
+                else if (n <= 6) cols = 3;
+                else cols = 4;
+            }
+            if (cols > n) cols = n;
+            int rows = (int)Math.Ceiling((double)n / cols);
+
+            float margin = 8f;
+            float innerW = panelSize.X - margin * (cols + 1);
+            float innerH = panelSize.Y - margin * (rows + 1);
+            float boxW = Math.Max(20f, innerW / cols);
+            float boxH = Math.Max(20f, innerH / rows);
+
+            for (int i = 0; i < n; i++)
+            {
+                int col = i % cols;
+                int row = i / cols;
+                float x = margin + col * (boxW + margin) + boxW * 0.5f;
+                float y = margin + row * (boxH + margin) + boxH * 0.5f;
+                var center = new Vector2(x, y);
+                var size = new Vector2(boxW, boxH);
+
+                sprites.Add(MakeRectSprite(center, size, new Color(40, 40, 40, 220)));
+
+                var labelPos = new Vector2(x - boxW * 0.38f + 6f, y - boxH * 0.25f);
+                sprites.Add(MakeTextSprite(items[i].Label, labelPos, 0.7f, Color.LightGray, TextAlignment.LEFT));
+
+                var valuePos = new Vector2(x, y + boxH * 0.08f);
+                sprites.Add(MakeTextSprite(items[i].Value, valuePos, 1.1f, Color.White, TextAlignment.CENTER));
+            }
+
+            return sprites;
+        }
+
+        // Usage example inside Main()
+        public void DrawInfoPanel(IMyTextSurface panel)
+        {
+            panel.ContentType = ContentType.SCRIPT;
+
+            var items = new List<InfoItem>();
+            items.Add(new InfoItem("Power", GetPowerString()));
+            items.Add(new InfoItem("Cargo", GetCargoString()));
+            items.Add(new InfoItem("Crew", GetCrewString()));
+            // add more items as needed
+
+            var sprites = BuildInfoSprites(items, panel.SurfaceSize, 3);
+
             using (var frame = panel.DrawFrame())
             {
-                foreach (var s in sprites) frame.Add(s);
+                for (int i = 0; i < sprites.Count; i++) frame.Add(sprites[i]);
             }
         }
 
-        // Get first usable text surface or named
-        IMyTextSurface GetTextSurface()
-        {
-            if (!string.IsNullOrEmpty(LCD_NAME))
-            {
-                var blocks = new List<IMyTerminalBlock>();
-                GridTerminalSystem.SearchBlocksOfName(LCD_NAME, blocks, b => b is IMyTextPanel);
-                if (blocks.Count > 0)
-                {
-                    var panelBlock = blocks[0] as IMyTextPanel;
-                    if (panelBlock != null) return panelBlock as IMyTextSurface;
-                }
-            }
-
-            // fallback: first text panel
-            var allPanels = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(allPanels);
-            if (allPanels.Count > 0) return allPanels[0] as IMyTextSurface;
-
-            // try generic surfaces (cockpits)
-            var surfaces = new List<IMyTextSurfaceProvider>();
-            GridTerminalSystem.GetBlocksOfType(surfaces);
-            foreach (var p in surfaces)
-            {
-                var s = p.GetSurface(0);
-                if (s != null) return s;
-            }
-
-            return null;
-        }
-
-        // Example value providers
+        // Example providers (reuse from your script)
         string GetPowerString()
         {
             var batteries = new List<IMyBatteryBlock>();
             GridTerminalSystem.GetBlocksOfType(batteries);
             if (batteries.Count == 0) return "No Batt";
-
             double stored = 0, capacity = 0;
-            foreach (var b in batteries)
-            {
-                stored += (double)b.CurrentStoredPower;
-                capacity += (double)b.MaxStoredPower;
-            }
+            foreach (var b in batteries) { stored += (double)b.CurrentStoredPower; capacity += (double)b.MaxStoredPower; }
             if (capacity <= 0) return "N/A";
             int pct = (int)Math.Round(100.0 * stored / capacity);
             return pct + "%";
@@ -188,14 +147,8 @@ namespace IngameScript
             var containers = new List<IMyCargoContainer>();
             GridTerminalSystem.GetBlocksOfType(containers);
             if (containers.Count == 0) return "No Cargo";
-
             double used = 0, max = 0;
-            foreach (var c in containers)
-            {
-                var inv = c.GetInventory();
-                used += inv.CurrentVolume.RawValue;
-                max += inv.MaxVolume.RawValue;
-            }
+            foreach (var c in containers) { var inv = c.GetInventory(); used += inv.CurrentVolume.RawValue; max += inv.MaxVolume.RawValue; }
             if (max <= 0) return "N/A";
             int pct = (int)Math.Round(100.0 * used / max);
             return pct + "%";
@@ -206,14 +159,10 @@ namespace IngameScript
             var seats = new List<IMyCockpit>();
             GridTerminalSystem.GetBlocksOfType(seats);
             if (seats.Count == 0) return "No Cockpits";
-            int occupied = 0;
-            int total = 0;
-            foreach (var s in seats)
-            {
-                total++;
-                if (s.IsUnderControl) occupied++;
-            }
-            return $"{occupied}/{total}";
+            int occ = 0, tot = 0;
+            foreach (var s in seats) { tot++; if (s.IsUnderControl) occ++; }
+            return occ + "/" + tot;
         }
+
     }
 }
