@@ -101,6 +101,32 @@ namespace IngameScript
             FlightSystems(gc, ic, pc, argument);
 
             pc.CacheValues();
+
+            Echo(GetRuntimeInfo());
+        }
+
+        private double tickCounter = 0;
+        private double maxRuntimeMs = 0;
+
+        private String GetRuntimeInfo()
+        {
+            tickCounter++;
+
+            if (tickCounter % 20 == 1)
+            {
+                maxRuntimeMs = 0;
+            }
+
+            StringBuilder m_echoBuilder = new StringBuilder(512);
+            m_echoBuilder.Append($"Runtime: {Math.Round(Runtime.LastRunTimeMs, 5)} Ms\n");
+
+            double newRuntimeMs = Math.Round(Runtime.LastRunTimeMs, 5);
+            maxRuntimeMs = Math.Max(newRuntimeMs, maxRuntimeMs);
+
+            m_echoBuilder.Append($"Max Runtime: {maxRuntimeMs} Ms\n");
+            m_echoBuilder.Append($"Instruction Count: {Runtime.CurrentInstructionCount}\n");
+            m_echoBuilder.Append($"Complexity: {Math.Round((double)Runtime.CurrentInstructionCount / Runtime.MaxInstructionCount, 5)}%\n");
+            return m_echoBuilder.ToString();
         }
 
         private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc, string argument)
