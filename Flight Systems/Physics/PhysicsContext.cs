@@ -51,7 +51,7 @@ namespace IngameScript.Physics
         double prevH2Fill = 0;
 
         public struct H2Totals { public double Capacity; public double Filled; public double Percent; public string Time; }
-        public struct BatTotals { public double Capacity; public double Filled; public string Time; }
+        public struct BatTotals { public double Capacity; public double Filled; public double Percent; public string Time; }
 
         const double ALPHA = 0.2;
 
@@ -136,16 +136,18 @@ namespace IngameScript.Physics
 
         BatTotals ComputeBatTotals()
         {
-            double batCap = 0, batStored = 0;
+            double cap = 0, filled = 0, percent;
             double batIn = 0, batOut = 0;
 
             foreach (var battery in gc.Batteries)
             {
-                batCap += battery.MaxStoredPower;
-                batStored += battery.CurrentStoredPower;
+                cap += battery.MaxStoredPower;
+                filled += battery.CurrentStoredPower;
                 batIn += battery.CurrentInput;
                 batOut += battery.CurrentOutput;
             }
+
+            percent = 100 * filled / cap;
 
             double netPower = batIn - batOut;
             string batTime = "--";
@@ -153,11 +155,12 @@ namespace IngameScript.Physics
             if (Math.Abs(netPower) > 0.01)
             {
                 if (netPower > 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * (batCap - batStored) / netPower) + " /\\";
+                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / netPower) + " /\\";
                 else if (netPower < 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * batStored / -netPower) + " \\/";
+                    batTime = UtilsHelpder.FormatTime(3600 * filled / -netPower) + " \\/";
             }
-            return new BatTotals { Capacity = batCap, Filled = batStored, Time = batTime };
+
+            return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime };
         }
 
         double GetPlanetElevation()

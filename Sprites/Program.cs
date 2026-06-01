@@ -119,6 +119,9 @@ namespace IngameScript
             items.Add(new InfoItem("Power", GetPowerString()));
             items.Add(new InfoItem("Cargo", GetCargoString()));
             items.Add(new InfoItem("Crew", GetCrewString()));
+            items.Add(new InfoItem("Power", GetPowerString()));
+            items.Add(new InfoItem("Cargo", GetCargoString()));
+            items.Add(new InfoItem("Crew", GetCrewString()));
             // add more items as needed
 
             var sprites = BuildInfoSprites(items, panel.SurfaceSize, 3);

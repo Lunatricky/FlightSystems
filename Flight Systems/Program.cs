@@ -18,6 +18,7 @@ namespace IngameScript
         IniContext ic;
         PhysicsContext pc;
         SpeedTimeTracker stt;
+        Sprites spt;
 
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
@@ -60,6 +61,7 @@ namespace IngameScript
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
             pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
+            spt = new Sprites(gc, pc, ic);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
@@ -212,7 +214,19 @@ namespace IngameScript
             }
 
             // Info LCDs
-            if (gc.Lcds1.Count > 0) WriteInfo();
+            if (gc.Lcds1.Count > 0)
+            {
+                spt.Items.Clear();
+                spt.Items.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
+                spt.Items.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
+                spt.Items.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
+                spt.Items.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
+
+                foreach (IMyTextSurface lcd in gc.Lcds1)
+                {
+                    spt.DrawInfoPanel(lcd, 1);
+                }
+            }
             if (gc.Lcds2.Count > 0) WriteInfo2();
         }
 
@@ -685,25 +699,6 @@ namespace IngameScript
             }
 
             lastError = error;
-        }
-
-        void WriteInfo()
-        {
-            // Output
-            StringBuilder stringBuilder = new StringBuilder();
-
-            ScriptInfoHeader(stringBuilder);
-            stringBuilder.AppendLine("\n");
-
-            stringBuilder.AppendLine($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
-            stringBuilder.AppendLine($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
-
-            stringBuilder.AppendLine($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
-
-            stringBuilder.AppendLine($"Bat:  {pc.BatCache.Filled / pc.BatCache.Capacity * 100:0}% - {pc.BatCache.Time}");
-
-            foreach (IMyTextSurface lcd1 in gc.Lcds1)
-                lcd1.WriteText(stringBuilder.ToString());
         }
 
         void WriteInfo2()
