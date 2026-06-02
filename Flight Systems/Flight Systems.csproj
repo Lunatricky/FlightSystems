@@ -44,7 +44,6 @@
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniContext.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
-    <Compile Include="Physics\Cached.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />

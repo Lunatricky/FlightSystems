@@ -18,7 +18,6 @@ namespace IngameScript
         IniContext ic;
         PhysicsContext pc;
         SpeedTimeTracker stt;
-        Sprites spt;
 
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
@@ -26,10 +25,12 @@ namespace IngameScript
         Command command = Command.Empty;
         int tickCount;
         double timeSinceLastRun;
+        StringBuilder scriptInfo;
+        string argument;
 
         //Dock Mode
-        bool isDockMode = false;
-        bool lastDockState = false;
+        bool isDockMode;
+        bool lastDockState;
         Vector3D desiredUp;
 
         struct booleans
@@ -46,13 +47,14 @@ namespace IngameScript
                 
         public Program()
         {
+            scriptInfo = new StringBuilder();
             gridTerminalSystem = GridTerminalSystem;
             me = Me;
 
             b = new booleans();
             stt = new SpeedTimeTracker();
 
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
             InicializeContexts();
         }
 
@@ -61,28 +63,28 @@ namespace IngameScript
             gc = new GridContext(gridTerminalSystem, me);
             ic = new IniContext(gc);
             pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
-            spt = new Sprites(gc, pc, ic);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
         }
 
-        public void Main(string argument, UpdateType updateSource)
-        {
-            timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
+        int tick = 0;
 
-            if (ic.IniAnyChanged
-                || gc.Controller == null
-                || gc.Controller.Closed
-                || gc.ErrorMessage.Length > 0)
+        public void Main(string argument)
+        {
+            if (gc.ErrorMessage.Length > 0)
             {
-                ReloadGridContext(ref gc, ref ic);
+                Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
+                return;
             }
 
-            pc.NewRun(timeSinceLastRun);
+            if (!string.IsNullOrEmpty(argument)) this.argument = argument;
+
+            Echo(scriptInfo.ToString());
+            gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
 
             tickCount++;
-            if (tickCount % 100 == 1)
+            if (tickCount % 1000 == 1)
             {
                 ic.ParseIni();
 
@@ -92,17 +94,42 @@ namespace IngameScript
                 }
             }
 
-            if (gc.ErrorMessage.Length > 0)
+            if (ic.IniAnyChanged || gc.Controller == null || gc.Controller.Closed)
             {
-                Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
+                ReloadGridContext(ref gc, ref ic);
+                tick = 0;
                 return;
             }
 
-            FlightSystems(gc, ic, pc, argument);
+            switch (tick % 3)
+            {
+                case 0:
+                    timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
+                    pc.NewRun(timeSinceLastRun);
+                    scriptInfo = ScriptInfo();
+                    break;
+                case 1:
+                    FlightSystems(gc, ic, pc);
+                    pc.CacheValues();
+                    break;
+                case 2:
+                    if (gc.Lcds1.Count > 0) LCD1Sprite();
+                    if (gc.Lcds2.Count > 0) LCD2Sprite();
+                    break;
+            }
 
-            pc.CacheValues();
+            tick++;
 
             Echo(GetRuntimeInfo());
+        }
+
+        private StringBuilder ScriptInfo()
+        {
+            StringBuilder scriptInfo = new StringBuilder();
+            ScriptInfoHeader(scriptInfo);
+            scriptInfo.AppendLine("");
+            ScriptInfoBlocks(ic, scriptInfo);
+            return scriptInfo;
         }
 
         private double tickCounter = 0;
@@ -129,15 +156,14 @@ namespace IngameScript
             return m_echoBuilder.ToString();
         }
 
-        private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc, string argument)
+        private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc)
         {
-            if (!string.IsNullOrEmpty(argument)) command = new Command(argument);
-
-            StringBuilder scriptInfo = new StringBuilder();
-
-            ScriptInfoHeader(scriptInfo);
-            scriptInfo.AppendLine("");
-
+            if (!string.IsNullOrEmpty(argument))
+            {
+                command = new Command(argument);
+                argument = "";
+            }
+                        
             if (ic.AllowDockMode)
             {
                 bool anyConnected = GridManager.IsAnyConnectorConnected(gc);
@@ -151,11 +177,6 @@ namespace IngameScript
                     return;
                 }
             }
-            
-            ScriptInfoBlocks(ic, scriptInfo);
-
-            Echo(scriptInfo.ToString());
-            gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
 
             if (isDockMode) return;
 
@@ -214,15 +235,14 @@ namespace IngameScript
                         AbortShipContext(gc);
                         return;
                     }
-                    if (command.Param.AutoLandState == AutoLandState.Idle) StartLand();
+                    if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
                     AutoLandStateSwitch(gc, command.Param);
                     break;
                 case MainState.SBurn: // Suicide Burn
-                    if (command.Param.AutoLandState == AutoLandState.Idle) StartLand();
+                    if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
                     SuicideBurnStateSwitch(gc, command.Param);
                     break;
                 case MainState.Gps:
-                    Runtime.UpdateFrequency = UpdateFrequency.Update1;
                     b.autoPilotToggle = true;
                     CircumNavigateStateSwitch(gc, ic, command.Param);
                     break;
@@ -238,22 +258,6 @@ namespace IngameScript
             {
                 b.lastCheckIsOnNatGrav = pc.Gravity > 0.0;
             }
-
-            // Info LCDs
-            if (gc.Lcds1.Count > 0)
-            {
-                spt.Items.Clear();
-                spt.Items.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
-                spt.Items.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
-                spt.Items.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
-                spt.Items.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
-
-                foreach (IMyTextSurface lcd in gc.Lcds1)
-                {
-                    spt.DrawInfoPanel(lcd, 1);
-                }
-            }
-            if (gc.Lcds2.Count > 0) WriteInfo2();
         }
 
         private void DockToggle(GridContext gc, bool anyConnected)
@@ -445,16 +449,13 @@ namespace IngameScript
                     if (!b.autoPilotToggle)
                     {
                         AlignToGravity(gc);
-                    } 
+                    }
                     else if (pc.DistanceToLine < ic.DistanceToGPS + pc.StopZDist)
                     {
                         command.State = MainState.Land;
                         b.autoPilotToggle = false;
-                    } 
-                    else if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates))
-                    {
-                        Runtime.UpdateFrequency = UpdateFrequency.Update10;
                     }
+                    else if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates)) ;
                     break;
                 case "off":
                     AbortShipContext(gc);
@@ -646,7 +647,7 @@ namespace IngameScript
         const double Kd = 0.5;
 
         const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
-        const double OVERRIDE_STEP = 0.05;     // max absolute change per tick (smoothness)
+        const double OVERRIDE_STEP = 0.02;     // max absolute change per tick (smoothness)
         const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
 
         void CruiseControl(double cruiseSpeed, double dt)
@@ -727,49 +728,66 @@ namespace IngameScript
             lastError = error;
         }
 
-        void WriteInfo2()
+        private void LCD1Sprite()
         {
-            StringBuilder stringBuilder = new StringBuilder();
+            Sprites spt = new Sprites(ic);
+            spt.Items.Add(gc.GridName);
 
-            stringBuilder.AppendLine(gc.GridName);
-            stringBuilder.AppendLine(new string('-', 28));
+            StringBuilder state = new StringBuilder();
+            state.Append("State: " + command.State);
+
+            if (!string.IsNullOrEmpty(command.Param.Text))
+                state.Append(" - " + command.Param.Text);
+            if (command.Param.Number != 0)
+                state.Append(" - " + command.Param.Number);
+            if (command.Param.AutoLandState != AutoLandState.Idle)
+                state.Append(" - " + command.Param.AutoLandState);
+
+            spt.Items.Add(state.ToString());
+
+            spt.Items.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
+            spt.Items.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
+            spt.Items.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
+            spt.Items.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
+
+            foreach (IMyTextSurface lcd in gc.Lcds1)
+            {
+                spt.DrawInfoPanel(lcd, 1);
+            }
+        }
+
+        void LCD2Sprite()
+        {
+            Sprites spt = new Sprites(ic);
 
             if (pc.Gravity > 0)
             {
-                stringBuilder.AppendLine($"Ground level : {pc.GroundLevel:F1} m");
-                stringBuilder.AppendLine($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                stringBuilder.AppendLine($"Accel: {pc.Accel.Length() / 9.81:F1} g");
-                stringBuilder.AppendLine($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
+                spt.Items.Add($"Ground level: {pc.GroundLevel:F1} m");
+                spt.Items.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
+                spt.Items.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
+                spt.Items.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
             }
-            stringBuilder.AppendLine($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
+            spt.Items.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
 
             if (b.autoPilotToggle)
             {
-                Echo("stt: " + stt.GetAverageSpeed());
-                stringBuilder.AppendLine($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
+                spt.Items.Add($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
             else if (command.State == MainState.Land || command.State == MainState.SBurn)
             {
-                stringBuilder.AppendLine($"Gravity: {pc.Gravity:F1} m²/s");
-                stringBuilder.AppendLine($"TTI: {pc.TimeToImpact:F1} s");
+                spt.Items.Add($"TTI: {pc.TimeToImpact:F1} s");
             }
             else
             {
-                stringBuilder.AppendLine($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
-                stringBuilder.AppendLine($"Lateral v: {pc.RightVelocity:F1} m/s");
-                stringBuilder.AppendLine($"Vertical v: {pc.UpVelocity:F1} m/s");
+                spt.Items.Add($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
+                spt.Items.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
+                spt.Items.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
 
-            stringBuilder.AppendLine();
-
-            foreach (IMyTextSurface lcd2 in gc.Lcds2)
-                lcd2.WriteText(stringBuilder.ToString());
-        }
-
-        void StartLand()
-        {
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            command.Param.AutoLandState = AutoLandState.Align;
+            foreach (IMyTextSurface lcd in gc.Lcds2)
+            {
+                spt.DrawInfoPanel(lcd, 1);
+            }
         }
 
         void AbortShipContext(GridContext gc)
@@ -780,8 +798,6 @@ namespace IngameScript
 
             gc.Controller.DampenersOverride = true;
             b.autoPilotToggle = false;
-
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
             tickCount = 0;
             GridManager.ResetGyros(gc);

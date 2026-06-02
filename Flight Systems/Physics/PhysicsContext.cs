@@ -14,37 +14,42 @@ namespace IngameScript.Physics
         SpeedTimeTracker stt;
         Command command;
 
-        double accumulatedTime = 0.0;
+        double accumulatedTime = 0;
         double timeSinceLastRun = 0.00001;
         double threshold = 0.1;
 
-        Cached<MatrixD> worldMatrix = new Cached<MatrixD>();
-        Cached<MyShipMass> mass = new Cached<MyShipMass>();
+        MatrixD worldMatrix = new MatrixD();
+        MyShipMass mass = new MyShipMass();
 
-        Cached<Vector3D> naturalGravity = new Cached<Vector3D>();
-        Cached<Vector3D> velocity = new Cached<Vector3D>();
-        Cached<Vector3D> accel = new Cached<Vector3D>();
-        Cached<Vector3D> desiredUpVector = new Cached<Vector3D>();
+        Vector3D naturalGravity = new Vector3D();
+        Vector3D velocity = new Vector3D();
+        Vector3D accel = new Vector3D();
+        Vector3D desiredUpVector = new Vector3D();
 
-        Cached<H2Totals> h2Cache = new Cached<H2Totals>();
-        Cached<BatTotals> batCache = new Cached<BatTotals>();
+        H2Totals h2Cache = new H2Totals();
+        BatTotals batCache = new BatTotals();
 
-        Cached<double> groundLevel = new Cached<double>();
-        Cached<double> gravity = new Cached<double>();
-        Cached<double> climbRate = new Cached<double>();
-        Cached<double> vEffectiveYSpeed = new Cached<double>();
-        Cached<double> vEffectiveZSpeed = new Cached<double>();
-        Cached<double> timeToImpact = new Cached<double>();
-        Cached<double> timeToStopY = new Cached<double>();
-        Cached<double> timeToStopZ = new Cached<double>();
-        Cached<double> timeToDistanceSmoothed = new Cached<double>();
-        Cached<double> forwardVelocity = new Cached<double>();
-        Cached<double> rightVelocity = new Cached<double>();
-        Cached<double> upVelocity = new Cached<double>();
-        Cached<double> netDecel = new Cached<double>();
-        Cached<double> distanceToLine = new Cached<double>();
+        double groundLevel;
+        double effectiveAlt;
+        double gravity;
+        double climbRate;
+        double vEffectiveYSpeed;
+        double vEffectiveZSpeed;
+        double stopYDist;
+        double stopZDist;
+        double stopYDistTemp;
+        double stopZDistTemp;
+        double timeToImpact;
+        double timeToStopY;
+        double timeToStopZ;
+        double timeToDistanceSmoothed;
+        double forwardVelocity;
+        double rightVelocity;
+        double upVelocity;
+        double netDecel;
+        double distanceToLine;
 
-        Cached<bool> isStopped = new Cached<bool>();
+        bool isStopped;
 
         Vector3D prevVelocity = new Vector3D();
         double smoothedSpeed = 0;
@@ -69,7 +74,37 @@ namespace IngameScript.Physics
         {
             if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
             accumulatedTime += timeSinceLastRun;
+
+            worldMatrix = gc.Controller.WorldMatrix;
+            mass = gc.Controller.CalculateShipMass();
+            naturalGravity = gc.Controller.GetNaturalGravity();
+            velocity = gc.Controller.GetShipVelocities().LinearVelocity;
+            accel = ((Velocity - prevVelocity) / timeSinceLastRun);
+            desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
+            gravity = NaturalGravity.Length();
+            groundLevel = GetPlanetElevation();
+            effectiveAlt = (GroundLevel - gc.GridHeight - vEffectiveYSpeed * timeSinceLastRun);
+            vEffectiveYSpeed = UpVelocity == 0 ? 0 : ClimbRate + MaxYDecel * timeSinceLastRun;
+            vEffectiveZSpeed = ForwardVelocity == 0 ? 0 : ForwardVelocity + MaxZDecel * timeSinceLastRun;
+            stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
+            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
+            stopYDistTemp = Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
+            stopZDistTemp = Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
+            climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
+            timeToImpact = GroundLevel / Math.Abs(VEffectiveYSpeed);
+            timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
+            timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
+            timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToLine, timeSinceLastRun);
+            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
+            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
+            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
+            netDecel = ComputeNetDecel(gc);
+            distanceToLine = DistanceToGps(gc.Controller, command.Param.TargetCoordinates);
+            isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
+            h2Cache = ComputeH2Totals();
+            batCache = ComputeBatTotals();
         }
+        
 
         public void CacheValues()
         {
@@ -79,36 +114,36 @@ namespace IngameScript.Physics
 
         public double Now => accumulatedTime;
 
-        MatrixD WorldMatrix => worldMatrix.Get(Now, () => gc.Controller.WorldMatrix);
-        public MyShipMass Mass => mass.Get(Now, () => gc.Controller.CalculateShipMass());
-        public Vector3D NaturalGravity => naturalGravity.Get(Now, () => gc.Controller.GetNaturalGravity());
-        Vector3D Velocity => velocity.Get(Now, () => gc.Controller.GetShipVelocities().LinearVelocity);
-        public Vector3D Accel => accel.Get(Now, () => ((Velocity - prevVelocity) / timeSinceLastRun));
-        public Vector3D DesiredUpVector => desiredUpVector.Get(Now, () => VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc)));
-        public double Gravity => gravity.Get(Now, () => NaturalGravity.Length());
-        public double GroundLevel => groundLevel.Get(Now, () => GetPlanetElevation());
-        public double EffectiveAlt => (GroundLevel - gc.GridHeight - VEffectiveYSpeed * timeSinceLastRun);
-        double VEffectiveYSpeed => (UpVelocity == 0 ? 0 : vEffectiveYSpeed.Get(Now, () => ClimbRate + MaxYDecel * timeSinceLastRun));
-         double VEffectiveZSpeed => (ForwardVelocity == 0 ? 0 : vEffectiveZSpeed.Get(Now, () => ForwardVelocity + MaxZDecel * timeSinceLastRun));
-        double StopYDistTemp => Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
-        double StopZDistTemp => Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
-        public double StopYDist => (StopYDistTemp < 0.4 ? 0 : StopYDistTemp);
-        public double StopZDist => (StopZDistTemp < 0.4 ? 0 : StopZDistTemp);
-        public double ClimbRate => climbRate.Get(Now, () => VectorHelper.GetGravityAlignedVerticalVelocity(gc, this));
+        MatrixD WorldMatrix => worldMatrix;
+        public MyShipMass Mass => mass;
+        public Vector3D NaturalGravity => naturalGravity;
+        Vector3D Velocity => velocity;
+        public Vector3D Accel => accel;
+        public Vector3D DesiredUpVector => desiredUpVector;
+        public double Gravity => gravity;
+        public double GroundLevel => groundLevel;
+        public double EffectiveAlt => effectiveAlt;
+        double VEffectiveYSpeed => vEffectiveYSpeed; 
+        double VEffectiveZSpeed => vEffectiveZSpeed;
+        double StopYDistTemp => stopYDistTemp;
+        double StopZDistTemp => stopZDistTemp;
+        public double StopYDist => stopYDist;
+        public double StopZDist => stopZDist;
+        public double ClimbRate => climbRate;
         double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
         double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
-        public double TimeToImpact => timeToImpact.Get(Now, () => GroundLevel / Math.Abs(VEffectiveYSpeed));
-        public double TimeToStopY => timeToStopY.Get(Now, () => Math.Abs(ClimbRate / MaxYDecel));
-        public double TimeToStopZ => timeToStopZ.Get(Now, () => Math.Abs(ForwardVelocity / MaxZDecel));
-        public double TimeToDistanceSmoothed => timeToDistanceSmoothed.Get(Now, () => GetTimeToDistanceSmoothed(DistanceToLine, timeSinceLastRun));
-        public double ForwardVelocity => forwardVelocity.Get(Now, () => Vector3D.Dot(Velocity, WorldMatrix.Forward));
-        public double RightVelocity => rightVelocity.Get(Now, () => Vector3D.Dot(Velocity, WorldMatrix.Right));
-        public double UpVelocity => upVelocity.Get(Now, () => Vector3D.Dot(Velocity, WorldMatrix.Up));
-        public double NetDecel => netDecel.Get(Now, () => ComputeNetDecel(gc));
-        public double DistanceToLine => distanceToLine.Get(Now, () => DistanceToGps(gc.Controller, command.Param.TargetCoordinates));
-        public bool IsStopped => isStopped.Get(Now, () => threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity));
-        public H2Totals H2Cache => h2Cache.Get(Now, () => ComputeH2Totals());
-        public BatTotals BatCache => batCache.Get(Now, () => ComputeBatTotals());
+        public double TimeToImpact => timeToImpact;
+        public double TimeToStopY => timeToStopY;
+        public double TimeToStopZ => timeToStopZ;
+        public double TimeToDistanceSmoothed => timeToDistanceSmoothed;
+        public double ForwardVelocity => forwardVelocity;
+        public double RightVelocity => rightVelocity;
+        public double UpVelocity => upVelocity;
+        public double NetDecel => netDecel;
+        public double DistanceToLine => distanceToLine;
+        public bool IsStopped => isStopped;
+        public H2Totals H2Cache => h2Cache;
+        public BatTotals BatCache => batCache;
 
         H2Totals ComputeH2Totals()
         {

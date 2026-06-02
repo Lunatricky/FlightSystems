@@ -193,8 +193,7 @@ namespace IngameScript.Domain
             {
                 GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
                     block.IsSameConstructAs(Me) &&
-                    (block.CustomName.Contains(LCD_TAG) ||
-                    block.CustomData.Contains(LCD_TAG))
+                    block.CustomName.Contains(LCD_TAG)
                 );
             }
 
@@ -354,7 +353,8 @@ namespace IngameScript.Domain
 
             GridTS.GetBlocksOfType(tempList, tempBlock =>
                 tempBlock.IsSameConstructAs(Me) &&
-                !ContainsIgnore(tempBlock.CustomName)
+                !ContainsIgnore(tempBlock.CustomName) &&
+                !ContainsIgnore(tempBlock.CustomData)
             );
 
             foreach (var block in tempList)
