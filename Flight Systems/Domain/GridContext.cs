@@ -353,20 +353,12 @@ namespace IngameScript.Domain
 
             GridTS.GetBlocksOfType(tempList, tempBlock =>
                 tempBlock.IsSameConstructAs(Me) &&
-                !ContainsIgnore(tempBlock.CustomName) &&
-                !ContainsIgnore(tempBlock.CustomData)
+                !tempBlock.CustomName.Contains(IgnoreTag) &&
+                !tempBlock.CustomData.Contains(IgnoreTag)
             );
 
             foreach (var block in tempList)
                 blocks.Add(block);
-        }
-
-        bool ContainsIgnore(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return false;
-
-            return text.IndexOf("ignore", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         bool IsHydrogenTank(IMyGasTank tank)
