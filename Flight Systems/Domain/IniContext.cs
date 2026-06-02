@@ -16,12 +16,14 @@ namespace IngameScript.Domain
         const string TogglesSection = "Toggles";
 
         public const string FLIGHT_SYSTEMS = "Flight Systems";
+        public const string LOW_FUEL_LAND = "Low Fuel Auto Land";
         public const string DOCK_MODE = "Dock Mode";
         public const string CONTROL_ANTENNAS = "Control Antennas";
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
 
         bool allowFlightSystems = true;
+        bool allowLowFuelLand = false;
         bool allowDockMode = false;
         bool controlAntennas = false;
         bool renameSubgrids = false;
@@ -89,6 +91,7 @@ namespace IngameScript.Domain
         public double DistanceToGPS => distanceToGPS;
         public double MinimumAcceptedFuel => minimumAcceptedFuel;
         public bool AllowFlightSystems => allowFlightSystems;
+        public bool AllowLowFuelLand => allowLowFuelLand;
         public bool AllowDockMode => allowDockMode;
         public bool ControlAntennas => controlAntennas;
         public bool RenameSubgrids => renameSubgrids;
@@ -125,6 +128,7 @@ namespace IngameScript.Domain
 
             //TogglesSection
             allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
+            allowLowFuelLand = ini.Get(TogglesSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
             allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
             controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
             renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
@@ -165,6 +169,7 @@ namespace IngameScript.Domain
 
             //TogglesSection
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, LOW_FUEL_LAND, AllowLowFuelLand);
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);

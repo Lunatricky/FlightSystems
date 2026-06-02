@@ -197,7 +197,7 @@ namespace IngameScript
                 return;
             }
 
-            if (pc.Gravity > 0)
+            if (ic.AllowLowFuelLand && pc.Gravity > 0)
             {
                 if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
                 {
@@ -295,6 +295,7 @@ namespace IngameScript
             scriptInfo.AppendLine();
             scriptInfo.AppendLine("Toggles");
             scriptInfo.AppendLine(IniContext.FLIGHT_SYSTEMS + ": " + ic.AllowFlightSystems);
+            scriptInfo.AppendLine(IniContext.LOW_FUEL_LAND + ": " + ic.AllowLowFuelLand);
             scriptInfo.AppendLine(IniContext.DOCK_MODE + ": " + ic.AllowDockMode);
             scriptInfo.AppendLine(IniContext.CONTROL_ANTENNAS + ": " + ic.ControlAntennas);
             scriptInfo.AppendLine(IniContext.RENAME_SUBGRIDS + ": " + ic.RenameSubgrids);
@@ -731,7 +732,7 @@ namespace IngameScript
         private void LCD1Sprite()
         {
             Sprites spt = new Sprites(ic);
-            spt.Items.Add(gc.GridName);
+            spt.Add(gc.GridName);
 
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);
@@ -743,12 +744,27 @@ namespace IngameScript
             if (command.Param.AutoLandState != AutoLandState.Idle)
                 state.Append(" - " + command.Param.AutoLandState);
 
-            spt.Items.Add(state.ToString());
+            spt.Add(state.ToString());
 
-            spt.Items.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
-            spt.Items.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
-            spt.Items.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
-            spt.Items.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
+            spt.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
+            spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
+
+            Color color = new Color();
+            color = pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2
+                ? Color.DarkRed : pc.H2Cache.Percent < ic.MinimumAcceptedFuel
+                ? Color.DarkOrange : new Color();
+
+            if (!color.Equals(new Color()))
+                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color, Color.Black);
+            else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
+
+            color = pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2
+                ? Color.DarkRed : pc.BatCache.Percent < ic.MinimumAcceptedFuel
+                ? Color.DarkOrange : new Color();
+
+            if (!color.Equals(new Color()))
+                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color, Color.Black );
+            else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
@@ -762,32 +778,56 @@ namespace IngameScript
 
             if (pc.Gravity > 0)
             {
-                spt.Items.Add($"Ground level: {pc.GroundLevel:F1} m");
-                spt.Items.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                spt.Items.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
-                spt.Items.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
+                Color color = new Color();
+                if (pc.ClimbRate < 0)
+                {
+                    color = pc.GroundLevel < 2 * pc.StopYDist
+                        ? Color.DarkRed : pc.GroundLevel < 4 * pc.StopYDist
+                        ? Color.DarkOrange : new Color();
+                }
+
+                if (!color.Equals(new Color()))
+                {
+                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", color, Color.Black);
+                    ClimbRateAndAccel(spt);
+                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color, Color.Black);
+                }
+                else
+                {
+                    spt.Add($"Ground level: {pc.GroundLevel:F1} m");
+                    ClimbRateAndAccel(spt);
+                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
+                }
             }
-            spt.Items.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
+
+
+            spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
 
             if (b.autoPilotToggle)
             {
-                spt.Items.Add($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
+                spt.Add($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
             else if (command.State == MainState.Land || command.State == MainState.SBurn)
             {
-                spt.Items.Add($"TTI: {pc.TimeToImpact:F1} s");
+                spt.Add($"TTI: {pc.TimeToImpact:F1} s");
             }
             else
             {
-                spt.Items.Add($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
-                spt.Items.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
-                spt.Items.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
+                spt.Add($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
+                spt.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
+                spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
                 spt.DrawInfoPanel(lcd, 1);
             }
+        }
+
+        private void ClimbRateAndAccel(Sprites spt)
+        {
+            spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
+            spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
         }
 
         void AbortShipContext(GridContext gc)
