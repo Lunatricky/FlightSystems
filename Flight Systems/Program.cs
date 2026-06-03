@@ -750,17 +750,19 @@ namespace IngameScript
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
             Color color = new Color();
-            color = pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2
-                ? Color.DarkRed : pc.H2Cache.Percent < ic.MinimumAcceptedFuel
-                ? Color.DarkOrange : new Color();
+            color = pc.PrevH2Fill > pc.H2Cache.Filled ? Color.LightBlue 
+                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
+                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
+                : new Color();
 
             if (!color.Equals(new Color()))
                     spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color, Color.Black);
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
-            color = pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2
-                ? Color.DarkRed : pc.BatCache.Percent < ic.MinimumAcceptedFuel
-                ? Color.DarkOrange : new Color();
+            color = pc.PrevBatFill > pc.BatCache.Filled ? Color.LightBlue
+                : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
+                : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
+                : new Color();
 
             if (!color.Equals(new Color()))
                 spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color, Color.Black );

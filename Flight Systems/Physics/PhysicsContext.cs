@@ -54,6 +54,7 @@ namespace IngameScript.Physics
         Vector3D prevVelocity = new Vector3D();
         double smoothedSpeed = 0;
         double prevH2Fill = 0;
+        double prevBatFill = 0;
 
         public struct H2Totals { public double Capacity; public double Filled; public double Percent; public string Time; }
         public struct BatTotals { public double Capacity; public double Filled; public double Percent; public string Time; }
@@ -110,6 +111,7 @@ namespace IngameScript.Physics
         {
             prevVelocity = Velocity;
             prevH2Fill = H2Cache.Filled;
+            prevBatFill = BatCache.Filled;
         }
 
         public double Now => accumulatedTime;
@@ -144,6 +146,8 @@ namespace IngameScript.Physics
         public bool IsStopped => isStopped;
         public H2Totals H2Cache => h2Cache;
         public BatTotals BatCache => batCache;
+        public double PrevH2Fill => prevH2Fill;
+        public double PrevBatFill => prevBatFill;
 
         H2Totals ComputeH2Totals()
         {
