@@ -768,6 +768,8 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
+                lcd.AddImageToSelection("Online");
+                lcd.RemoveImageFromSelection("Online");
                 spt.DrawInfoPanel(lcd, 1);
             }
         }
@@ -820,6 +822,8 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
+                lcd.AddImageToSelection("Online");
+                lcd.RemoveImageFromSelection("Online");
                 spt.DrawInfoPanel(lcd, 1);
             }
         }
