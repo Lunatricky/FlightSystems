@@ -9,9 +9,10 @@ namespace IngameScript
 {
     partial class Sprites
    {
-        IniContext ic;
+        readonly IniContext ic;
         public List<TextSprite> TextList => textList;
-        List<TextSprite> textList;
+
+        readonly List<TextSprite> textList;
 
         public struct TextSprite {public string Text; public Color BackgroundColor; public Color FontColor;}
 
@@ -50,27 +51,31 @@ namespace IngameScript
         // Helper: create a MySprite rectangle
         MySprite MakeRectSprite(Vector2 center, Vector2 size, Color backgroundColor)
         {
-            var s = new MySprite();
-            s.Type = SpriteType.TEXTURE;
-            s.Data = "SquareSimple";
-            s.Position = center;
-            s.Size = size;
-            s.Color = backgroundColor;
-            s.Alignment = TextAlignment.CENTER;
+            var s = new MySprite
+            {
+                Type = SpriteType.TEXTURE,
+                Data = "SquareSimple",
+                Position = center,
+                Size = size,
+                Color = backgroundColor,
+                Alignment = TextAlignment.CENTER
+            };
             return s;
         }
 
         // Helper: create a MySprite text
         MySprite MakeTextSprite(string text, Vector2 pos, float scale, TextAlignment align, Color fontColor)
         {
-            MySprite s = new MySprite();
-            s.Type = SpriteType.TEXT;
-            s.Data = text;
-            s.Position = pos;
-            s.Color = fontColor;
-            s.RotationOrScale = scale;
-            s.FontId = "DEBUG";
-            s.Alignment = align;
+            MySprite s = new MySprite
+            {
+                Type = SpriteType.TEXT,
+                Data = text,
+                Position = pos,
+                Color = fontColor,
+                RotationOrScale = scale,
+                FontId = "DEBUG",
+                Alignment = align
+            };
             return s;
         }
 
@@ -101,18 +106,18 @@ namespace IngameScript
             if (cols > n) cols = n;
             int rows = (int)Math.Ceiling((double)n / cols);
 
-            float margin = 1f;
+            float margin = Math.Max(2f, panelSize.X * 0.01f);
             float innerW = panelSize.X - margin * (cols + 1);
             float innerH = panelSize.Y - margin * (rows + 1);
-            float boxW = Math.Max(10f, innerW / cols);
-            float boxH = Math.Max(10f, innerH / rows);
+            float boxW = innerW / cols;
+            float boxH = innerH / rows;
 
             int i = 0;
             foreach (var item in items)
             {
                 int col = i % cols;
                 int row = i / cols;
-                float x = margin + col * (boxW + margin) + boxW * 0.5f - 2f;
+                float x = margin + col * (boxW + margin) + boxW * 0.5f;
                 float y = margin + row * (boxH + margin) + boxH * 0.5f;
                 var center = new Vector2(x, y);
                 var size = new Vector2(boxW, boxH);
@@ -122,8 +127,9 @@ namespace IngameScript
 
                 sprites.Add(MakeRectSprite(center, size, backgroundColor));
 
+                float textScale = Math.Max(0.5f, Math.Min(boxW, boxH) * 0.08f);
                 var labelPos = new Vector2(x - boxW * 0.38f, y - boxH * 0.25f);
-                sprites.Add(MakeTextSprite(item.Text, labelPos, 1.7f, TextAlignment.LEFT, fontColor));
+                sprites.Add(MakeTextSprite(item.Text, labelPos, textScale, TextAlignment.LEFT, fontColor));
 
                 i++;
             }

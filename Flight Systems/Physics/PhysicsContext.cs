@@ -10,13 +10,13 @@ namespace IngameScript.Physics
 {
     class PhysicsContext
     {
-        GridContext gc;
-        SpeedTimeTracker stt;
-        Command command;
+        readonly GridContext gc;
+        readonly SpeedTimeTracker stt;
+        readonly Command command;
 
         double accumulatedTime = 0;
         double timeSinceLastRun = 0.00001;
-        double threshold = 0.1;
+        readonly double threshold = 0.1;
 
         MatrixD worldMatrix = new MatrixD();
         MyShipMass mass = new MyShipMass();

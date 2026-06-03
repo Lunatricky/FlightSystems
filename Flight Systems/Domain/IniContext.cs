@@ -9,7 +9,7 @@ namespace IngameScript.Domain
         readonly GridContext gc;
 
         //Ini
-        Dictionary<string, string> __snapshot = new Dictionary<string, string>();
+        readonly Dictionary<string, string> __snapshot = new Dictionary<string, string>();
         bool iniAnyChanged;
 
         //TogglesSection
@@ -21,6 +21,7 @@ namespace IngameScript.Domain
         public const string CONTROL_ANTENNAS = "Control Antennas";
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
+        public const string USE_SPRITES = "Use Sprites";
 
         bool allowFlightSystems = true;
         bool allowLowFuelLand = false;
@@ -28,6 +29,7 @@ namespace IngameScript.Domain
         bool controlAntennas = false;
         bool renameSubgrids = false;
         bool paintSurfaces = false;
+        bool useSprites = false;
 
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
@@ -71,7 +73,7 @@ namespace IngameScript.Domain
 
         string backgroundColor = "Black";
         string fontColor = "White";
-        string colors = ColorMap.All.ToString();
+        readonly string colors = ColorMap.All.ToString();
 
         public IniContext(GridContext gc)
         {
@@ -96,6 +98,7 @@ namespace IngameScript.Domain
         public bool ControlAntennas => controlAntennas;
         public bool RenameSubgrids => renameSubgrids;
         public bool PaintSurfaces => paintSurfaces;
+        public bool UseSprites => useSprites;
         public string BackgroundColor => backgroundColor;
         public string FontColor => fontColor;
         public string Color => colors;
@@ -133,6 +136,7 @@ namespace IngameScript.Domain
             controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
             renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
             paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
+            useSprites = ini.Get(TogglesSection, USE_SPRITES).ToBoolean(UseSprites);
 
             //NamesTagsSection
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
@@ -174,6 +178,7 @@ namespace IngameScript.Domain
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
             iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
+            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, USE_SPRITES, UseSprites);
 
             //NamesTagsSection
             iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);

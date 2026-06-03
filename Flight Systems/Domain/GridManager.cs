@@ -1,10 +1,21 @@
-﻿using Sandbox.ModAPI.Ingame;
+﻿using IngameScript.UseCases;
+using IngameScript.Utils;
+using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
 
 namespace IngameScript.Domain
 {
     class GridManager
     {
+        readonly GridContext gc;
+        private Booleans b;
+
+        public GridManager(GridContext gc, Booleans b)
+        {
+            this.gc = gc;
+            this.b = b;
+        }
+
         public static void GetOwnGridBlocks<T>(List<T> list, GridContext gc, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
             list.Clear();
@@ -17,7 +28,7 @@ namespace IngameScript.Domain
         }
 
 
-        public static bool IsAnyConnectorConnected(GridContext gc)
+        public bool IsAnyConnectorConnected()
         {
             foreach (IMyShipConnector connector in gc.Connectors)
             {
@@ -27,7 +38,7 @@ namespace IngameScript.Domain
             return false;
         }
 
-        public static void SetBlocks(GridContext gc, bool enabled, out bool isDockMode)
+        public bool SetBlocks(bool isDockMode)
         {
             //Always turn tools OFF when dock/undock
             gc.ControlledToolBlocks.ForEach(b => b.Enabled = false);
@@ -36,12 +47,12 @@ namespace IngameScript.Domain
             foreach (IMyFunctionalBlock cachedBlock in gc.ControlledBlocks)
             {
                 if (cachedBlock != null && cachedBlock.IsFunctional)
-                    cachedBlock.Enabled = enabled;
+                    cachedBlock.Enabled = isDockMode;
             }
 
-            isDockMode = !enabled;
+            return !isDockMode;
         }
-        public static void ResetGyros(GridContext gc)
+        public void ResetGyros()
         {
             foreach (var g in gc.Gyros)
             {
@@ -50,7 +61,7 @@ namespace IngameScript.Domain
             }
         }
 
-        public static void ResetThrusters(GridContext gc)
+        public void ResetThrusters()
         {
             foreach (var forwardThruster in gc.ForwardThrusters)
             {
@@ -72,7 +83,7 @@ namespace IngameScript.Domain
 
         }
 
-        public static void StockpileTanks(GridContext gc, bool stockpile)
+        public void StockpileTanks(bool stockpile)
         {
             foreach (IMyGasTank tank in gc.Tanks)
             {
@@ -81,20 +92,20 @@ namespace IngameScript.Domain
             }
         }
 
-        public static void ChargeBatteries(GridContext gc)
+        public void ChargeBatteries()
         {
             if (gc.BackupBattery != null)
             {
                 gc.BackupBattery.ChargeMode = ChargeMode.Auto;
                 foreach (IMyBatteryBlock battery in gc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
-            else if (IsAnyConnectorConnected(gc))
+            else if (IsAnyConnectorConnected())
             {
                 foreach (IMyBatteryBlock battery in gc.Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
         }
 
-        public static void AutoBatteries(GridContext gc)
+        public void AutoBatteries()
         {
             if (gc.BackupBattery != null)
                 gc.BackupBattery.ChargeMode = ChargeMode.Recharge;
@@ -105,12 +116,36 @@ namespace IngameScript.Domain
             }
         }
 
-        public static void TurnOFfBreakingThrust(GridContext gc)
+        public void TurnOFfBreakingThrust()
         {
             foreach (IMyThrust thruster in gc.BreakingThrusters)
             {
                 thruster.Enabled = false;
             }
+        }
+
+        public void AbortShipContext(ref Command command, ref int tickCount)
+        {
+            tickCount = 0;
+
+            b = new Booleans();
+
+            command = Command.Empty;
+
+            gc.Controller.DampenersOverride = true;
+            b.autoPilotToggle = false;
+
+            ResetGyros();
+            ResetThrusters();
+        }
+
+        public void SoftAbort()
+        {
+            gc.Controller.DampenersOverride = true;
+            b.stopCruiseWhenOutOfGrav = false;
+
+            ResetGyros();
+            ResetThrusters();
         }
     }
 }

@@ -43,12 +43,17 @@
   <ItemGroup>
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniContext.cs" />
+    <Compile Include="LCDInfo\Text.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />
-    <Compile Include="UseCases\Command.cs" />
-    <Compile Include="UseCases\CommandParam.cs" />
+    <Compile Include="UseCases\AutoLand.cs" />
+    <Compile Include="UseCases\DockMode.cs" />
+    <Compile Include="UseCases\CruiseControl.cs" />
+    <Compile Include="Domain\Command.cs" />
+    <Compile Include="Domain\CommandParam.cs" />
+    <Compile Include="Utils\Booleans.cs" />
     <Compile Include="Utils\ColorMap.cs" />
     <Compile Include="Utils\UtilsHelpder.cs" />
     <Compile Include="Utils\VectorHelper.cs" />
