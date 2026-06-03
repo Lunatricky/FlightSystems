@@ -110,11 +110,11 @@ namespace IngameScript
                     break;
                 case 1:
                     FlightSystems(gc, ic, pc);
-                    pc.CacheValues();
                     break;
                 case 2:
                     if (gc.Lcds1.Count > 0) LCD1Sprite();
                     if (gc.Lcds2.Count > 0) LCD2Sprite();
+                    pc.CacheValues();
                     break;
             }
 
@@ -750,7 +750,7 @@ namespace IngameScript
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
             Color color = new Color();
-            color = pc.PrevH2Fill > pc.H2Cache.Filled ? Color.LightBlue 
+            color = pc.PrevH2Fill < pc.H2Cache.Filled ? Color.LightBlue 
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
                 : new Color();
@@ -759,7 +759,7 @@ namespace IngameScript
                     spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color, Color.Black);
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
-            color = pc.PrevBatFill > pc.BatCache.Filled ? Color.LightBlue
+            color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
                 : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
                 : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
                 : new Color();
