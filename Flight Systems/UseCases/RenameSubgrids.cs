@@ -4,7 +4,7 @@ using VRage.Game.ModAPI.Ingame;
 
 namespace IngameScript
 {
-    class RenameSubgrids
+    public class RenameSubgrids
     {
         public static void GetSubgridsAndRename(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid mainGrid)
         {

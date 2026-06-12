@@ -1,6 +1,6 @@
 ﻿namespace IngameScript
 {
-    enum MainState
+    public enum MainState
     {
         Abort,
         Reload,

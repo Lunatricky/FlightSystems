@@ -3,7 +3,7 @@ using VRage.Game.ModAPI.Ingame.Utilities;
 
 namespace IngameScript.Domain
 {
-    class IniContext
+    public class IniContext
     {
         readonly MyIni ini = new MyIni();
         readonly GridContext gc;

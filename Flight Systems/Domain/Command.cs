@@ -3,7 +3,7 @@ using VRageMath;
 
 namespace IngameScript.UseCases
 {
-    class Command
+    public class Command
     {
         public MainState State { get; set; }
         public CommandParam Param { get; set; }

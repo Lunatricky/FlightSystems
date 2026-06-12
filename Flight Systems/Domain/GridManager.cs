@@ -4,7 +4,7 @@ using Sandbox.ModAPI.Ingame;
 
 namespace IngameScript.Domain
 {
-    class GridManager : GridContext
+    public class GridManager : GridContext
     {
         public GridManager(IMyGridTerminalSystem grid, IMyProgrammableBlock me) : base(grid, me)
         {

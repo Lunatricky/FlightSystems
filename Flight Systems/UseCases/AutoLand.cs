@@ -5,7 +5,7 @@ using System;
 
 namespace IngameScript.UseCases
 {
-    class AutoLand
+    public class AutoLand
     {
         readonly GridManager gm;
         readonly PhysicsContext pc;

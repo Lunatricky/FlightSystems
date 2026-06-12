@@ -6,7 +6,7 @@ using VRageMath;
 
 namespace IngameScript.UseCases
 {
-    class CruiseControl
+    public class CruiseControl
     {
         readonly GridManager gm;
         readonly IniContext ic;

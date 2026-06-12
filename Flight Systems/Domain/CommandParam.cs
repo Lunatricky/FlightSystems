@@ -2,7 +2,7 @@
 
 namespace IngameScript.UseCases
 {
-    class CommandParam
+    public class CommandParam
     {
         public ParamType Type;
         public AutoLandState AutoLandState = AutoLandState.Idle;

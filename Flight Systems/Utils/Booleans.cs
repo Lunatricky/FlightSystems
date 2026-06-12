@@ -1,6 +1,6 @@
 ﻿namespace IngameScript.Utils
 {
-    class Booleans
+    public class Booleans
     {
         public bool cruiseToggle;
         public bool circumnavToggle;

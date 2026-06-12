@@ -9,7 +9,7 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    class GridContext
+    public class GridContext
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;

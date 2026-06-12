@@ -1,6 +1,6 @@
 ﻿namespace IngameScript
 {
-    enum AutoLandState
+    public enum AutoLandState
     {
         Idle,
         Abort,

@@ -2,7 +2,7 @@
 
 namespace IngameScript.UseCases
 {
-    class DockMode
+    public class DockMode
     {
         readonly GridManager gm;
         Command command;

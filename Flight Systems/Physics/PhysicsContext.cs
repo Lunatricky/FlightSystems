@@ -8,7 +8,7 @@ using VRageMath;
 
 namespace IngameScript.Physics
 {
-    class PhysicsContext
+    public class PhysicsContext
     {
         readonly GridContext gc;
         readonly SpeedTimeTracker stt;

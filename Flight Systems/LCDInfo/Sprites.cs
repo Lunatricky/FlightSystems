@@ -7,7 +7,7 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class Sprites
+   class Sprites
    {
         readonly IniContext ic;
 

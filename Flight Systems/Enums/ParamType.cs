@@ -1,6 +1,6 @@
 ﻿namespace IngameScript
 {
-    enum ParamType
+    public enum ParamType
     {
         AutoLandState,
         AutoPilotState,
