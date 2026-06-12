@@ -104,17 +104,20 @@ namespace IngameScript
             float margin = 1f;
             float innerW = panelSize.X - margin * (cols + 1);
             float innerH = panelSize.Y - margin * (rows + 1);
-            float boxW = Math.Max(10f, innerW / cols);
-            float boxH = Math.Max(10f, innerH / rows);
+            float boxW = Math.Max(2f, innerW / cols);
+            float boxH = Math.Max(2f, innerH / rows);
+
+            float incrmentY = 0f; 
+            if (panelSize.X == 512f) incrmentY = 70f;
 
             int i = 0;
             foreach (var item in items)
             {
                 int col = i % cols;
                 int row = i / cols;
-                float x = margin + col * (boxW + margin) + boxW * 0.5f - 2f;
+                float x = margin + col * (boxW + margin) + boxW * 0.5f - 25f;
                 float y = margin + row * (boxH + margin) + boxH * 0.5f;
-                var center = new Vector2(x, y);
+                var center = new Vector2(x, y + cols * incrmentY);
                 var size = new Vector2(boxW, boxH);
 
                 if (item.BackgroundColor != null) backgroundColor = item.BackgroundColor;
@@ -122,8 +125,9 @@ namespace IngameScript
 
                 sprites.Add(MakeRectSprite(center, size, backgroundColor));
 
-                var labelPos = new Vector2(x - boxW * 0.38f, y - boxH * 0.25f);
-                sprites.Add(MakeTextSprite(item.Text, labelPos, 1.7f, TextAlignment.LEFT, fontColor));
+                var labelPos = new Vector2(x - boxW * 0.38f, y - boxH * 0.25f + cols * incrmentY);
+                float scale = 1.9f - cols;
+                sprites.Add(MakeTextSprite(item.Text, labelPos, scale, TextAlignment.LEFT, fontColor));
 
                 i++;
             }

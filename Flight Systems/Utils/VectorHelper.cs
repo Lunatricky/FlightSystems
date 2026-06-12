@@ -11,9 +11,7 @@ namespace IngameScript
         {
             BoundingBoxD bb = sc.Me.CubeGrid.WorldAABB;
 
-            Vector3D shipDown = Base6Directions.GetVector(
-                Base6Directions.GetOppositeDirection(sc.Controller.Orientation.Up)
-            );
+            Vector3D shipDown = Base6Directions.GetVector(Base6Directions.GetOppositeDirection(sc.Controller.Orientation.Up));
 
             // This gives the true lowest point of the grid in the ship's "down" direction
             Vector3D lowestPoint = bb.Center - shipDown * bb.HalfExtents.Dot(shipDown);

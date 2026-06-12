@@ -173,6 +173,7 @@ namespace IngameScript
 
                 if (isDockMode != lastDockState)
                 {
+                    AbortShipContext(gc);
                     DockToggle(gc, isDockMode);
                     lastDockState = isDockMode;
                     return;
@@ -771,8 +772,6 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
-                lcd.AddImageToSelection("Online");
-                lcd.RemoveImageFromSelection("Online");
                 spt.DrawInfoPanel(lcd, 1);
             }
         }
@@ -825,8 +824,6 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
-                lcd.AddImageToSelection("Online");
-                lcd.RemoveImageFromSelection("Online");
                 spt.DrawInfoPanel(lcd, 1);
             }
         }
@@ -942,7 +939,7 @@ namespace IngameScript
 
             gc.Controller.DampenersOverride = false;
             AlignToGravity(gc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -104);
+            VectorHelper.MatchVerticalSpeed(gc, pc, -ic.MaxSpeed - 10 );
             return pc.EffectiveAlt < 1.1 * pc.StopYDist + gc.GridHeight;
         }
 

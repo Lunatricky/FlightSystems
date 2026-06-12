@@ -17,8 +17,8 @@ namespace IngameScript.Domain
         string ignoreTag;
         readonly StringBuilder errorMessage;
 
-        double centerGridHight;
-        double bottomGridHight;
+        double centerGridHeight;
+        double bottomGridHeight;
         double gridHeight;
 
         IMyRemoteControl controller;
@@ -26,7 +26,6 @@ namespace IngameScript.Domain
 
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
-        List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
         List<IMyShipConnector> connectors = new List<IMyShipConnector>();
         List<IMyGasTank> tanks = new List<IMyGasTank>();
         List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
@@ -41,7 +40,9 @@ namespace IngameScript.Domain
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
+        List<IMyTextSurface> slopedLcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
+        List<IMyTextSurface> slopedLcds2 = new List<IMyTextSurface>();
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -102,11 +103,11 @@ namespace IngameScript.Domain
             Vector3D shipBottom = VectorHelper.GetLowestPoint(this);
 
             // project onto gravity vector
-            CenterGridHeight = center.Dot(gravityDir);
-            BottomGridHeight = shipBottom.Dot(gravityDir);
+            centerGridHeight = center.Dot(gravityDir);
+            bottomGridHeight = shipBottom.Dot(gravityDir);
 
             // height difference along gravity
-            GridHeight = Math.Abs(CenterGridHeight - BottomGridHeight);
+            GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
             return this;
         }
 
@@ -179,7 +180,7 @@ namespace IngameScript.Domain
         List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool isIgnoreTag = false, bool setupSurface = false)
         {
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
-            // LCDs
+            
             var blocks = new List<IMyTerminalBlock>();
             if (isIgnoreTag)
             {
@@ -210,6 +211,13 @@ namespace IngameScript.Domain
                     }
                 }
             }
+
+            foreach (IMyTextSurface lcd in lcds)
+            {
+                lcd.AddImageToSelection("Online");
+                lcd.RemoveImageFromSelection("Online");
+            }
+
             return lcds;
         }
 
@@ -308,7 +316,7 @@ namespace IngameScript.Domain
             return this;
         }
 
-        public List<IMyFunctionalBlock> ReloadOverrideGroup(string overrideBlockTag)
+        List<IMyFunctionalBlock> ReloadOverrideGroup(string overrideBlockTag)
         {
             List<IMyFunctionalBlock> OverrideBlocks = new List<IMyFunctionalBlock>();
             GridTS.GetBlocksOfType(OverrideBlocks, block =>
@@ -419,32 +427,6 @@ namespace IngameScript.Domain
             }
         }
 
-        public double CenterGridHeight
-        {
-            get
-            {
-                return centerGridHight;
-            }
-
-            set
-            {
-                centerGridHight = value;
-            }
-        }
-
-        public double BottomGridHeight
-        {
-            get
-            {
-                return bottomGridHight;
-            }
-
-            set
-            {
-                bottomGridHight = value;
-            }
-        }
-
         public double GridHeight
         {
             get
@@ -491,7 +473,7 @@ namespace IngameScript.Domain
         public List<IMyGasTank> H2Tanks => h2Tanks;
         public List<IMyBatteryBlock> Batteries => batteries;
         public List<IMyRadioAntenna> Antennas => antennas;
-        public List<IMyShipController> Controllers => controllers;
+        List<IMyShipController> Controllers => controllers;
         public List<IMyThrust> BreakingThrusters => breakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
         public List<IMyThrust> UpwardThrusters => upwardThrusters;
