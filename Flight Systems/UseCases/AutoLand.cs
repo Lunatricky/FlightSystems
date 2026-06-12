@@ -2,24 +2,23 @@
 using IngameScript.Physics;
 using IngameScript.Utils;
 using System;
-using VRageMath;
 
 namespace IngameScript.UseCases
 {
     class AutoLand
     {
-        readonly GridContext gc;
         readonly GridManager gm;
         readonly PhysicsContext pc;
         Command command;
+        Booleans b;
         int tc;
 
-        public AutoLand(GridContext gc, GridManager gm, PhysicsContext pc, Command command, int tickCount)
+        public AutoLand(GridManager gm, PhysicsContext pc, Command command, Booleans b, int tickCount)
         {
-            this.gc = gc;
             this.gm = gm;
             this.pc = pc;
             this.command = command;
+            this.b = b;
             tc = tickCount;
         }
 
@@ -31,16 +30,16 @@ namespace IngameScript.UseCases
                     break;
 
                 case AutoLandState.Align:
-                    gm.SoftAbort();
-                    if (VectorHelper.AlignToGravity(gc, pc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    gm.SoftAbort(b);
+                    if (VectorHelper.AlignToGravity(gm, pc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
-                    if (AutoLandCalc(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (AutoLandCalc(gm)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) gm.AbortShipContext(ref command, ref tc);
+                    if (TryLock(gm)) gm.AbortShipContext(command, b, ref tc);
                     break;
             }
         }
@@ -53,65 +52,65 @@ namespace IngameScript.UseCases
                     break;
 
                 case AutoLandState.Align:
-                    gm.SoftAbort();
-                    if (VectorHelper.AlignToGravity(gc, pc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    gm.SoftAbort(b);
+                    if (VectorHelper.AlignToGravity(gm, pc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
-                    if (SuicideBurn(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (SuicideBurn(gm)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) gm.AbortShipContext(ref command, ref tc);
+                    if (TryLock(gm)) gm.AbortShipContext( command, b,ref tc);
                     break;
             }
         }
 
-        bool SuicideBurn(GridContext gc)
+        bool SuicideBurn(GridManager gm)
         {
             if (pc.NetDecel - 1 < 0)
             {
-                gm.AbortShipContext(ref command, ref tc);
+                this.gm.AbortShipContext(command, b, ref tc);
                 command.State = MainState.Cruise;
                 command.Param.Text = "orbit";
             }
 
-            gc.Controller.DampenersOverride = false;
-            VectorHelper.AlignToGravity(gc, pc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -104);
-            return pc.EffectiveAlt < 1.1 * pc.StopYDist + gc.GridHeight;
+            gm.Controller.DampenersOverride = false;
+            VectorHelper.AlignToGravity(gm, pc);
+            VectorHelper.MatchVerticalSpeed(gm, pc, -104);
+            return pc.EffectiveAlt < 1.1 * pc.StopYDist + gm.GridHeight;
         }
 
-        bool AutoLandCalc(GridContext gc)
+        bool AutoLandCalc(GridManager gm)
         {
             if (pc.NetDecel - 0.5 < 0)
             {
-                gm.AbortShipContext(ref command, ref tc);
+                this.gm.AbortShipContext(command, b, ref tc);
                 command.State = MainState.Cruise;
                 command.Param.Text = "orbit";
             }
 
-            gc.Controller.DampenersOverride = false;
-            VectorHelper.AlignToGravity(gc, pc);
+            gm.Controller.DampenersOverride = false;
+            VectorHelper.AlignToGravity(gm, pc);
 
             double speedFromAlt = (100 + pc.GroundLevel) * 0.08;
             double speedFromAccel = 20 * pc.NetDecel;
             double speedMin = -Math.Min(speedFromAlt, speedFromAccel);
 
-            if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
-            return pc.EffectiveAlt < 10 + 2 * gc.GridHeight;
+            if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gm, pc, speedMin);
+            return pc.EffectiveAlt < 10 + 2 * gm.GridHeight;
         }
 
-        bool TryLock(GridContext gc)
+        bool TryLock(GridManager gm)
         {
-            VectorHelper.AlignToGravity(gc, pc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -2);
-            gc.Controller.DampenersOverride = true;
+            VectorHelper.AlignToGravity(gm, pc);
+            VectorHelper.MatchVerticalSpeed(gm, pc, -2);
+            gm.Controller.DampenersOverride = true;
 
-            foreach (var g in gc.Gears)
+            foreach (var g in gm.Gears)
                 g.Lock();
 
-            return gc.Gears.Exists(g => g.IsLocked);
+            return gm.Gears.Exists(g => g.IsLocked);
         }
     }
 }

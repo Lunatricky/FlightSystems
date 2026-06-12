@@ -9,7 +9,7 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    public class GridContext
+    class GridContext
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
@@ -66,8 +66,8 @@ namespace IngameScript.Domain
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
 
-            GridManager.GetOwnGridBlocks(remotes, this, IgnoreTag);
-            GridManager.GetOwnGridBlocks(cockpits, this, IgnoreTag);
+            GetOwnGridBlocks(remotes, this, IgnoreTag);
+            GetOwnGridBlocks(cockpits, this, IgnoreTag);
 
             foreach (IMyRemoteControl remote in remotes)
             {
@@ -117,7 +117,7 @@ namespace IngameScript.Domain
             UpwardThrusters.Clear();
 
             List<IMyThrust> allThrusters = new List<IMyThrust>();
-            GridManager.GetOwnGridBlocks(allThrusters, this, IgnoreTag);
+            GetOwnGridBlocks(allThrusters, this, IgnoreTag);
 
             foreach (var thruster in allThrusters)
             {
@@ -138,19 +138,19 @@ namespace IngameScript.Domain
 
         public GridContext ReloadGyros()
         {
-            GridManager.GetOwnGridBlocks(Gyros, this, IgnoreTag);
+            GetOwnGridBlocks(Gyros, this, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadGears()
         {
-            GridManager.GetOwnGridBlocks(Gears, this, IgnoreTag);
+            GetOwnGridBlocks(Gears, this, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadAntennas(bool controlAntennas)
         {
-            GridManager.GetOwnGridBlocks(Antennas, this, IgnoreTag);
+            GetOwnGridBlocks(Antennas, this, IgnoreTag);
             if (controlAntennas)
             {
                 foreach (IMyRadioAntenna antenna in Antennas)
@@ -233,7 +233,7 @@ namespace IngameScript.Domain
         public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GridManager.GetOwnGridBlocks(Connectors, this, IgnoreTag);
+            GetOwnGridBlocks(Connectors, this, IgnoreTag);
             SetConnectors();
 
             return this;
@@ -241,14 +241,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadTanks()
         {
-            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
+            GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             return this;
         }
 
         public GridContext ReloadH2Tanks()
         {
-            GridManager.GetOwnGridBlocks(Tanks, this, IgnoreTag);
+            GetOwnGridBlocks(Tanks, this, IgnoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -262,7 +262,7 @@ namespace IngameScript.Domain
 
         public GridContext ReloadBatteries(string backupTag)
         {
-            GridManager.GetOwnGridBlocks(Batteries, this, IgnoreTag);
+            GetOwnGridBlocks(Batteries, this, IgnoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -365,6 +365,16 @@ namespace IngameScript.Domain
         {
             return tank.BlockDefinition.SubtypeName
                 .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        void GetOwnGridBlocks<T>(List<T> list, GridContext gc, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        {
+            list.Clear();
+            bool hasIgnore = !string.IsNullOrEmpty(__ignoreTag);
+            GridTS.GetBlocksOfType(list, block =>
+                block.IsSameConstructAs(Me)
+                && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
+                && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
+            );
         }
 
         public string IgnoreTag

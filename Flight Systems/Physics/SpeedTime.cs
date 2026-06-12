@@ -1,6 +1,6 @@
 ﻿namespace IngameScript.Physics
 {
-    public class SpeedTime
+    class SpeedTime
     {
         public double Speed { get; set; }
         public double Time { get; set; }

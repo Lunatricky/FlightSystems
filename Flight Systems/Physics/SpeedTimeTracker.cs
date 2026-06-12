@@ -2,7 +2,7 @@
 
 namespace IngameScript.Physics
 {
-    public class SpeedTimeTracker
+    class SpeedTimeTracker
     {
         readonly List<SpeedTime> speedTimeValues;
         const int SpeedTimeTrackerMaxSize = 100;

@@ -15,7 +15,6 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        GridContext gc;
         GridManager gm;
         IniContext ic;
         PhysicsContext pc;
@@ -28,8 +27,8 @@ namespace IngameScript
         readonly IMyGridTerminalSystem gridTerminalSystem;
         readonly IMyProgrammableBlock me;
 
-        Command command = Command.Empty;
-        int tickCount;
+        Command command;
+        int tc;
         double timeSinceLastRun;
         StringBuilder scriptInfo;
         string argument;
@@ -41,6 +40,8 @@ namespace IngameScript
                 
         public Program()
         {
+            command = Command.Empty;
+
             scriptInfo = new StringBuilder();
             gridTerminalSystem = GridTerminalSystem;
             me = Me;
@@ -54,50 +55,52 @@ namespace IngameScript
 
         private void InicializeContexts()
         {
-            gc = new GridContext(gridTerminalSystem, me);
-            gm = new GridManager(gc, b);
-            ic = new IniContext(gc);
-            pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
-            cc = new CruiseControl(gc, gm, ic, pc, b, command, timeSinceLastRun, tickCount);
-            al = new AutoLand(gc, gm, pc, command, tickCount);
+            gm = new GridManager(gridTerminalSystem, me);
+            ic = new IniContext(gm);
+            pc = new PhysicsContext(gm, stt, command, timeSinceLastRun);
+            cc = new CruiseControl(gm, ic, pc, b, command, timeSinceLastRun, tc);
+            al = new AutoLand(gm, pc, command, b, tc);
             dm = new DockMode(gm, command);
-            text = new Text(gc, ic, pc, b, command);
+            text = new Text(gm, ic, pc, b, command);
 
             ic.ParseIni();
-            gc.IgnoreTag = ic.IgnoreTag;
+            gm.IgnoreTag = ic.IgnoreTag;
         }
 
         int tick = 0;
 
         public void Main(string argument)
         {
+            timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
             Echo("argument: " + argument);
-            if (gc.ErrorMessage.Length > 0)
+            if (gm.ErrorMessage.Length > 0)
             {
-                Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
+                Echo("ErrorMessage: \n" + gm.ErrorMessage.ToString());
                 return;
             }
 
             if (!string.IsNullOrEmpty(argument)) this.argument = argument;
+            Echo("maxSpeed: " + ic.MaxSpeed);
             Echo("argument: " + this.argument);
+            Echo("command: " + command.State);
 
             Echo(scriptInfo.ToString());
-            gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
+            gm.Me.GetSurface(0).WriteText(scriptInfo.ToString());
 
-            tickCount++;
-            if (tickCount % 1000 == 1)
+            tc++;
+            if (tc % 1000 == 1)
             {
                 ic.ParseIni();
 
-                if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
+                if (!string.IsNullOrWhiteSpace(gm.GridName) && !gm.GridName.Contains(" Grid "))
                 {
-                    gc.Me.CubeGrid.CustomName = gc.GridName;
+                    gm.Me.CubeGrid.CustomName = gm.GridName;
                 }
             }
 
-            if (ic.IniAnyChanged || gc.Controller == null || gc.Controller.Closed)
+            if (ic.IniAnyChanged || gm.Controller == null || gm.Controller.Closed)
             {
-                ReloadGridContext(ref gc, ref ic);
+                ReloadGridManager(gm, ic);
                 tick = 0;
                 return;
             }
@@ -105,22 +108,21 @@ namespace IngameScript
             switch (tick % 3)
             {
                 case 0:
-                    timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
                     pc.NewRun(timeSinceLastRun);
                     scriptInfo = text.ScriptInfo();
                     break;
                 case 1:
-                    FlightSystems(gc, ic, pc);
+                    FlightSystems(gm, ic, pc);
                     break;
                 case 2:
                     if (ic.UseSprites)
                     {
-                        if (gc.Lcds1.Count > 0) LCD1Sprite();
-                        if (gc.Lcds2.Count > 0) LCD2Sprite();
+                        if (gm.Lcds1.Count > 0) LCD1Sprite();
+                        if (gm.Lcds2.Count > 0) LCD2Sprite();
                     } else
                     {
-                        if (gc.Lcds1.Count > 0) text.WriteInfo();
-                        if (gc.Lcds2.Count > 0) text.WriteInfo2();
+                        if (gm.Lcds1.Count > 0) text.WriteInfo();
+                        if (gm.Lcds2.Count > 0) text.WriteInfo2();
                     }
                     pc.CacheValues();
                     break;
@@ -131,7 +133,7 @@ namespace IngameScript
             Echo(GetRuntimeInfo());
         }
 
-        private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc)
+        private void FlightSystems(GridManager gm, IniContext ic, PhysicsContext pc)
         {
             if (!string.IsNullOrEmpty(argument))
             {
@@ -142,7 +144,7 @@ namespace IngameScript
             if (ic.AllowDockMode)
             {
                 bool anyConnected = gm.IsAnyConnectorConnected();
-                bool isGearlocked = gc.Gears.Exists(g => g.IsLocked);
+                bool isGearlocked = gm.Gears.Exists(g => g.IsLocked);
                 dm.IsDockMode = anyConnected || isGearlocked;
 
                 if (dm.IsDockMode != lastDockState)
@@ -157,10 +159,10 @@ namespace IngameScript
 
             if (ic.ControlAntennas)
             {
-                gc.Antennas.ForEach(b => { if (b != null) b.Enabled = false; });
-                if (gc.Antennas.Count > 0)
+                gm.Antennas.ForEach(antenna => { if (antenna != null) antenna.Enabled = false; });
+                if (gm.Antennas.Count > 0)
                 {
-                    var firstValid = gc.Antennas.FirstOrDefault(b => b != null && !b.Closed);
+                    var firstValid = gm.Antennas.FirstOrDefault(antenna => antenna != null && !antenna.Closed);
                     if (firstValid != null) firstValid.Enabled = true;
                 }
             }
@@ -174,11 +176,11 @@ namespace IngameScript
 
             if (ic.AllowLowFuelLand && pc.Gravity > 0)
             {
-                if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
+                if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gm.Controller.GetNaturalGravity().Length() / 9.81 > 0.75)
                 {
                     command.State = MainState.Land;
                 }
-                else if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
+                else if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gm.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
                 {
                     command.State = MainState.Cruise;
                     command.Param.Text = "orbit";
@@ -188,26 +190,26 @@ namespace IngameScript
             switch (command.State)
             {
                 case MainState.Reload:
-                    ReloadGridContext(ref gc, ref ic);
+                    ReloadGridManager(gm, ic);
                     break;
                 case MainState.Abort:
-                    gm.AbortShipContext(ref command, ref tickCount);
+                    gm.AbortShipContext(command, b, ref tc);
                     break;
                 case MainState.Dock:
                     dm.DockStateSwitch();
                     return;
                 case MainState.Cruise:
-                    gc.Controller.DampenersOverride = true;
+                    gm.Controller.DampenersOverride = true;
                     cc.CruiseControlStateSwitch();
                     break;
                 case MainState.CNav: // Circumnavigation
-                    gc.Controller.DampenersOverride = true;
+                    gm.Controller.DampenersOverride = true;
                     cc.CircumNavigateStateSwitch();
                     break;
                 case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
                     {
-                        gm.AbortShipContext(ref command, ref tickCount);
+                        gm.AbortShipContext(command, b, ref tc);
                         return;
                     }
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
@@ -227,7 +229,7 @@ namespace IngameScript
             if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
             {
                 b.stopCruiseWhenOutOfGrav = b.lastCheckIsOnNatGrav = b.cruiseToggle = false;
-                gm.AbortShipContext(ref command, ref tickCount);
+                gm.AbortShipContext(command, b, ref tc);
             }
             else
             {
@@ -235,61 +237,62 @@ namespace IngameScript
             }
         }
 
-        private void ReloadGridContext(ref GridContext gc, ref IniContext ic)
+        private void ReloadGridManager(GridManager gm, IniContext ic)
         {
             InicializeContexts();
 
-            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag)
+            gm.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag)
                     .ReloadH2Tanks()
                     .ReloadBatteries(ic.BackupBatteryTag);
 
             // Flight cached blocks
             if (ic.AllowFlightSystems)
             {
-                gc.ReloadControllers(ic.ControllerTag);
+                gm.ReloadControllers(ic.ControllerTag);
 
-                if (gc.ErrorMessage.Length > 0)
+                if (gm.ErrorMessage.Length > 0)
                     return;
 
-                gc.ReloadGridHeight()
+                gm.ReloadGridHeight()
                     .ReloadThrusters()
                     .ReloadGyros()
                     .ReloadGears();
 
-                b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
-                gm.AbortShipContext(ref command, ref tickCount);
+                b.lastCheckIsOnNatGrav = gm.Controller.GetNaturalGravity().LengthSquared() > 0;
+
+                gm.AbortShipContext(command, b, ref tc);
             }
 
             // Dock cached blocks
             if (ic.AllowDockMode)
-                gc.ReloadConnectors()
+                gm.ReloadConnectors()
                 .ReloadGears()
                 .ReloadTanks()
                 .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
 
             if (ic.ControlAntennas)
-                gc.ReloadAntennas(ic.ControlAntennas);
+                gm.ReloadAntennas(ic.ControlAntennas);
 
             if (ic.RenameSubgrids)
             {
                 // Get main grid (where this PB is)
-                IMyCubeGrid mainGrid = gc.Me.CubeGrid;
+                IMyCubeGrid mainGrid = gm.Me.CubeGrid;
                 if (mainGrid != null)
                 {
-                    RenameSubgrids.GetSubgridsAndRename(gc.GridTS, mainGrid);
+                    RenameSubgrids.GetSubgridsAndRename(gm.GridTS, mainGrid);
                 }
             }
 
             if (ic.PaintSurfaces)
             {
-                gc.ReloadSurfaces();
+                gm.ReloadSurfaces();
 
-                foreach(IMyTextSurface surface in gc.Surfaces)
+                foreach(IMyTextSurface surface in gm.Surfaces)
                 {
                     Color backgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor);
                     Color fontColor = ColorMap.GetColorFromString(ic.FontColor);
 
-                    GridContext.PaintSurface(surface, backgroundColor, fontColor);
+                    GridManager.PaintSurface(surface, backgroundColor, fontColor);
                 }
             }
         }
@@ -297,7 +300,7 @@ namespace IngameScript
         private void LCD1Sprite()
         {
             Sprites spt = new Sprites(ic);
-            spt.Add(gc.GridName);
+            spt.Add(gm.GridName);
 
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);
@@ -332,7 +335,7 @@ namespace IngameScript
                 spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color, Color.Black );
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
-            foreach (IMyTextSurface lcd in gc.Lcds1)
+            foreach (IMyTextSurface lcd in gm.Lcds1)
             {
                 lcd.AddImageToSelection("Online");
                 lcd.RemoveImageFromSelection("Online");
@@ -386,7 +389,7 @@ namespace IngameScript
                 spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
 
-            foreach (IMyTextSurface lcd in gc.Lcds2)
+            foreach (IMyTextSurface lcd in gm.Lcds2)
             {
                 lcd.AddImageToSelection("Online");
                 lcd.RemoveImageFromSelection("Online");

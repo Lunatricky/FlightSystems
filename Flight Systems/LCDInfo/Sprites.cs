@@ -7,14 +7,13 @@ using VRageMath;
 
 namespace IngameScript
 {
-    partial class Sprites
+    class Sprites
    {
         readonly IniContext ic;
-        public List<TextSprite> TextList => textList;
 
         readonly List<TextSprite> textList;
 
-        public struct TextSprite {public string Text; public Color BackgroundColor; public Color FontColor;}
+        struct TextSprite {public string Text; public Color BackgroundColor; public Color FontColor;}
 
         public Sprites(IniContext ic)
         {

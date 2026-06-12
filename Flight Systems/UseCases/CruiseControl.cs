@@ -8,7 +8,6 @@ namespace IngameScript.UseCases
 {
     class CruiseControl
     {
-        readonly GridContext gc;
         readonly GridManager gm;
         readonly IniContext ic;
         readonly PhysicsContext pc;
@@ -19,9 +18,8 @@ namespace IngameScript.UseCases
 
         Vector3D desiredUp;
 
-        public CruiseControl(GridContext gc, GridManager gm, IniContext ic, PhysicsContext pc, Booleans b, Command command, double timeSinceLastRun, int tickCount)
+        public CruiseControl(GridManager gm, IniContext ic, PhysicsContext pc, Booleans b, Command command, double timeSinceLastRun, int tickCount)
         {
-            this.gc = gc;
             this.gm = gm;
             this.ic = ic;
             this.pc = pc;
@@ -47,7 +45,7 @@ namespace IngameScript.UseCases
                     CruiseControlCalc(CruiseSpeed, tslr);
                     break;
                 case "off":
-                    gm.AbortShipContext(ref command, ref tc);
+                    gm.AbortShipContext(command, b, ref tc);
                     break;
                 case "orbit":
                     b.cruiseToggle = !b.cruiseToggle;
@@ -64,11 +62,11 @@ namespace IngameScript.UseCases
                             command.State = MainState.Gps;
                             command.Param.Text = "on";
                         }
-                        else gm.AbortShipContext(ref command, ref tc);
+                        else gm.AbortShipContext(command, b, ref tc);
                     }
                     break;
                 case "align":
-                    if (VectorHelper.AlignToGravity(gc, pc))
+                    if (VectorHelper.AlignToGravity(gm, pc))
                     {
                         command.Param.Text = "climb";
                         desiredUp = pc.DesiredUpVector;
@@ -85,19 +83,19 @@ namespace IngameScript.UseCases
                         }
                         else
                         {
-                            gm.AbortShipContext(ref command, ref tc);
+                            gm.AbortShipContext(command, b, ref tc);
                             command.State = MainState.CNav;
                         }
                     }
-                    Vector3D shipUp = gc.Controller.WorldMatrix.Up;
-                    VectorHelper.AlignToVector(gc, pc, shipUp, false, desiredUp);
+                    Vector3D shipUp = gm.Controller.WorldMatrix.Up;
+                    VectorHelper.AlignToVector(gm, pc, shipUp, false, desiredUp);
                     CruiseControlCalc(CruiseSpeed, tslr);
                     break;
                 case "glide":
                     CruiseControlCalc(CruiseSpeed, tslr);
                     if (pc.EffectiveAlt < 500 + pc.StopYDist)
                     {
-                        gm.AbortShipContext(ref command, ref tc);
+                        gm.AbortShipContext(command, b, ref tc);
                         command.State = MainState.Land;
                     }
                     break;
@@ -118,7 +116,7 @@ namespace IngameScript.UseCases
                 case "on":
                     if (pc.EffectiveAlt < ic.CnavAltitude)
                     {
-                        gm.SoftAbort();
+                        gm.SoftAbort(b);
                         b.circumnavCheckAltitude = true;
                         command.State = MainState.Cruise;
                         command.Param.Text = "orbit";
@@ -127,17 +125,17 @@ namespace IngameScript.UseCases
                     CruiseControlCalc(CruiseSpeed, tslr);
                     if (!b.autoPilotToggle)
                     {
-                        VectorHelper.AlignToGravity(gc, pc);
+                        VectorHelper.AlignToGravity(gm, pc);
                     }
                     else if (pc.DistanceToLine < ic.DistanceToGPS + pc.StopZDist)
                     {
                         command.State = MainState.Land;
                         b.autoPilotToggle = false;
                     }
-                    else if (VectorHelper.AlignToGravity(gc, pc) && b.autoPilotToggle && VectorHelper.AimYawOnlyAt(gc, pc, command.Param.TargetCoordinates)) ;
+                    else if (VectorHelper.AlignToGravity(gm, pc) && b.autoPilotToggle && VectorHelper.AimYawOnlyAt(gm, pc, command.Param.TargetCoordinates)) ;
                     break;
                 case "off":
-                    gm.AbortShipContext(ref command, ref tc);
+                    gm.AbortShipContext(command, b, ref tc);
                     break;
             }
         }
@@ -217,7 +215,7 @@ namespace IngameScript.UseCases
 
             // Apply thrusters: enable brake thrusters only when brake significant
             bool useBrakes = currentBrake > 1e-4;
-            foreach (var bt in gc.BreakingThrusters)
+            foreach (var bt in gm.BreakingThrusters)
             {
                 bt.Enabled = useBrakes;
                 bt.ThrustOverridePercentage = (float)currentBrake;
@@ -225,7 +223,7 @@ namespace IngameScript.UseCases
 
             // Apply forward thrusters
             bool useForward = currentOverride > 1e-4;
-            foreach (var ft in gc.ForwardThrusters)
+            foreach (var ft in gm.ForwardThrusters)
             {
                 ft.Enabled = useForward;
                 ft.ThrustOverridePercentage = (float)currentOverride;
