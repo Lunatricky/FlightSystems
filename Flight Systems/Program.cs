@@ -78,6 +78,8 @@ namespace IngameScript
                 return;
             }
 
+            timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
+
             if (!string.IsNullOrEmpty(argument)) this.argument = argument;
 
             Echo(scriptInfo.ToString());
@@ -104,7 +106,6 @@ namespace IngameScript
             switch (tick % 3)
             {
                 case 0:
-                    timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
                     pc.NewRun(timeSinceLastRun);
                     scriptInfo = ScriptInfo();
                     break;
