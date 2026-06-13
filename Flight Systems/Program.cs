@@ -743,7 +743,7 @@ namespace IngameScript
 
         private void LCD1Sprite()
         {
-            Sprites spt = new Sprites(ic);
+            Sprites spt = new Sprites();
             spt.Add(gc.GridName);
 
             StringBuilder state = new StringBuilder();
@@ -768,7 +768,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color, Color.Black);
+                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
             color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
@@ -777,18 +777,18 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color, Color.Black );
+                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
-                spt.DrawInfoPanel(lcd, 1);
+                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 
         void LCD2Sprite()
         {
-            Sprites spt = new Sprites(ic);
+            Sprites spt = new Sprites();
 
             if (pc.Gravity > 0)
             {
@@ -802,9 +802,9 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", color, Color.Black);
+                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", ColorMap.GetStringFromColor(color));
                     ClimbRateAndAccel(spt);
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color, Color.Black);
+                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", ColorMap.GetStringFromColor(color));
                 }
                 else
                 {
@@ -834,7 +834,7 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
-                spt.DrawInfoPanel(lcd, 1);
+                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 

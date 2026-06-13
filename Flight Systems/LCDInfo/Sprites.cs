@@ -9,37 +9,24 @@ namespace IngameScript
 {
     partial class Sprites
    {
-        IniContext ic;
-        public List<TextSprite> TextList => textList;
-        List<TextSprite> textList;
+        readonly List<string> texts = new List<string>();
+        readonly List<string> colors = new List<string>();
 
-        public struct TextSprite {public string Text; public Color BackgroundColor; public Color FontColor;}
-
-        public Sprites(IniContext ic)
+        public void Add(string s, string c = null)
         {
-            this.ic = ic;
-            textList = new List<TextSprite>();
-        }
-
-        public void Add(string text)
-        {
-            textList.Add(new TextSprite { Text = text, BackgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor), FontColor = ColorMap.GetColorFromString(ic.FontColor) });
-        }
-
-        public void Add(string text, Color backgroundColor, Color fontColor)
-        {
-            textList.Add(new TextSprite { Text = text, BackgroundColor = backgroundColor, FontColor = fontColor });
+            texts.Add(s);
+            colors.Add(c);
         }
 
         // Usage example
-        public void DrawInfoPanel(IMyTextSurface panel, int cols)
+        public void DrawInfoPanel(IMyTextSurface panel, int cols, Color fontColor, Color backgroundColor)
         {
             panel.ContentType = ContentType.SCRIPT;
 
             List<MySprite> sprites = new List<MySprite>();
 
-            if (textList != null && textList.Count > 0)
-                sprites = BuildSprites(textList, panel.SurfaceSize, cols);
+            if (texts != null && texts.Count > 0)
+                sprites = BuildSprites(panel.SurfaceSize, cols, fontColor, backgroundColor);
 
             using (var frame = panel.DrawFrame())
             {
@@ -60,58 +47,39 @@ namespace IngameScript
             return s;
         }
 
-        // Helper: create a MySprite text
-        MySprite MakeTextSprite(string text, Vector2 pos, float scale, TextAlignment align, Color fontColor)
+        private static MySprite MakeTextSprite(Color fontColor, string text, Vector2 size, Vector2 labelPos, float scale)
         {
-            MySprite s = new MySprite();
-            s.Type = SpriteType.TEXT;
-            s.Data = text;
-            s.Position = pos;
-            s.Color = fontColor;
-            s.RotationOrScale = scale;
-            s.FontId = "DEBUG";
-            s.Alignment = align;
-            return s;
+            MySprite sprite = new MySprite();
+            sprite.Type = SpriteType.TEXT;
+            sprite.Data = text;
+            sprite.Position = labelPos;
+            sprite.Size = size;
+            sprite.Color = fontColor;
+            sprite.RotationOrScale = scale;
+            sprite.FontId = "DEBUG";
+            sprite.Alignment = TextAlignment.CENTER;
+            return sprite;
         }
 
         // Build sprites for a list of InfoItem
-        List<MySprite> BuildSprites(List<TextSprite> items, Vector2 panelSize, int cols)
-        {
-            Color backgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor);
-            Color fontColor = ColorMap.GetColorFromString(ic.FontColor);
-            
+        List<MySprite> BuildSprites(Vector2 panelSize, int cols, Color fontColor, Color backgroundColor)
+        {            
             var sprites = new List<MySprite>();
-            if (items == null || items.Count == 0)
-            {
-                sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, backgroundColor));
-                sprites.Add(MakeTextSprite("No data", panelSize * 0.5f, 1.2f, TextAlignment.CENTER, fontColor));
-                return sprites;
-            }
-
             // background
             sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, backgroundColor));
 
-            int n = items.Count;
-            if (cols <= 0)
-            {
-                if (n <= 3) cols = n;
-                else if (n <= 6) cols = 3;
-                else cols = 4;
-            }
-            if (cols > n) cols = n;
-            int rows = (int)Math.Ceiling((double)n / cols);
+            int rows = texts.Count;
 
             float margin = 1f;
             float innerW = panelSize.X - margin * (cols + 1);
             float innerH = panelSize.Y - margin * (rows + 1);
-            float boxW = Math.Max(2f, innerW / cols);
-            float boxH = Math.Max(2f, innerH / rows);
+            float boxW = innerW / cols;
+            float boxH = innerH / rows;
 
-            float incrmentY = 0f; 
+            float incrmentY = 0f;
             if (panelSize.X == 512f) incrmentY = 70f;
 
-            int i = 0;
-            foreach (var item in items)
+            for (int i = 0; i < rows; i++)
             {
                 int col = i % cols;
                 int row = i / cols;
@@ -120,16 +88,17 @@ namespace IngameScript
                 var center = new Vector2(x, y + cols * incrmentY);
                 var size = new Vector2(boxW, boxH);
 
-                if (item.BackgroundColor != null) backgroundColor = item.BackgroundColor;
-                if (item.FontColor != null) fontColor = item.FontColor;
-
                 sprites.Add(MakeRectSprite(center, size, backgroundColor));
 
                 var labelPos = new Vector2(x - boxW * 0.38f, y - boxH * 0.25f + cols * incrmentY);
                 float scale = 1.9f - cols;
-                sprites.Add(MakeTextSprite(item.Text, labelPos, scale, TextAlignment.LEFT, fontColor));
 
-                i++;
+                Color color;
+
+                if (colors[i] == null) color = fontColor;
+                else color = ColorMap.GetColorFromString(colors[i]);
+
+                sprites.Add(MakeTextSprite(color, texts[i], size, labelPos, scale));
             }
 
             return sprites;
