@@ -9,6 +9,7 @@ using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 using IngameScript.UseCases;
 using IngameScript.Domain;
+using VRage.Game.GUI.TextPanel;
 
 namespace IngameScript
 {
@@ -72,6 +73,15 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            foreach(IMyTextSurface surface in gc.Lcds1)
+            {
+                Echo("========");
+                Echo("Name       : " + surface.Name);
+                Echo("DisplayName: " + surface.DisplayName);
+                Echo("X: " + surface.SurfaceSize.X);
+                Echo("Y: " + surface.SurfaceSize.Y);
+            } 
+
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());

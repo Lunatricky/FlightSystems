@@ -115,7 +115,7 @@ namespace IngameScript
             {
                 int col = i % cols;
                 int row = i / cols;
-                float x = margin + col * (boxW + margin) + boxW * 0.5f - 25f;
+                float x = margin + col * (boxW + margin) + boxW * 0.5f;
                 float y = margin + row * (boxH + margin) + boxH * 0.5f;
                 var center = new Vector2(x, y + cols * incrmentY);
                 var size = new Vector2(boxW, boxH);
