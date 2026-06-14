@@ -73,15 +73,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            foreach(IMyTextSurface surface in gc.Lcds1)
-            {
-                Echo("========");
-                Echo("Name       : " + surface.Name);
-                Echo("DisplayName: " + surface.DisplayName);
-                Echo("X: " + surface.SurfaceSize.X);
-                Echo("Y: " + surface.SurfaceSize.Y);
-            } 
-
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -288,9 +279,8 @@ namespace IngameScript
 
         public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
         {
-            scriptInfo.AppendLine(gc.GridName);
-            scriptInfo.AppendLine(new string('-', 28));
-            scriptInfo.Append("State: " + command.State);
+            scriptInfo.AppendLine("Flight systems - " + gc.GridName);
+            scriptInfo.Append("    State: " + command.State);
 
             if (!string.IsNullOrEmpty(command.Param.Text))
                 scriptInfo.Append(" - " + command.Param.Text);
@@ -304,37 +294,36 @@ namespace IngameScript
 
         public StringBuilder ScriptInfoBlocks(IniContext ic, StringBuilder scriptInfo)
         {
-            scriptInfo.AppendLine();
             scriptInfo.AppendLine("Toggles");
-            scriptInfo.AppendLine(IniContext.FLIGHT_SYSTEMS + ": " + ic.AllowFlightSystems);
-            scriptInfo.AppendLine(IniContext.LOW_FUEL_LAND + ": " + ic.AllowLowFuelLand);
-            scriptInfo.AppendLine(IniContext.DOCK_MODE + ": " + ic.AllowDockMode);
-            scriptInfo.AppendLine(IniContext.CONTROL_ANTENNAS + ": " + ic.ControlAntennas);
-            scriptInfo.AppendLine(IniContext.RENAME_SUBGRIDS + ": " + ic.RenameSubgrids);
-            scriptInfo.AppendLine(IniContext.PAINT_SURFACES + ": " + ic.PaintSurfaces);
-            scriptInfo.AppendLine();
+            scriptInfo.AppendLine("    " + IniContext.FLIGHT_SYSTEMS + ": " + ic.AllowFlightSystems);
+            scriptInfo.AppendLine("    " + IniContext.LOW_FUEL_LAND + ": " + ic.AllowLowFuelLand);
+            scriptInfo.AppendLine("    " + IniContext.DOCK_MODE + ": " + ic.AllowDockMode);
+            scriptInfo.AppendLine("    " + IniContext.CONTROL_ANTENNAS + ": " + ic.ControlAntennas);
+            scriptInfo.AppendLine("    " + IniContext.RENAME_SUBGRIDS + ": " + ic.RenameSubgrids);
+            scriptInfo.AppendLine("    " + IniContext.PAINT_SURFACES + ": " + ic.PaintSurfaces);
             scriptInfo.AppendLine("Blocks");
-            scriptInfo.AppendLine("Controller: " + gc.Controller.CustomName);
+            scriptInfo.AppendLine("    Controller: " + gc.Controller.CustomName);
 
             if (ic.AllowFlightSystems)
             {
-                scriptInfo.AppendLine("Batteries: " + gc.Batteries.Count + " | Tanks: " + gc.Tanks.Count);
-                scriptInfo.AppendLine("Forward thruster: " + gc.ForwardThrusters.Count);
-                scriptInfo.AppendLine("Breaking thruster: " + gc.BreakingThrusters.Count);
-                scriptInfo.AppendLine("Upward thruster: " + gc.UpwardThrusters.Count);
-                scriptInfo.AppendLine("Gyros: " + gc.Gyros.Count);
+                scriptInfo.AppendLine("    Batteries: " + gc.Batteries.Count + " | Tanks: " + gc.Tanks.Count);
+                scriptInfo.AppendLine("    Forward thruster: " + gc.ForwardThrusters.Count);
+                scriptInfo.AppendLine("    Breaking thruster: " + gc.BreakingThrusters.Count);
+                scriptInfo.AppendLine("    Upward thruster: " + gc.UpwardThrusters.Count);
+                scriptInfo.AppendLine("    Gyros: " + gc.Gyros.Count);
             }
 
             if (ic.AllowDockMode || ic.AllowFlightSystems)
-                scriptInfo.AppendLine("Gears: " + gc.Gears.Count);
+                scriptInfo.AppendLine("    Gears: " + gc.Gears.Count);
 
             if (ic.AllowDockMode)
             {
-                scriptInfo.AppendLine("Dock Mode blocks: " + gc.ControlledBlocks.Count);
+                scriptInfo.AppendLine("    Dock Mode blocks: " + gc.ControlledBlocks.Count);
             }
 
-            scriptInfo.AppendLine("LCDs1: " + gc.Lcds1.Count);
-            scriptInfo.AppendLine("LCDs2: " + gc.Lcds2.Count);
+            scriptInfo.AppendLine("    LCDs1: " + gc.Lcds1.Count);
+            scriptInfo.AppendLine("    LCDs2: " + gc.Lcds2.Count);
+            scriptInfo.AppendLine("    Surfaces: " + gc.Surfaces.Count);
 
             return scriptInfo;
         }
@@ -598,6 +587,9 @@ namespace IngameScript
                     .ReloadH2Tanks()
                     .ReloadBatteries(ic.BackupBatteryTag);
 
+            GridContext.PaintSurfaces(ic, gc.Lcds1);
+            GridContext.PaintSurfaces(ic, gc.Lcds2);
+
             // Flight cached blocks
             if (ic.AllowFlightSystems)
             {
@@ -639,13 +631,7 @@ namespace IngameScript
             {
                 gc.ReloadSurfaces();
 
-                foreach(IMyTextSurface surface in gc.Surfaces)
-                {
-                    Color backgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor);
-                    Color fontColor = ColorMap.GetColorFromString(ic.FontColor);
-
-                    GridContext.PaintSurface(surface, backgroundColor, fontColor);
-                }
+                GridContext.PaintSurfaces(ic, gc.Surfaces);
             }
         }
 
@@ -743,7 +729,7 @@ namespace IngameScript
 
         private void LCD1Sprite()
         {
-            Sprites spt = new Sprites(ic);
+            Sprites spt = new Sprites();
             spt.Add(gc.GridName);
 
             StringBuilder state = new StringBuilder();
@@ -768,7 +754,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color, Color.Black);
+                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
             color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
@@ -777,18 +763,18 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color, Color.Black );
+                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
-                spt.DrawInfoPanel(lcd, 1);
+                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 
         void LCD2Sprite()
         {
-            Sprites spt = new Sprites(ic);
+            Sprites spt = new Sprites();
 
             if (pc.Gravity > 0)
             {
@@ -802,9 +788,9 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", color, Color.Black);
+                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", ColorMap.GetStringFromColor(color));
                     ClimbRateAndAccel(spt);
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color, Color.Black);
+                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", ColorMap.GetStringFromColor(color));
                 }
                 else
                 {
@@ -834,7 +820,7 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
-                spt.DrawInfoPanel(lcd, 1);
+                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 

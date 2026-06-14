@@ -40,9 +40,7 @@ namespace IngameScript.Domain
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
-        List<IMyTextSurface> slopedLcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
-        List<IMyTextSurface> slopedLcds2 = new List<IMyTextSurface>();
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -230,7 +228,18 @@ namespace IngameScript.Domain
             return surface;
         }
 
-        public static void PaintSurface(IMyTextSurface surface, Color BackgroundColor, Color FontColor)
+        public static void PaintSurfaces(IniContext ic, List<IMyTextSurface> surfaces)
+        {
+            foreach (IMyTextSurface surface in surfaces)
+            {
+                Color backgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor);
+                Color fontColor = ColorMap.GetColorFromString(ic.FontColor);
+
+                PaintSurface(surface, backgroundColor, fontColor);
+            }
+        }
+
+        static void PaintSurface(IMyTextSurface surface, Color BackgroundColor, Color FontColor)
         {
             surface.BackgroundColor = BackgroundColor;
             surface.FontColor = FontColor;
