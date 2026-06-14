@@ -40,9 +40,7 @@ namespace IngameScript.Domain
         List<IMyGyro> gyros = new List<IMyGyro>();
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
-        List<IMyTextSurface> slopedLcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
-        List<IMyTextSurface> slopedLcds2 = new List<IMyTextSurface>();
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -172,7 +170,7 @@ namespace IngameScript.Domain
 
         public GridContext ReloadSurfaces()
         {
-            Surfaces.AddList(AddLCDsToList(ignoreTag, true));
+            surfaces.AddList(AddLCDsToList(ignoreTag, true));
 
             return this;
         }

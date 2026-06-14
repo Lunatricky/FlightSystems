@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingot Inventory", "Ingot In
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sprites", "Sprites\Sprites.csproj", "{CC9382B2-2E26-4515-A16D-95228809AE19}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ODD", "ODD\ODD.csproj", "{09B81B49-4360-48CA-8A56-11A4B7B5F894}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -33,6 +35,8 @@ Global
 		{B00D0965-19FF-4A8B-9519-9B46E16487C6}.Debug|x64.Build.0 = Debug|x64
 		{CC9382B2-2E26-4515-A16D-95228809AE19}.Debug|x64.ActiveCfg = Debug|x64
 		{CC9382B2-2E26-4515-A16D-95228809AE19}.Debug|x64.Build.0 = Debug|x64
+		{09B81B49-4360-48CA-8A56-11A4B7B5F894}.Debug|x64.ActiveCfg = Debug|x64
+		{09B81B49-4360-48CA-8A56-11A4B7B5F894}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

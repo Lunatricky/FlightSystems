@@ -39,7 +39,7 @@ namespace IngameScript
             List<MySprite> sprites = new List<MySprite>();
 
             if (textList != null && textList.Count > 0)
-                sprites = BuildSprites(textList, panel.SurfaceSize, cols);
+                sprites = BuildSprites(textList, panel, cols);
 
             using (var frame = panel.DrawFrame())
             {
@@ -75,21 +75,19 @@ namespace IngameScript
         }
 
         // Build sprites for a list of InfoItem
-        List<MySprite> BuildSprites(List<TextSprite> items, Vector2 panelSize, int cols)
+        List<MySprite> BuildSprites(List<TextSprite> items, IMyTextSurface panel, int cols)
         {
             Color backgroundColor = ColorMap.GetColorFromString(ic.BackgroundColor);
             Color fontColor = ColorMap.GetColorFromString(ic.FontColor);
-            
+
+            Vector2 surfaceSize = panel.SurfaceSize;
+            Vector2 textureSize = panel.TextureSize;
+
+
             var sprites = new List<MySprite>();
-            if (items == null || items.Count == 0)
-            {
-                sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, backgroundColor));
-                sprites.Add(MakeTextSprite("No data", panelSize * 0.5f, 1.2f, TextAlignment.CENTER, fontColor));
-                return sprites;
-            }
 
             // background
-            sprites.Add(MakeRectSprite(panelSize * 0.5f, panelSize, backgroundColor));
+            sprites.Add(MakeRectSprite(surfaceSize * 0.5f, surfaceSize, fontColor));
 
             int n = items.Count;
             if (cols <= 0)
@@ -102,13 +100,13 @@ namespace IngameScript
             int rows = (int)Math.Ceiling((double)n / cols);
 
             float margin = 1f;
-            float innerW = panelSize.X - margin * (cols + 1);
-            float innerH = panelSize.Y - margin * (rows + 1);
+            float innerW = surfaceSize.X - margin * (cols + 1);
+            float innerH = surfaceSize.Y - margin * (rows + 1);
             float boxW = Math.Max(2f, innerW / cols);
             float boxH = Math.Max(2f, innerH / rows);
 
             float incrmentY = 0f; 
-            if (panelSize.X == 512f) incrmentY = 70f;
+            if (surfaceSize.X == 512f) incrmentY = 70f;
 
             int i = 0;
             foreach (var item in items)

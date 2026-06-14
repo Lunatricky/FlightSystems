@@ -80,6 +80,8 @@ namespace IngameScript
                 Echo("DisplayName: " + surface.DisplayName);
                 Echo("X: " + surface.SurfaceSize.X);
                 Echo("Y: " + surface.SurfaceSize.Y);
+                Echo("X: " + surface.TextureSize.X);
+                Echo("Y: " + surface.TextureSize.Y);
             } 
 
             if (gc.ErrorMessage.Length > 0)
