@@ -8,12 +8,12 @@ namespace IngameScript.UseCases
 {
     public class CruiseControl
     {
-        readonly GridManager gm;
-        readonly IniContext ic;
-        readonly PhysicsContext pc;
+        GridManager gm;
+        IniContext ic;
+        PhysicsContext pc;
         Booleans b;
         Command command;
-        readonly double tslr;
+        double tslr;
         int tc;
 
         Vector3D desiredUp;

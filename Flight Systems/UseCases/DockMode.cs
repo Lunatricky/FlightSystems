@@ -4,7 +4,7 @@ namespace IngameScript.UseCases
 {
     public class DockMode
     {
-        readonly GridManager gm;
+        GridManager gm;
         Command command;
 
         bool isDockMode;

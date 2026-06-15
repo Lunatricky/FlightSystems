@@ -10,9 +10,9 @@ namespace IngameScript.Physics
 {
     public class PhysicsContext
     {
-        readonly GridContext gc;
-        readonly SpeedTimeTracker stt;
-        readonly Command command;
+        GridContext gc;
+        SpeedTimeTracker stt;
+        Command command;
 
         double accumulatedTime = 0;
         double timeSinceLastRun = 0.00001;

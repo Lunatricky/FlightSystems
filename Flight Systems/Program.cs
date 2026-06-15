@@ -22,10 +22,10 @@ namespace IngameScript
         AutoLand al;
         DockMode dm;
         Text text;
-        readonly SpeedTimeTracker stt;
+        SpeedTimeTracker stt;
 
-        readonly IMyGridTerminalSystem gridTerminalSystem;
-        readonly IMyProgrammableBlock me;
+        IMyGridTerminalSystem gridTerminalSystem;
+        IMyProgrammableBlock me;
 
         Command command;
         int tc;
@@ -428,3 +428,4 @@ namespace IngameScript
         }
     }
 }
+

@@ -6,7 +6,6 @@ namespace IngameScript.Utils
 {
     class UtilsHelpder
     {
-
         public static Command ParseCommand(Command command, string argument)
         {
             var parts = argument.Trim().Split(

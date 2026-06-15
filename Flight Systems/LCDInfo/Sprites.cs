@@ -9,9 +9,9 @@ namespace IngameScript
 {
    class Sprites
    {
-        readonly IniContext ic;
+        IniContext ic;
 
-        readonly List<TextSprite> textList;
+        List<TextSprite> textList;
 
         struct TextSprite {public string Text; public Color BackgroundColor; public Color FontColor;}
 

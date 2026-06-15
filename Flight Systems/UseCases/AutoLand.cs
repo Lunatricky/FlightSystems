@@ -7,8 +7,8 @@ namespace IngameScript.UseCases
 {
     public class AutoLand
     {
-        readonly GridManager gm;
-        readonly PhysicsContext pc;
+        GridManager gm;
+        PhysicsContext pc;
         Command command;
         Booleans b;
         int tc;

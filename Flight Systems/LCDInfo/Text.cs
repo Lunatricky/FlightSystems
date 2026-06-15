@@ -9,11 +9,11 @@ namespace IngameScript.LCDInfo
 {
     class Text
     {
-        readonly GridContext gc;
-        readonly IniContext ic;
-        readonly PhysicsContext pc;
-        readonly Booleans b;
-        readonly Command command;
+        GridContext gc;
+        IniContext ic;
+        PhysicsContext pc;
+        Booleans b;
+        Command command;
 
         public Text(GridContext gc, IniContext ic, PhysicsContext pc, Booleans b, Command command)
         {

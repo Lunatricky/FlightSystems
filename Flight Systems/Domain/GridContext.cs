@@ -15,7 +15,7 @@ namespace IngameScript.Domain
         IMyProgrammableBlock me;
         string gridName;
         string ignoreTag;
-        readonly StringBuilder errorMessage;
+        StringBuilder errorMessage;
 
         double centerGridHight;
         double bottomGridHight;
@@ -23,26 +23,26 @@ namespace IngameScript.Domain
 
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
-        readonly List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
-        readonly List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
-        readonly List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
-        readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-        readonly List<IMyGasTank> tanks = new List<IMyGasTank>();
-        readonly List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
-        readonly List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
-        readonly List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
-        readonly List<IMyShipController> controllers = new List<IMyShipController>();
+        List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
+        List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
+        List<IMyFunctionalBlock> overrideBlocks = new List<IMyFunctionalBlock>();
+        List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+        List<IMyGasTank> tanks = new List<IMyGasTank>();
+        List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
+        List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+        List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
+        List<IMyShipController> controllers = new List<IMyShipController>();
 
-        readonly List<IMyThrust> breakingThrusters = new List<IMyThrust>();
-        readonly List<IMyThrust> forwardThrusters = new List<IMyThrust>();
-        readonly List<IMyThrust> upwardThrusters = new List<IMyThrust>();
+        List<IMyThrust> breakingThrusters = new List<IMyThrust>();
+        List<IMyThrust> forwardThrusters = new List<IMyThrust>();
+        List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
-        readonly List<IMyGyro> gyros = new List<IMyGyro>();
-        readonly List<IMyLandingGear> gears = new List<IMyLandingGear>();
-        readonly List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
-        readonly List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
+        List<IMyGyro> gyros = new List<IMyGyro>();
+        List<IMyLandingGear> gears = new List<IMyLandingGear>();
+        List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
+        List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
 
-        readonly List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
+        List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
 
         public GridContext(IMyGridTerminalSystem grid, IMyProgrammableBlock me)
