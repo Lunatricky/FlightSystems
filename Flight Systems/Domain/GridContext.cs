@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -21,6 +22,8 @@ namespace IngameScript.Domain
         double bottomGridHeight;
         double gridHeight;
 
+        public bool IsLG;
+
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
 
@@ -33,6 +36,7 @@ namespace IngameScript.Domain
         List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
         List<IMyShipController> controllers = new List<IMyShipController>();
 
+        List<IMyThrust> thrusters = new List<IMyThrust>();
         List<IMyThrust> breakingThrusters = new List<IMyThrust>();
         List<IMyThrust> forwardThrusters = new List<IMyThrust>();
         List<IMyThrust> upwardThrusters = new List<IMyThrust>();
@@ -49,7 +53,7 @@ namespace IngameScript.Domain
             errorMessage = new StringBuilder();
             GridTS = grid;
             Me = me;
-
+            IsLG = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
@@ -111,14 +115,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadThrusters()
         {
+            Thrusters.Clear();
             ForwardThrusters.Clear();
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
 
-            List<IMyThrust> allThrusters = new List<IMyThrust>();
-            GridManager.GetOwnGridBlocks(allThrusters, this, IgnoreTag);
+            GridManager.GetOwnGridBlocks(Thrusters, this, IgnoreTag);
 
-            foreach (var thruster in allThrusters)
+            foreach (var thruster in Thrusters)
             {
                 // Thrusters that push the ship forward
                 if (thruster.Orientation.Forward == Base6Directions.GetOppositeDirection(Controller.Orientation.Forward))
@@ -483,6 +487,7 @@ namespace IngameScript.Domain
         public List<IMyBatteryBlock> Batteries => batteries;
         public List<IMyRadioAntenna> Antennas => antennas;
         List<IMyShipController> Controllers => controllers;
+        public List<IMyThrust> Thrusters => thrusters;
         public List<IMyThrust> BreakingThrusters => breakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
         public List<IMyThrust> UpwardThrusters => upwardThrusters;

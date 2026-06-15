@@ -34,7 +34,7 @@ namespace IngameScript
         bool lastDockState;
         Vector3D desiredUp;
 
-        struct booleans
+        struct Booleans
         {
             public bool cruiseToggle;
             public bool circumnavToggle;
@@ -44,7 +44,7 @@ namespace IngameScript
             public bool autoPilotToggle;
         }
 
-        booleans b;
+        Booleans b;
                 
         public Program()
         {
@@ -52,11 +52,11 @@ namespace IngameScript
             gridTerminalSystem = GridTerminalSystem;
             me = Me;
 
-            b = new booleans();
+            b = new Booleans();
             stt = new SpeedTimeTracker();
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            InicializeContexts();
+            ReloadGridContext(ref gc, ref ic);
         }
 
         private void InicializeContexts()
@@ -73,15 +73,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            foreach(IMyTextSurface surface in gc.Lcds1)
-            {
-                Echo("========");
-                Echo("Name       : " + surface.Name);
-                Echo("DisplayName: " + surface.DisplayName);
-                Echo("X: " + surface.SurfaceSize.X);
-                Echo("Y: " + surface.SurfaceSize.Y);
-            } 
-
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -491,7 +482,12 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) AbortShipContext(gc);
+                    if (pc.UpVelocity > -(ic.MaxSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopZDist)
+                    {
+                        command.State = MainState.Land;
+                        command.Param.AutoLandState = AutoLandState.Drop;
+                    }
+                    else if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
         }
@@ -612,8 +608,10 @@ namespace IngameScript
                     .ReloadGyros()
                     .ReloadGears();
 
+                GridManager.ResetThrusters(gc.Thrusters);
+                GridManager.ResetGyros(gc.Gyros);
+
                 b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
-                AbortShipContext(gc);
             }
 
             // Dock cached blocks
@@ -655,15 +653,14 @@ namespace IngameScript
         const double Kd = 0.5;
 
         const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
-        const double OVERRIDE_STEP = 0.02;     // max absolute change per tick (smoothness)
+        const double OVERRIDE_STEP = 0.01;     // max absolute change per tick (smoothness)
         const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
             if (pc.ForwardVelocity > ic.MaxSpeed)
             {
-                GridManager.ResetThrusters(gc);
-                GridManager.TurnOFfBreakingThrust(gc);
+                GridManager.ResetThrusters(gc.Thrusters);
                 return;
             }
 
@@ -756,7 +753,7 @@ namespace IngameScript
             spt.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
-            Color color = new Color();
+            Color color;
             color = pc.PrevH2Fill < pc.H2Cache.Filled ? Color.LightBlue 
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
@@ -777,7 +774,7 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds1)
             {
-                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
+                spt.DrawInfoPanel(gc.IsLG, lcd, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 
@@ -829,7 +826,7 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
-                spt.DrawInfoPanel(lcd, 1, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
+                spt.DrawInfoPanel(gc.IsLG, lcd, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
             }
         }
 
@@ -841,7 +838,7 @@ namespace IngameScript
 
         void AbortShipContext(GridContext gc)
         {
-            b = new booleans();
+            b = new Booleans();
 
             command = Command.Empty;
 
@@ -849,8 +846,8 @@ namespace IngameScript
             b.autoPilotToggle = false;
 
             tickCount = 0;
-            GridManager.ResetGyros(gc);
-            GridManager.ResetThrusters(gc);
+            GridManager.ResetGyros(gc.Gyros);
+            GridManager.ResetThrusters(gc.Thrusters);
         }
 
         void SoftAbort(GridContext gc)
@@ -858,8 +855,8 @@ namespace IngameScript
             gc.Controller.DampenersOverride = true;
             b.stopCruiseWhenOutOfGrav = false;
 
-            GridManager.ResetGyros(gc);
-            GridManager.ResetThrusters(gc);
+            GridManager.ResetGyros(gc.Gyros);
+            GridManager.ResetThrusters(gc.Thrusters);
         }
 
         ////////////////////////////////////////////////////////
@@ -871,7 +868,7 @@ namespace IngameScript
             return AlignToGravity(gc, false);
         }
 
-        bool AlignToGravity(GridContext sc, bool checkSpeed)
+        bool AlignToGravity(GridContext gc, bool checkSpeed)
         {
             Vector3D shipUp = gc.Controller.WorldMatrix.Up;
 
@@ -886,7 +883,7 @@ namespace IngameScript
             Vector3D axis = shipUp.Cross(desiredUpVector);
             double angle = axis.Length();
 
-            if (angle < 0.005 && (checkSpeed ? pc.IsStopped : true))
+            if (angle < 0.005 && (!checkSpeed || pc.IsStopped))
             {
                 foreach (var g in gc.Gyros)
                     g.GyroOverride = false;
@@ -945,7 +942,7 @@ namespace IngameScript
             gc.Controller.DampenersOverride = false;
             AlignToGravity(gc);
             VectorHelper.MatchVerticalSpeed(gc, pc, -ic.MaxSpeed - 10 );
-            return pc.EffectiveAlt < 1.1 * pc.StopYDist + gc.GridHeight;
+            return pc.EffectiveAlt < 1.3 * pc.StopYDist + gc.GridHeight;
         }
 
         bool AutoLand(GridContext gc)

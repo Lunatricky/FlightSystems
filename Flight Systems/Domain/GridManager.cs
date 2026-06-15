@@ -41,35 +41,24 @@ namespace IngameScript.Domain
 
             isDockMode = !enabled;
         }
-        public static void ResetGyros(GridContext gc)
+
+        public static void ResetThrusters(List<IMyThrust> thrusters)
         {
-            foreach (var g in gc.Gyros)
+            foreach (var t in thrusters)
+            {
+                t.ThrustOverridePercentage = 0f;
+                t.Enabled = true;
+            }
+
+        }
+
+        public static void ResetGyros(List<IMyGyro> gyros)
+        {
+            foreach (var g in gyros)
             {
                 g.GyroOverride = false;
                 g.Enabled = true;
             }
-        }
-
-        public static void ResetThrusters(GridContext gc)
-        {
-            foreach (var forwardThruster in gc.ForwardThrusters)
-            {
-                forwardThruster.ThrustOverridePercentage = 0f;
-                forwardThruster.Enabled = true;
-            }
-
-            foreach (var brakingThruster in gc.BreakingThrusters)
-            {
-                brakingThruster.ThrustOverridePercentage = 0f;
-                brakingThruster.Enabled = true;
-            }
-
-            foreach (var upThruster in gc.UpwardThrusters)
-            {
-                upThruster.ThrustOverridePercentage = 0f;
-                upThruster.Enabled = true;
-            }
-
         }
 
         public static void StockpileTanks(GridContext gc, bool stockpile)
@@ -102,14 +91,6 @@ namespace IngameScript.Domain
             foreach (IMyBatteryBlock battery in gc.Batteries)
             {
                 battery.ChargeMode = ChargeMode.Auto;
-            }
-        }
-
-        public static void TurnOFfBreakingThrust(GridContext gc)
-        {
-            foreach (IMyThrust thruster in gc.BreakingThrusters)
-            {
-                thruster.Enabled = false;
             }
         }
     }
