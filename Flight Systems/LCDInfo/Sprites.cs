@@ -79,9 +79,18 @@ namespace IngameScript
 
             for (int i = 0; i < rows; i++)
             {
-                //var centerRec = new Vector2(margin, 2.5f * margin + i * surfaceSize.Y/ rows + (surfaceSize.Y - textureSize.Y) / rows / 2);
-                var centerRec = new Vector2(1.5f * margin, (textureSize.Y - surfaceSize.Y) / 2 + (surfaceSize.Y / rows) / 2 + i * surfaceSize.Y / rows);
-                var centerText = new Vector2(2 * margin + (textureSize.X - surfaceSize.X) / 2, 3f * margin + (textureSize.Y - surfaceSize.Y - margin) / 2 + i * (surfaceSize.Y - margin) / rows);
+                //Centers
+                var centerRec = new Vector2(
+                    1.5f * margin, 
+                    (textureSize.Y - surfaceSize.Y) / 2 + (surfaceSize.Y / rows) / 2 + i * surfaceSize.Y / rows
+                    );
+
+                var centerText = new Vector2(
+                    2 * margin + (textureSize.X - surfaceSize.X) / 2,
+                    margin + (textureSize.Y - surfaceSize.Y) / 2 + i * (surfaceSize.Y) / rows
+                    );
+
+                //Sizes
                 var sizeRec = new Vector2(textureSize.X - 3 * margin, (surfaceSize.Y - margin) / rows - margin);
                 var sizeText = new Vector2(surfaceSize.X - 3 * margin, (surfaceSize.Y) / rows);
 
@@ -89,6 +98,8 @@ namespace IngameScript
                 if (surfaceSize.X < 512) scale = 0.9f;
                 else if (surfaceSize.Y != textureSize.Y) scale = 1.4f;
                 else scale = 1.6f;
+
+                scale = scale * 6 / rows;
 
                 if (colors[i] != null)
                 {
