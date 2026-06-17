@@ -1,6 +1,4 @@
-﻿using IngameScript.Domain;
-using Sandbox.ModAPI.Ingame;
-using System;
+﻿using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
@@ -99,7 +97,7 @@ namespace IngameScript
                 else if (surfaceSize.Y != textureSize.Y) scale = 1.4f;
                 else scale = 1.6f;
 
-                scale = scale * 6 / rows;
+                if (6 / rows < 1) scale = scale * 6 / rows;
 
                 if (colors[i] != null)
                 {

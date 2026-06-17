@@ -73,18 +73,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-
-            foreach(IMyTextSurface s in gc.Lcds1)
-            {
-                Echo("Name: " + s.Name);
-                Echo("DisplayName: " + s.DisplayName);
-                Echo("Texture X: " + s.TextureSize.X);
-                Echo("Texture Y: " + s.TextureSize.Y);
-                Echo("Surface X: " + s.SurfaceSize.X);
-                Echo("Surface Y: " + s.SurfaceSize.Y);
-            }
-
-
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -180,7 +168,7 @@ namespace IngameScript
                         
             if (ic.AllowDockMode)
             {
-                bool anyConnected = GridManager.IsAnyConnectorConnected(gc);
+                bool anyConnected = GridContext.IsAnyConnectorConnected(gc);
                 bool isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 isDockMode = anyConnected || isGearlocked;
 
@@ -277,15 +265,15 @@ namespace IngameScript
 
         private void DockToggle(GridContext gc, bool anyConnected)
         {
-            GridManager.SetBlocks(gc, !anyConnected, out isDockMode);
-            GridManager.StockpileTanks(gc, anyConnected);
+            GridContext.SetBlocks(gc, !anyConnected, out isDockMode);
+            GridContext.StockpileTanks(gc, anyConnected);
             if (anyConnected)
             {
-                GridManager.ChargeBatteries(gc);
+                GridContext.ChargeBatteries(gc);
             }
             else
             {
-                GridManager.AutoBatteries(gc);
+                GridContext.AutoBatteries(gc);
             }
         }
 
@@ -604,9 +592,6 @@ namespace IngameScript
                     .ReloadH2Tanks()
                     .ReloadBatteries(ic.BackupBatteryTag);
 
-            GridContext.PaintSurfaces(ic, gc.Lcds1);
-            GridContext.PaintSurfaces(ic, gc.Lcds2);
-
             // Flight cached blocks
             if (ic.AllowFlightSystems)
             {
@@ -620,8 +605,8 @@ namespace IngameScript
                     .ReloadGyros()
                     .ReloadGears();
 
-                GridManager.ResetThrusters(gc.Thrusters);
-                GridManager.ResetGyros(gc.Gyros);
+                GridContext.ResetThrusters(gc.Thrusters);
+                GridContext.ResetGyros(gc.Gyros);
 
                 b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
             }
@@ -672,7 +657,7 @@ namespace IngameScript
         {
             if (pc.ForwardVelocity > ic.MaxSpeed)
             {
-                GridManager.ResetThrusters(gc.Thrusters);
+                GridContext.ResetThrusters(gc.Thrusters);
                 return;
             }
 
@@ -766,28 +751,25 @@ namespace IngameScript
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
             Color color;
-            color = pc.PrevH2Fill < pc.H2Cache.Filled ? Color.LightBlue 
-                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
-                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
+            color = pc.PrevH2Fill < pc.H2Cache.Filled ? Color.LightBlue
+                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
+                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
                 : new Color();
 
             if (!color.Equals(new Color()))
-                    spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", ColorMap.GetStringFromColor(color));
+                spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
             color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
-                : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed 
-                : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange 
+                : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
+                : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
                 : new Color();
 
             if (!color.Equals(new Color()))
                 spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", ColorMap.GetStringFromColor(color));
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
-            foreach (IMyTextSurface lcd in gc.Lcds1)
-            {
-                spt.DrawInfoPanel(gc.IsLG, lcd, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
-            }
+            DrawSprites(spt, gc.Lcds1);
         }
 
         void LCD2Sprite()
@@ -807,19 +789,19 @@ namespace IngameScript
                 if (!color.Equals(new Color()))
                 {
                     spt.Add($"Ground level: {pc.GroundLevel:F1} m", ColorMap.GetStringFromColor(color));
-                    ClimbRateAndAccel(spt);
+                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", ColorMap.GetStringFromColor(color));
                 }
                 else
                 {
                     spt.Add($"Ground level: {pc.GroundLevel:F1} m");
-                    ClimbRateAndAccel(spt);
+                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
                 }
             }
 
-
             spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
+            spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
 
             if (b.autoPilotToggle)
             {
@@ -838,14 +820,19 @@ namespace IngameScript
 
             foreach (IMyTextSurface lcd in gc.Lcds2)
             {
-                spt.DrawInfoPanel(gc.IsLG, lcd, ColorMap.GetColorFromString(ic.FontColor), ColorMap.GetColorFromString(ic.BackgroundColor));
+                DrawSprites(spt, gc.Lcds2);
             }
         }
 
-        private void ClimbRateAndAccel(Sprites spt)
+        private void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces)
         {
-            spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-            spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
+            foreach (IMyTextSurface surface in surfaces)
+            {
+                Color backgroundColor;
+                if (ic.TransparentLCD && surface.Name.ToLower().Contains("transparent")) backgroundColor = Color.Black;
+                else backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
+                spt.DrawInfoPanel(gc.IsLG, surface, ColorMap.GetColorFromString(ic.SpriteFontColor), backgroundColor);
+            }
         }
 
         void AbortShipContext(GridContext gc)
@@ -858,8 +845,8 @@ namespace IngameScript
             b.autoPilotToggle = false;
 
             tickCount = 0;
-            GridManager.ResetGyros(gc.Gyros);
-            GridManager.ResetThrusters(gc.Thrusters);
+            GridContext.ResetGyros(gc.Gyros);
+            GridContext.ResetThrusters(gc.Thrusters);
         }
 
         void SoftAbort(GridContext gc)
@@ -867,8 +854,8 @@ namespace IngameScript
             gc.Controller.DampenersOverride = true;
             b.stopCruiseWhenOutOfGrav = false;
 
-            GridManager.ResetGyros(gc.Gyros);
-            GridManager.ResetThrusters(gc.Thrusters);
+            GridContext.ResetGyros(gc.Gyros);
+            GridContext.ResetThrusters(gc.Thrusters);
         }
 
         ////////////////////////////////////////////////////////

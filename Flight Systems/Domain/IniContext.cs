@@ -65,12 +65,18 @@ namespace IngameScript.Domain
         //SurfaceColorsSection
         const string SurfaceColorsSection = "Screen Colors";
 
-        const string BACKGROUNDCOLOR = "Background Color";
-        const string FONTCOLOR = "Font Color";
+        const string TRANSPARENTLCD = "Transparent LCD";
+        const string LCDBACKGROUNDCOLOR = "LCD Background Color";
+        const string LCDFONTCOLOR = "LCD Font Color";
+        const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
+        const string SPRITEFONTCOLOR = "Sprite Font Color";
         const string COLORS = "Available Colors";
 
-        string backgroundColor = "Black";
-        string fontColor = "White";
+        bool transparentLCD = true;
+        string lcdBackgroundColor = "Black";
+        string lcdFontColor = "White";
+        string spriteBackgroundColor = "Black";
+        string spriteFontColor = "White";
         string colors = ColorMap.All.ToString();
 
         public IniContext(GridContext gc)
@@ -96,8 +102,11 @@ namespace IngameScript.Domain
         public bool ControlAntennas => controlAntennas;
         public bool RenameSubgrids => renameSubgrids;
         public bool PaintSurfaces => paintSurfaces;
-        public string BackgroundColor => backgroundColor;
-        public string FontColor => fontColor;
+        public bool TransparentLCD => transparentLCD;
+        public string LcdBackgroundColor => lcdBackgroundColor;
+        public string LcdFontColor => lcdFontColor;
+        public string SpriteBackgroundColor => spriteBackgroundColor;
+        public string SpriteFontColor => spriteFontColor;
         public string Color => colors;
 
 
@@ -153,8 +162,11 @@ namespace IngameScript.Domain
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
             //SurfaceColorsSection
-            backgroundColor = ini.Get(SurfaceColorsSection, BACKGROUNDCOLOR).ToString(BackgroundColor);
-            fontColor = ini.Get(SurfaceColorsSection, FONTCOLOR).ToString(FontColor);
+            transparentLCD = ini.Get(SurfaceColorsSection, TRANSPARENTLCD).ToBoolean(TransparentLCD);
+            lcdBackgroundColor = ini.Get(SurfaceColorsSection, LCDBACKGROUNDCOLOR).ToString(LcdBackgroundColor);
+            lcdFontColor = ini.Get(SurfaceColorsSection, LCDFONTCOLOR).ToString(LcdFontColor);
+            spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(SpriteBackgroundColor);
+            spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(SpriteFontColor);
 
 
             // ───────────────────── 
@@ -192,8 +204,11 @@ namespace IngameScript.Domain
             iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
 
             //SurfaceColorsSection
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, BACKGROUNDCOLOR, BackgroundColor);
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, FONTCOLOR, FontColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, TRANSPARENTLCD, transparentLCD);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, LcdBackgroundColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, LcdFontColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, SpriteBackgroundColor);
+            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, SpriteFontColor);
             ini.Set(SurfaceColorsSection, COLORS, colors);
 
 

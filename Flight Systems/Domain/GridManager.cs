@@ -1,9 +1,10 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
+using VRage.Game.GUI.TextPanel;
 
 namespace IngameScript.Domain
 {
-    class GridManager
+    public class GridManager
     {
         public static void GetOwnGridBlocks<T>(List<T> list, GridContext gc, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
@@ -91,6 +92,17 @@ namespace IngameScript.Domain
             foreach (IMyBatteryBlock battery in gc.Batteries)
             {
                 battery.ChargeMode = ChargeMode.Auto;
+            }
+        }
+
+        public static void CleanSurfaces(List<IMyTextSurface> lcds)
+        {
+            foreach (IMyTextSurface lcd in lcds)
+            {
+                lcd.AddImageToSelection("Online");
+                lcd.RemoveImageFromSelection("Online");
+                lcd.ContentType = ContentType.SCRIPT;
+                lcd.Script = "";
             }
         }
     }

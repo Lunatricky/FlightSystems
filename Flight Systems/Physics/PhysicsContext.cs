@@ -37,6 +37,8 @@ namespace IngameScript.Physics
         double vEffectiveZSpeed;
         double stopYDist;
         double stopZDist;
+        double maxYDecel;
+        double maxZDecel;
         double stopYDistTemp;
         double stopZDistTemp;
         double timeToImpact;
@@ -84,21 +86,30 @@ namespace IngameScript.Physics
             desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
             gravity = NaturalGravity.Length();
             groundLevel = GetPlanetElevation();
-            effectiveAlt = (GroundLevel - gc.GridHeight - vEffectiveYSpeed * timeSinceLastRun);
+            climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
+
+            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
+            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
+            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
+
+            maxYDecel = GetMaxDecel(gc.UpwardThrusters, gc.Controller.WorldMatrix.Down);
+            maxZDecel = GetMaxDecel(gc.BreakingThrusters, gc.Controller.WorldMatrix.Backward);
+
             vEffectiveYSpeed = UpVelocity == 0 ? 0 : ClimbRate + MaxYDecel * timeSinceLastRun;
             vEffectiveZSpeed = ForwardVelocity == 0 ? 0 : ForwardVelocity + MaxZDecel * timeSinceLastRun;
-            stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
-            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
+
+            effectiveAlt = (GroundLevel - gc.GridHeight - vEffectiveYSpeed * timeSinceLastRun);
+
             stopYDistTemp = Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
             stopZDistTemp = Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
-            climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
+
+            stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
+            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
+
             timeToImpact = GroundLevel / Math.Abs(VEffectiveYSpeed);
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToLine, timeSinceLastRun);
-            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
-            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
-            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
             netDecel = ComputeNetDecel(gc);
             distanceToLine = DistanceToGps(gc.Controller, command.Param.TargetCoordinates);
             isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
@@ -132,8 +143,8 @@ namespace IngameScript.Physics
         public double StopYDist => stopYDist;
         public double StopZDist => stopZDist;
         public double ClimbRate => climbRate;
-        double MaxYDecel => GetMaxDecel(gc.UpwardThrusters);
-        double MaxZDecel => GetMaxDecel(gc.BreakingThrusters);
+        double MaxYDecel => maxYDecel;
+        public double MaxZDecel => maxZDecel;
         public double TimeToImpact => timeToImpact;
         public double TimeToStopY => timeToStopY;
         public double TimeToStopZ => timeToStopZ;
@@ -225,15 +236,13 @@ namespace IngameScript.Physics
             return distance / smoothedSpeed;
         }
 
-        double GetMaxDecel(List<IMyThrust> thrusters)
+        double GetMaxDecel(List<IMyThrust> thrusters, Vector3D direciton)
         {
             double thrust = 0;
 
-            Vector3D up = -Vector3D.Normalize(NaturalGravity);
-
             foreach (var t in thrusters)
             {
-                double dot = t.WorldMatrix.Backward.Dot(up);
+                double dot = t.WorldMatrix.Backward.Dot(direciton);
 
                 if (dot > 0.7)
                     thrust += t.MaxEffectiveThrust * dot;
@@ -247,7 +256,8 @@ namespace IngameScript.Physics
             Vector3D shipPos = controller.GetPosition();
             double vertical;
 
-            Vector3D up = -Vector3D.Normalize(NaturalGravity); // up direction
+            Vector3D up = Vector3D.Normalize(NaturalGravity); // up direction
+            up = -up;
             Vector3D toTarget = gps - shipPos;
 
             // vertical distance along up (signed): positive = target is "above" ship in up direction
