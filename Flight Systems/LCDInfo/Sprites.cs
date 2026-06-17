@@ -21,8 +21,6 @@ namespace IngameScript
         // Usage example
         public void DrawInfoPanel(bool IsLG, IMyTextSurface panel, Color fontColor, Color backgroundColor)
         {
-            panel.ContentType = ContentType.SCRIPT;
-
             List<MySprite> sprites = new List<MySprite>();
 
             if (texts != null && texts.Count > 0)
@@ -72,25 +70,25 @@ namespace IngameScript
             Vector2 textureSize = panel.TextureSize;
 
             // background
-            var sprites = new List<MySprite>
-            {
-                MakeRectSprite(surfaceSize, surfaceSize, fontColor)
-            };
+            var sprites = new List<MySprite>();
+
+            sprites.Add(MakeRectSprite(new Vector2(0, 0), 2 * textureSize, fontColor));
 
             int rows = texts.Count;
-            int marginH = IsLG ? 40 : 10;
-            int marginV = 5;
+            int margin = 5;
 
             for (int i = 0; i < rows; i++)
             {
-                var centerRec = new Vector2((textureSize.Y - surfaceSize.Y) / 2 + marginH, (textureSize.Y - surfaceSize.Y) / 2 + (surfaceSize.Y / rows) / 2 + i * surfaceSize.Y / rows);
-                var centerText = new Vector2((textureSize.Y - surfaceSize.Y) / 2 + marginH, (textureSize.Y - surfaceSize.Y) / 2 + marginV + i * surfaceSize.Y / rows);
-                var sizeRec = new Vector2(surfaceSize.X - marginV, (surfaceSize.Y - marginV) / rows) - marginV;
-                var sizeText = new Vector2(surfaceSize.X, (surfaceSize.Y - marginV) / rows);
+                //var centerRec = new Vector2(margin, 2.5f * margin + i * surfaceSize.Y/ rows + (surfaceSize.Y - textureSize.Y) / rows / 2);
+                var centerRec = new Vector2(1.5f * margin, (textureSize.Y - surfaceSize.Y) / 2 + (surfaceSize.Y / rows) / 2 + i * surfaceSize.Y / rows);
+                var centerText = new Vector2(2 * margin + (textureSize.X - surfaceSize.X) / 2, 3f * margin + (textureSize.Y - surfaceSize.Y - margin) / 2 + i * (surfaceSize.Y - margin) / rows);
+                var sizeRec = new Vector2(textureSize.X - 3 * margin, (surfaceSize.Y - margin) / rows - margin);
+                var sizeText = new Vector2(surfaceSize.X - 3 * margin, (surfaceSize.Y) / rows);
 
                 float scale;
-                if (surfaceSize.X > 512) scale = 1.5f;
-                else scale = 1.4f * surfaceSize.Y / 512f;
+                if (surfaceSize.X < 512) scale = 0.9f;
+                else if (surfaceSize.Y != textureSize.Y) scale = 1.4f;
+                else scale = 1.6f;
 
                 if (colors[i] != null)
                 {

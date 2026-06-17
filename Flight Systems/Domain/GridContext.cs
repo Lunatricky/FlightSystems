@@ -218,6 +218,8 @@ namespace IngameScript.Domain
             {
                 lcd.AddImageToSelection("Online");
                 lcd.RemoveImageFromSelection("Online");
+                lcd.ContentType = ContentType.SCRIPT;
+                lcd.Script = "";
             }
 
             return lcds;

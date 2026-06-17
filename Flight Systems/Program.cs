@@ -73,6 +73,18 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+
+            foreach(IMyTextSurface s in gc.Lcds1)
+            {
+                Echo("Name: " + s.Name);
+                Echo("DisplayName: " + s.DisplayName);
+                Echo("Texture X: " + s.TextureSize.X);
+                Echo("Texture Y: " + s.TextureSize.Y);
+                Echo("Surface X: " + s.SurfaceSize.X);
+                Echo("Surface Y: " + s.SurfaceSize.Y);
+            }
+
+
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
