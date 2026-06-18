@@ -73,6 +73,10 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            Echo("arg: " + argument);
+            Echo("arg: " + this.argument);
+            Echo("isDockMode: " + isDockMode);
+            Echo("lastDockState: " + lastDockState);
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -141,7 +145,7 @@ namespace IngameScript
         {
             tickCounter++;
 
-            if (tickCounter % 20 == 1)
+            if (tickCounter % 100 == 1)
             {
                 maxRuntimeMs = 0;
             }
@@ -153,18 +157,26 @@ namespace IngameScript
             maxRuntimeMs = Math.Max(newRuntimeMs, maxRuntimeMs);
 
             m_echoBuilder.Append($"Max Runtime: {maxRuntimeMs} Ms\n");
-            m_echoBuilder.Append($"Instruction Count: {Runtime.CurrentInstructionCount}\n");
-            m_echoBuilder.Append($"Complexity: {Math.Round((double)Runtime.CurrentInstructionCount / Runtime.MaxInstructionCount, 5)}%\n");
             return m_echoBuilder.ToString();
         }
 
         private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc)
         {
+            if (isDockMode && argument.ToLower().Contains("awake"))
+            {
+                AbortShipContext(gc);
+                DockToggle(gc, isDockMode);
+                isDockMode = false;
+                argument = "";
+                return;
+            }
+
             if (!string.IsNullOrEmpty(argument))
             {
                 command = new Command(argument);
                 argument = "";
             }
+
                         
             if (ic.AllowDockMode)
             {
