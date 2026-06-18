@@ -177,7 +177,8 @@ namespace IngameScript.Domain
         public GridContext ReloadSurfaces()
         {
             surfaces.AddList(AddLCDsToList(ignoreTag, true));
-
+            surfaces.Add(Me.GetSurface(0));
+            surfaces.Add(Me.GetSurface(1));
             return this;
         }
 
