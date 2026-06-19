@@ -364,6 +364,7 @@ namespace IngameScript.Domain
             AddBlocks<IMyBeacon>(ControlledBlocks);
             AddBlocks<IMyOreDetector>(ControlledBlocks);
             AddBlocks<IMyTextPanel>(ControlledBlocks);
+            AddBlocks<IMyEmotionControllerBlock>(ControlledBlocks);
             AddBlocks<IMyProgrammableBlock>(ControlledBlocks);
         }
 

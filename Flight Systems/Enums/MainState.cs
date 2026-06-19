@@ -5,7 +5,6 @@
         Abort,
         Reload,
         Idle,
-        Dock,
         Cruise,
         CNav, // Circumnavigation
         Land, // Auto Land

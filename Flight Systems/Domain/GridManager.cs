@@ -34,11 +34,7 @@ namespace IngameScript.Domain
             gc.ControlledToolBlocks.ForEach(b => b.Enabled = false);
 
             //Toggle other blocks when dock/undock
-            foreach (IMyFunctionalBlock cachedBlock in gc.ControlledBlocks)
-            {
-                if (cachedBlock != null && cachedBlock.IsFunctional)
-                    cachedBlock.Enabled = enabled;
-            }
+            gc.ControlledBlocks.ForEach(b => b.Enabled = enabled);
 
             isDockMode = !enabled;
         }

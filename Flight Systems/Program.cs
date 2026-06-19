@@ -27,11 +27,10 @@ namespace IngameScript
         int tickCount;
         double timeSinceLastRun;
         StringBuilder scriptInfo;
-        string argument;
+        string argument = "";
 
         //Dock Mode
         bool isDockMode;
-        bool lastDockState;
         Vector3D desiredUp;
 
         struct Booleans
@@ -73,10 +72,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            Echo("arg: " + argument);
-            Echo("arg: " + this.argument);
-            Echo("isDockMode: " + isDockMode);
-            Echo("lastDockState: " + lastDockState);
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -162,34 +157,28 @@ namespace IngameScript
 
         private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc)
         {
-            if (isDockMode && argument.ToLower().Contains("awake"))
-            {
-                AbortShipContext(gc);
-                DockToggle(gc, isDockMode);
-                isDockMode = false;
-                argument = "";
-                return;
-            }
-
             if (!string.IsNullOrEmpty(argument))
             {
                 command = new Command(argument);
                 argument = "";
             }
-
-                        
+            
             if (ic.AllowDockMode)
             {
                 bool anyConnected = GridContext.IsAnyConnectorConnected(gc);
                 bool isGearlocked = gc.Gears.Exists(g => g.IsLocked);
-                isDockMode = anyConnected || isGearlocked;
+                bool isDocked = anyConnected || isGearlocked;
 
-                if (isDockMode != lastDockState)
+                if (isDocked)
                 {
+                    isDockMode = true;
                     AbortShipContext(gc);
                     DockToggle(gc, isDockMode);
-                    lastDockState = isDockMode;
-                    return;
+                } else
+                {
+                    isDockMode = false;
+                    AbortShipContext(gc);
+                    DockToggle(gc, isDockMode);
                 }
             }
 
@@ -233,9 +222,6 @@ namespace IngameScript
                 case MainState.Abort:
                     AbortShipContext(gc);
                     break;
-                case MainState.Dock:
-                    DockStateSwitch(gc, command.Param);
-                    return;
                 case MainState.Cruise:
                     gc.Controller.DampenersOverride = true;
                     CruiseControlStateSwitch(gc, ic, command.Param);
@@ -338,30 +324,6 @@ namespace IngameScript
             scriptInfo.AppendLine("    Surfaces: " + gc.Surfaces.Count);
 
             return scriptInfo;
-        }
-
-        void DockStateSwitch(GridContext gc, CommandParam param)
-        {
-            switch (param.Text.ToLowerInvariant())
-            {
-                case "toggle":
-                case "":
-                    isDockMode = !isDockMode;
-                    if (isDockMode) command.Param.Text = "on";
-                    else command.Param.Text = "off";
-                    break;
-                case "on":
-                    isDockMode = true;
-                    command = Command.Empty;
-                    DockToggle(gc, isDockMode);
-                    break;
-
-                case "off":
-                    isDockMode = false;
-                    command = Command.Empty;
-                    DockToggle(gc, isDockMode);
-                    break;
-            }
         }
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, CommandParam param)
