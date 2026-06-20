@@ -1,4 +1,4 @@
-﻿c using IngameScript.Domain;
+﻿using IngameScript.Domain;
 using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
