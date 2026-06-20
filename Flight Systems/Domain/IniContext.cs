@@ -9,8 +9,8 @@ namespace IngameScript.Domain
         readonly GridContext gc;
 
         //Ini
-        Dictionary<string, string> __snapshot = new Dictionary<string, string>();
-        bool iniAnyChanged;
+        public Dictionary<string, string> IniSnapshot;
+        bool iniChanged;
 
         //TogglesSection
         const string TogglesSection = "Toggles";
@@ -64,8 +64,9 @@ namespace IngameScript.Domain
 
         //SurfaceColorsSection
         const string SurfaceColorsSection = "Screen Colors";
+        const string AvailableColorsSection = "Available Colors";
 
-        const string TRANSPARENTLCD = "Transparent LCD";
+        const string TRANSPARENTLCD = "Keep LCD Transparency";
         const string LCDBACKGROUNDCOLOR = "LCD Background Color";
         const string LCDFONTCOLOR = "LCD Font Color";
         const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
@@ -81,10 +82,11 @@ namespace IngameScript.Domain
 
         public IniContext(GridContext gc)
         {
+            IniSnapshot = new Dictionary<string, string>();
             this.gc = gc;
         }
 
-        public bool IniAnyChanged => iniAnyChanged;
+        public bool IniChanged => iniChanged;
         public string DockGroupTag => dockGroupTag;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
@@ -107,7 +109,6 @@ namespace IngameScript.Domain
         public string LcdFontColor => lcdFontColor;
         public string SpriteBackgroundColor => spriteBackgroundColor;
         public string SpriteFontColor => spriteFontColor;
-        public string Color => colors;
 
 
         // ───────────────────────────────────────
@@ -116,9 +117,9 @@ namespace IngameScript.Domain
         public bool ParseIni()
         {
             ini.Clear();
-            iniAnyChanged = false;
+            iniChanged = false;
 
-            if (!ini.TryParse(gc.Me.CustomData)) return IniAnyChanged;
+            if (!ini.TryParse(gc.Me.CustomData)) return IniChanged;
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, TogglesSection };
@@ -171,7 +172,7 @@ namespace IngameScript.Domain
 
             // ───────────────────── 
             // Delete PB Custom Data
-            // ─────────────────────   
+            // ─────────────────────  
             ini.Clear();
             gc.Me.CustomData = "";
 
@@ -180,43 +181,41 @@ namespace IngameScript.Domain
             // ───────────────────────────────────────────────────────────────────────────────────────
 
             //TogglesSection
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, LOW_FUEL_LAND, AllowLowFuelLand);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
-            iniAnyChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, LOW_FUEL_LAND, AllowLowFuelLand);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
+            iniChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
 
             //NamesTagsSection
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_GROUP_TAG, DockGroupTag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_IGNORE_TAG, IgnoreTag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, Lcd1Tag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, Lcd2Tag);
-            iniAnyChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_GROUP_TAG, DockGroupTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_IGNORE_TAG, IgnoreTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, Lcd1Tag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, Lcd2Tag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
 
             //ParamsSection
-            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
-            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, CnavAltitude);
-            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
-            iniAnyChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, CnavAltitude);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
 
             //SurfaceColorsSection
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, TRANSPARENTLCD, transparentLCD);
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, LcdBackgroundColor);
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, LcdFontColor);
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, SpriteBackgroundColor);
-            iniAnyChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, SpriteFontColor);
-            ini.Set(SurfaceColorsSection, COLORS, colors);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, TRANSPARENTLCD, TransparentLCD);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, LcdBackgroundColor);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, LcdFontColor);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, SpriteBackgroundColor);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, SpriteFontColor);
 
-
-
+            ini.Set(AvailableColorsSection, COLORS, colors);
 
             gc.Me.CustomData = $"[Flight Systems: {gc.Me.EntityId}]\n\n" + ini.ToString();
 
-            return IniAnyChanged;
+            return iniChanged;
         }
 
         bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
@@ -225,10 +224,10 @@ namespace IngameScript.Domain
 
             string old;
             string newValString = newVal.ToString();
-            __snapshot.TryGetValue(key, out old);
+            IniSnapshot.TryGetValue(key, out old);
             if (old != newValString)
             {
-                __snapshot[key] = newValString;
+                IniSnapshot[key] = newValString;
                 return true;
             }
             return false;

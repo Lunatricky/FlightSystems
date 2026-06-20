@@ -1,4 +1,6 @@
-﻿using IngameScript.Physics;
+﻿c using IngameScript.Domain;
+using IngameScript.Physics;
+using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
@@ -7,9 +9,6 @@ using System.Linq;
 using System.Text;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
-using IngameScript.UseCases;
-using IngameScript.Domain;
-using VRage.Game.GUI.TextPanel;
 
 namespace IngameScript
 {
@@ -24,6 +23,7 @@ namespace IngameScript
         readonly IMyProgrammableBlock me;
 
         Command command = Command.Empty;
+        int tick;
         int tickCount;
         double timeSinceLastRun;
         StringBuilder scriptInfo;
@@ -31,6 +31,9 @@ namespace IngameScript
 
         //Dock Mode
         bool isDockMode;
+        bool lastDockMode;
+        bool anyConnected;
+        bool isGearlocked;
         Vector3D desiredUp;
 
         struct Booleans
@@ -48,30 +51,55 @@ namespace IngameScript
         public Program()
         {
             scriptInfo = new StringBuilder();
-            gridTerminalSystem = GridTerminalSystem;
-            me = Me;
+            gc = new GridContext(GridTerminalSystem, Me);
+            ic = new IniContext(gc);
 
             b = new Booleans();
             stt = new SpeedTimeTracker();
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            ReloadGridContext(ref gc, ref ic);
+            ReloadGridContext(gc, ic);
         }
 
         private void InicializeContexts()
         {
-            gc = new GridContext(gridTerminalSystem, me);
-            ic = new IniContext(gc);
             pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
 
             ic.ParseIni();
             gc.IgnoreTag = ic.IgnoreTag;
         }
 
-        int tick = 0;
-
         public void Main(string argument)
         {
+            tickCount++;
+            if (tickCount % 50 == 1)
+            {
+                    isGearlocked = gc.Gears.Exists(g => g.IsLocked);
+                    anyConnected = GridContext.IsAnyConnectorConnected(gc);
+                    return;
+            }
+
+            if (ic.AllowDockMode)
+            {
+                bool isDocked = anyConnected || isGearlocked;
+
+                if (!isDocked) isDockMode = false;
+                else if (isDocked && !isDockMode) isDockMode = true;
+
+                if (lastDockMode != isDockMode)
+                {
+                    AbortShipContext(gc);
+                    DockToggle(gc, isDockMode);
+                    lastDockMode = isDockMode;
+                }
+            }
+
+            if (isDockMode)
+            {
+                Echo(GetRuntimeInfo());
+                return;
+            }
+
             if (gc.ErrorMessage.Length > 0)
             {
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
@@ -82,11 +110,8 @@ namespace IngameScript
 
             if (!string.IsNullOrEmpty(argument)) this.argument = argument;
 
-            Echo(scriptInfo.ToString());
-            gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
 
-            tickCount++;
-            if (tickCount % 1000 == 1)
+            if (tickCount % 500 == 1)
             {
                 ic.ParseIni();
 
@@ -94,13 +119,14 @@ namespace IngameScript
                 {
                     gc.Me.CubeGrid.CustomName = gc.GridName;
                 }
-            }
 
-            if (ic.IniAnyChanged || gc.Controller == null || gc.Controller.Closed)
-            {
-                ReloadGridContext(ref gc, ref ic);
-                tick = 0;
-                return;
+                if (ic.IniChanged || gc.Controller == null || gc.Controller.Closed)
+                {
+                    ReloadGridContext(gc, ic);
+                    tick = 0;
+                    gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
+                    return;
+                }
             }
 
             switch (tick % 3)
@@ -121,6 +147,7 @@ namespace IngameScript
 
             tick++;
 
+            Echo(scriptInfo.ToString());
             Echo(GetRuntimeInfo());
         }
 
@@ -162,27 +189,6 @@ namespace IngameScript
                 command = new Command(argument);
                 argument = "";
             }
-            
-            if (ic.AllowDockMode)
-            {
-                bool anyConnected = GridContext.IsAnyConnectorConnected(gc);
-                bool isGearlocked = gc.Gears.Exists(g => g.IsLocked);
-                bool isDocked = anyConnected || isGearlocked;
-
-                if (isDocked)
-                {
-                    isDockMode = true;
-                    AbortShipContext(gc);
-                    DockToggle(gc, isDockMode);
-                } else
-                {
-                    isDockMode = false;
-                    AbortShipContext(gc);
-                    DockToggle(gc, isDockMode);
-                }
-            }
-
-            if (isDockMode) return;
 
             if (ic.ControlAntennas)
             {
@@ -217,7 +223,7 @@ namespace IngameScript
             switch (command.State)
             {
                 case MainState.Reload:
-                    ReloadGridContext(ref gc, ref ic);
+                    ReloadGridContext(gc, ic);
                     break;
                 case MainState.Abort:
                     AbortShipContext(gc);
@@ -261,11 +267,11 @@ namespace IngameScript
             }
         }
 
-        private void DockToggle(GridContext gc, bool anyConnected)
+        private void DockToggle(GridContext gc, bool isDocked)
         {
-            GridContext.SetBlocks(gc, !anyConnected, out isDockMode);
-            GridContext.StockpileTanks(gc, anyConnected);
-            if (anyConnected)
+            GridContext.SetBlocks(gc, !isDocked, out isDockMode);
+            GridContext.StockpileTanks(gc, isDocked);
+            if (isDocked)
             {
                 GridContext.ChargeBatteries(gc);
             }
@@ -558,7 +564,7 @@ namespace IngameScript
             return false;
         }
 
-        private void ReloadGridContext(ref GridContext gc, ref IniContext ic)
+        private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             InicializeContexts();
 
