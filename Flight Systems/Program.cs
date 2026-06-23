@@ -19,9 +19,6 @@ namespace IngameScript
         PhysicsContext pc;
         SpeedTimeTracker stt;
 
-        readonly IMyGridTerminalSystem gridTerminalSystem;
-        readonly IMyProgrammableBlock me;
-
         Command command = Command.Empty;
         int tick;
         int tickCount;
@@ -74,9 +71,9 @@ namespace IngameScript
             tickCount++;
             if (tickCount % 50 == 1)
             {
-                    isGearlocked = gc.Gears.Exists(g => g.IsLocked);
-                    anyConnected = GridContext.IsAnyConnectorConnected(gc);
-                    return;
+                isGearlocked = gc.Gears.Exists(g => g.IsLocked);
+                anyConnected = GridContext.IsAnyConnectorConnected(gc);
+                return;
             }
 
             if (ic.AllowDockMode)
@@ -111,16 +108,18 @@ namespace IngameScript
             if (!string.IsNullOrEmpty(argument)) this.argument = argument;
 
 
-            if (tickCount % 500 == 1)
+            if (tickCount > 500)
             {
-                ic.ParseIni();
+                tickCount = 0;
+
+                bool hasIniChanged = ic.ParseIni();
 
                 if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
                 {
                     gc.Me.CubeGrid.CustomName = gc.GridName;
                 }
 
-                if (ic.IniChanged || gc.Controller == null || gc.Controller.Closed)
+                if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
                 {
                     ReloadGridContext(gc, ic);
                     tick = 0;
@@ -603,7 +602,6 @@ namespace IngameScript
 
             if (ic.RenameSubgrids)
             {
-                // Get main grid (where this PB is)
                 IMyCubeGrid mainGrid = gc.Me.CubeGrid;
                 if (mainGrid != null)
                 {
@@ -824,7 +822,6 @@ namespace IngameScript
             gc.Controller.DampenersOverride = true;
             b.autoPilotToggle = false;
 
-            tickCount = 0;
             GridContext.ResetGyros(gc.Gyros);
             GridContext.ResetThrusters(gc.Thrusters);
         }

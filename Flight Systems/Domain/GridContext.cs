@@ -166,6 +166,8 @@ namespace IngameScript.Domain
 
         public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
         {
+            Lcds1.Clear();
+            Lcds2.Clear();
             Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
             Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
             CleanSurfaces(Lcds1);
@@ -176,13 +178,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadSurfaces()
         {
+            surfaces.Clear();
             surfaces.AddList(AddLCDsToList(ignoreTag, true));
             surfaces.Add(Me.GetSurface(0));
             surfaces.Add(Me.GetSurface(1));
             return this;
         }
 
-        List<IMyTextSurface> AddLCDsToList(string LCD_TAG = "", bool isIgnoreTag = false, bool setupSurface = false)
+        List<IMyTextSurface> AddLCDsToList(string tag, bool isIgnoreTag, bool setupSurface = false)
         {
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
             
@@ -191,29 +194,25 @@ namespace IngameScript.Domain
             {
                 GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
                     block.IsSameConstructAs(Me) &&
-                    !block.CustomName.Contains(LCD_TAG) &&
-                    !block.CustomData.Contains(LCD_TAG)
+                    !block.CustomName.Contains(tag) &&
+                    !block.CustomData.Contains(tag)
                 );
             }
             else
             {
                 GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
                     block.IsSameConstructAs(Me) &&
-                    block.CustomName.Contains(LCD_TAG)
+                    block.CustomName.Contains(tag)
                 );
             }
 
             foreach (IMyTextSurfaceProvider surfaceProvider in blocks)
             {
-                // Only take the first surface (index 0)
-                if (surfaceProvider.SurfaceCount > 0)
+                for (int i = 0; i < surfaceProvider.SurfaceCount; i++)
                 {
-                    for (int i = 0; i < surfaceProvider.SurfaceCount; i++)
-                    {
-                        IMyTextSurface surface = surfaceProvider.GetSurface(i);
-                        if (setupSurface) SetupSurface(surface);
-                        lcds.Add(surface);
-                    }
+                    IMyTextSurface surface = surfaceProvider.GetSurface(i);
+                    if (setupSurface) SetupSurface(surface);
+                    lcds.Add(surface);
                 }
             }
 
