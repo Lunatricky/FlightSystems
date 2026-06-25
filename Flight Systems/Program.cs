@@ -18,19 +18,23 @@ namespace IngameScript
         IniContext ic;
         PhysicsContext pc;
         SpeedTimeTracker stt;
+        PlayerInput pi;
 
         Command command = Command.Empty;
+        int tickSplit = 3;
         int tick;
         int tickCount;
         double timeSinceLastRun;
         StringBuilder scriptInfo;
-        string argument = "";
 
         //Dock Mode
         bool isDockMode;
         bool lastDockMode;
         bool anyConnected;
         bool isGearlocked;
+        bool settingsToggle;
+        bool settingsIsLocked;
+
         Vector3D desiredUp;
 
         struct Booleans
@@ -47,27 +51,58 @@ namespace IngameScript
                 
         public Program()
         {
+
             scriptInfo = new StringBuilder();
             gc = new GridContext(GridTerminalSystem, Me);
             ic = new IniContext(gc);
+            CheckIni();
 
             b = new Booleans();
             stt = new SpeedTimeTracker();
+            pi = new PlayerInput(gc.Controllers);
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
             ReloadGridContext(gc, ic);
         }
 
-        private void InicializeContexts()
-        {
-            pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
-
-            ic.ParseIni();
-            gc.IgnoreTag = ic.IgnoreTag;
-        }
+        int inputLock = 0;
 
         public void Main(string argument)
         {
+            if (!string.IsNullOrEmpty(argument))
+            {
+                if (argument.ToLowerInvariant() == "settings")
+                {
+                    settingsToggle = !settingsToggle;
+
+                    if (settingsToggle)
+                    {
+                        pi.OcupiedController(gc.Controllers);
+                        pi.PrepareController();
+                    }
+                    else pi.ResetController();
+                }
+                else command = new Command(argument);
+            }
+
+            inputLock++;
+            if (inputLock > 35)
+            {
+                inputLock = 0;
+                settingsIsLocked = false;
+            }
+
+            if (gc.LcdsSettings.Count > 0)
+            {
+                if (settingsToggle) EditSettingsSprite();
+                else LCDSettingsSprites();
+            }
+
+            if (ic.AnalogThrotle && command.State == MainState.Idle)
+            {
+                AnalogThrust();
+            }
+
             tickCount++;
             if (tickCount % 50 == 1)
             {
@@ -105,30 +140,12 @@ namespace IngameScript
 
             timeSinceLastRun = Runtime.TimeSinceLastRun.TotalSeconds;
 
-            if (!string.IsNullOrEmpty(argument)) this.argument = argument;
-
-
             if (tickCount > 500)
             {
-                tickCount = 0;
-
-                bool hasIniChanged = ic.ParseIni();
-
-                if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
-                {
-                    gc.Me.CubeGrid.CustomName = gc.GridName;
-                }
-
-                if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
-                {
-                    ReloadGridContext(gc, ic);
-                    tick = 0;
-                    gc.Me.GetSurface(0).WriteText(scriptInfo.ToString());
-                    return;
-                }
+                if (CheckIni()) return;
             }
 
-            switch (tick % 3)
+            switch (tick % tickSplit)
             {
                 case 0:
                     pc.NewRun(timeSinceLastRun);
@@ -150,7 +167,51 @@ namespace IngameScript
             Echo(GetRuntimeInfo());
         }
 
-        private StringBuilder ScriptInfo()
+        bool CheckIni()
+        {
+            tickCount = 0;
+
+            bool hasIniChanged = ic.ParseIni();
+            gc.IgnoreTag = ic.IgnoreTag;
+
+            if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
+            {
+                gc.Me.CubeGrid.CustomName = gc.GridName;
+            }
+
+            if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
+            {
+                ReloadGridContext(gc, ic);
+                tick = 0;
+                return true;
+            }
+            return false;
+        }
+
+        void AnalogThrust()
+        {
+            pi.OcupiedController(gc.Controllers);
+            if (pi.W())
+            {
+                foreach (IMyThrust t in gc.ForwardThrusters)
+                {
+                    t.ThrustOverridePercentage = t.ThrustOverridePercentage + 0.01f;
+                }
+            }
+
+            if (pi.S())
+            {
+                foreach (IMyThrust t in gc.ForwardThrusters)
+                {
+                    t.ThrustOverridePercentage = t.ThrustOverridePercentage - 0.01f;
+                }
+            }
+
+            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) GridManager.KillThrusters(gc.BreakingThrusters);
+            else GridManager.ResetThrusters(gc.BreakingThrusters);
+        }
+
+        StringBuilder ScriptInfo()
         {
             StringBuilder scriptInfo = new StringBuilder();
             ScriptInfoHeader(scriptInfo);
@@ -159,8 +220,8 @@ namespace IngameScript
             return scriptInfo;
         }
 
-        private double tickCounter = 0;
-        private double maxRuntimeMs = 0;
+        double tickCounter = 0;
+        double maxRuntimeMs = 0;
 
         private String GetRuntimeInfo()
         {
@@ -183,12 +244,6 @@ namespace IngameScript
 
         private void FlightSystems(GridContext gc, IniContext ic, PhysicsContext pc)
         {
-            if (!string.IsNullOrEmpty(argument))
-            {
-                command = new Command(argument);
-                argument = "";
-            }
-
             if (ic.ControlAntennas)
             {
                 gc.Antennas.ForEach(b => { if (b != null) b.Enabled = false; });
@@ -299,11 +354,13 @@ namespace IngameScript
         {
             scriptInfo.AppendLine("Toggles");
             scriptInfo.AppendLine("    " + IniContext.FLIGHT_SYSTEMS + ": " + ic.AllowFlightSystems);
+            scriptInfo.AppendLine("    " + IniContext.ANALOG_THROTLE + ": " + ic.AnalogThrotle);
             scriptInfo.AppendLine("    " + IniContext.LOW_FUEL_LAND + ": " + ic.AllowLowFuelLand);
             scriptInfo.AppendLine("    " + IniContext.DOCK_MODE + ": " + ic.AllowDockMode);
             scriptInfo.AppendLine("    " + IniContext.CONTROL_ANTENNAS + ": " + ic.ControlAntennas);
             scriptInfo.AppendLine("    " + IniContext.RENAME_SUBGRIDS + ": " + ic.RenameSubgrids);
             scriptInfo.AppendLine("    " + IniContext.PAINT_SURFACES + ": " + ic.PaintSurfaces);
+            scriptInfo.AppendLine("    " + IniContext.TRANSPARENTLCD + ": " + ic.TransparentLCD);
             scriptInfo.AppendLine("Blocks");
             scriptInfo.AppendLine("    Controller: " + gc.Controller.CustomName);
 
@@ -326,6 +383,7 @@ namespace IngameScript
 
             scriptInfo.AppendLine("    LCDs1: " + gc.Lcds1.Count);
             scriptInfo.AppendLine("    LCDs2: " + gc.Lcds2.Count);
+            scriptInfo.AppendLine("    Lcds Settings: " + gc.LcdsSettings.Count);
             scriptInfo.AppendLine("    Surfaces: " + gc.Surfaces.Count);
 
             return scriptInfo;
@@ -565,9 +623,9 @@ namespace IngameScript
 
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
-            InicializeContexts();
+            pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
 
-            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag)
+            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag, ic.LcdSettingsTag)
                     .ReloadH2Tanks()
                     .ReloadBatteries(ic.BackupBatteryTag);
 
@@ -628,7 +686,7 @@ namespace IngameScript
         const double Kd = 0.5;
 
         const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
-        const double OVERRIDE_STEP = 0.01;     // max absolute change per tick (smoothness)
+        double OVERRIDE_STEP = 0.01;                  // max absolute change per tick (smoothness)
         const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
 
         void CruiseControl(double cruiseSpeed, double dt)
@@ -664,7 +722,7 @@ namespace IngameScript
 
             // step limiter per tick to keep smooth visuals (OVERRIDE_STEP controls smoothness)
             // The step is applied independently to forward and brake, but we keep them complementary.
-            double step = OVERRIDE_STEP; // fixed per tick step (tune for desired smoothness)
+            double step = OVERRIDE_STEP * tickSplit; // fixed per tick step (tune for desired smoothness)
 
             // move currentOverride toward desiredForward by at most step
             double diffF = desiredForward - currentOverride;
@@ -796,20 +854,93 @@ namespace IngameScript
                 spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
 
-            foreach (IMyTextSurface lcd in gc.Lcds2)
-            {
-                DrawSprites(spt, gc.Lcds2);
-            }
+            DrawSprites(spt, gc.Lcds2);
         }
 
-        private void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces)
+        int selectedSprite = 1;
+
+        void EditSettingsSprite()
+        {
+            if (!settingsIsLocked && pi.W())
+            {
+                settingsIsLocked = true;
+                selectedSprite--;
+            }
+
+            if (!settingsIsLocked && pi.S())
+            {
+                settingsIsLocked = true;
+                selectedSprite++;
+            }
+
+            if (selectedSprite < 1) selectedSprite = 8;
+            else if (selectedSprite > 8) selectedSprite = 1;
+
+            if (!settingsIsLocked && pi.Space())
+            {
+                settingsIsLocked = true;
+                switch (selectedSprite)
+                {
+                    case 1: ic.AllowFlightSystems = !ic.AllowFlightSystems; break;
+                    case 2: ic.AnalogThrotle = !ic.AnalogThrotle; break;
+                    case 3: ic.AllowLowFuelLand = !ic.AllowLowFuelLand; break;
+                    case 4: ic.AllowDockMode = !ic.AllowDockMode; break;
+                    case 5: ic.ControlAntennas = !ic.ControlAntennas; break;
+                    case 6: ic.RenameSubgrids = !ic.RenameSubgrids; break;
+                    case 7: ic.PaintSurfaces = !ic.PaintSurfaces; break;
+                    case 8: ic.TransparentLCD = !ic.TransparentLCD; break;
+                }
+            }
+
+            Sprites spt = new Sprites();
+            spt.Add($"{IniContext.TogglesSection}");
+
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", SpriteColor(selectedSprite == 1, ic.AllowFlightSystems));
+            spt.Add($"{IniContext.ANALOG_THROTLE}", SpriteColor(selectedSprite == 2, ic.AnalogThrotle));
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", SpriteColor(selectedSprite == 3, ic.AllowLowFuelLand));
+            spt.Add($"{IniContext.DOCK_MODE}", SpriteColor(selectedSprite == 4, ic.AllowDockMode));
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", SpriteColor(selectedSprite == 5, ic.ControlAntennas));
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", SpriteColor(selectedSprite == 6, ic.RenameSubgrids));
+            spt.Add($"{IniContext.PAINT_SURFACES}", SpriteColor(selectedSprite == 7, ic.PaintSurfaces));
+            spt.Add($"{IniContext.TRANSPARENTLCD}", SpriteColor(selectedSprite == 8, ic.TransparentLCD));
+            
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        private void LCDSettingsSprites()
+        {
+            Sprites spt = new Sprites();
+
+            spt.Add($"{IniContext.TogglesSection}");
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", SpriteColor(false, ic.AllowFlightSystems));
+            spt.Add($"{IniContext.ANALOG_THROTLE}", SpriteColor(false, ic.AnalogThrotle));
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", SpriteColor(false, ic.AllowLowFuelLand));
+            spt.Add($"{IniContext.DOCK_MODE}", SpriteColor(false, ic.AllowDockMode));
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", SpriteColor(false, ic.ControlAntennas));
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", SpriteColor(false, ic.RenameSubgrids));
+            spt.Add($"{IniContext.PAINT_SURFACES}", SpriteColor(false, ic.PaintSurfaces));
+            spt.Add($"{IniContext.TRANSPARENTLCD}", SpriteColor(false, ic.TransparentLCD));
+
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        private string SpriteColor(bool isSelected, bool toggle)
+        {
+            return ColorMap.GetStringFromColor(
+                isSelected ? 
+                toggle ? Color.Green : Color.Red : 
+                toggle ? Color.LightGreen : Color.OrangeRed
+                );
+        }
+
+        private void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces, int col = 1)
         {
             foreach (IMyTextSurface surface in surfaces)
             {
                 Color backgroundColor;
                 if (ic.TransparentLCD && surface.Name.ToLower().Contains("transparent")) backgroundColor = Color.Black;
                 else backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
-                spt.DrawInfoPanel(gc.IsLG, surface, ColorMap.GetColorFromString(ic.SpriteFontColor), backgroundColor);
+                spt.DrawInfoPanel(surface, ColorMap.GetColorFromString(ic.SpriteFontColor), backgroundColor, col);
             }
         }
 

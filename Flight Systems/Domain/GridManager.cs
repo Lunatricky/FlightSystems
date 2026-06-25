@@ -39,6 +39,8 @@ namespace IngameScript.Domain
             isDockMode = !enabled;
         }
 
+        public static void KillThrusters(List<IMyThrust> thrusters) => thrusters.ForEach(b => b.Enabled = false);
+
         public static void ResetThrusters(List<IMyThrust> thrusters)
         {
             foreach (var t in thrusters)

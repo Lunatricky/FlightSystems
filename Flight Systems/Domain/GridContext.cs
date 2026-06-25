@@ -22,8 +22,6 @@ namespace IngameScript.Domain
         double bottomGridHeight;
         double gridHeight;
 
-        public bool IsLG;
-
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
 
@@ -45,6 +43,7 @@ namespace IngameScript.Domain
         List<IMyLandingGear> gears = new List<IMyLandingGear>();
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
+        List<IMyTextSurface> lcdsSettings = new List<IMyTextSurface>();
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -53,12 +52,10 @@ namespace IngameScript.Domain
             errorMessage = new StringBuilder();
             GridTS = grid;
             Me = me;
-            IsLG = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
+            //IsLG = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
-
-            SetupSurface(me.GetSurface(0), 1.1f);
         }
 
         public GridContext ReloadControllers(string controllerTag)
@@ -164,14 +161,20 @@ namespace IngameScript.Domain
             return this;
         }
 
-        public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag)
+        public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag, string lcdSettingsTag)
         {
             Lcds1.Clear();
             Lcds2.Clear();
+            lcdsSettings.Clear();
+
             Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
             Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
+            lcdsSettings.AddList(AddLCDsToList(lcdSettingsTag, false, true));
+            lcdsSettings.Add(Me.GetSurface(0));
+
             CleanSurfaces(Lcds1);
             CleanSurfaces(Lcds2);
+            CleanSurfaces(lcdsSettings);
 
             return this;
         }
@@ -180,8 +183,6 @@ namespace IngameScript.Domain
         {
             surfaces.Clear();
             surfaces.AddList(AddLCDsToList(ignoreTag, true));
-            surfaces.Add(Me.GetSurface(0));
-            surfaces.Add(Me.GetSurface(1));
             return this;
         }
 
@@ -485,7 +486,7 @@ namespace IngameScript.Domain
         public List<IMyGasTank> H2Tanks => h2Tanks;
         public List<IMyBatteryBlock> Batteries => batteries;
         public List<IMyRadioAntenna> Antennas => antennas;
-        List<IMyShipController> Controllers => controllers;
+        public List<IMyShipController> Controllers => controllers;
         public List<IMyThrust> Thrusters => thrusters;
         public List<IMyThrust> BreakingThrusters => breakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
@@ -494,6 +495,7 @@ namespace IngameScript.Domain
         public List<IMyLandingGear> Gears => gears;
         public List<IMyTextSurface> Lcds1 => lcds1;
         public List<IMyTextSurface> Lcds2 => lcds2;
+        public List<IMyTextSurface> LcdsSettings => lcdsSettings;
 
         public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;
