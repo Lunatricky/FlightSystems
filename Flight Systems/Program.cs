@@ -122,7 +122,7 @@ namespace IngameScript
                 }
             }
 
-            if (ic.AnalogThrotle && command.State == MainState.Idle)
+            if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
             {
                 AnalogThrust();
             }
