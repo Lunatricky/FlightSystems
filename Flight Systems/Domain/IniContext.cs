@@ -60,11 +60,13 @@ namespace IngameScript.Domain
         public const string ParamsSection = "Params";
 
         public const string MAX_SPEED = "Max Speed";
+        public const string CRUISE_SPEED = "Cruise Speed";
         public const string CNAV_ALTITUDE = "Cnav Altitude";
         public const string DISTANCE_TO_GPS = "Distance to GPS";
         public const string MINIMUM_ACCEPTED_FUEL = "Minimum Fuel";
 
-        double maxSpeed = 99; // m/s
+        double maxSpeed = double.PositiveInfinity; // m/s
+        double cruiseSpeed = 100; // m/s
         double cnavAltitude = 1000; // m
         double distanceToGPS = 500; // m
         double minimumAcceptedFuel = 20; //%
@@ -109,15 +111,26 @@ namespace IngameScript.Domain
         public double MaxSpeed
         {
             get { return maxSpeed; }
-            set {
+            set
+            {
                 maxSpeed = value;
                 UpdateIni(ParamsSection, MAX_SPEED, maxSpeed);
+            }
+        }
+        public double CruiseSpeed
+        {
+            get { return cruiseSpeed; }
+            set
+            {
+                cruiseSpeed = value;
+                UpdateIni(ParamsSection, CRUISE_SPEED, cruiseSpeed);
             }
         }
         public double CnavAltitude
         {
             get { return cnavAltitude; }
-            set {
+            set 
+            {
                 cnavAltitude = value;
                 UpdateIni(ParamsSection, CNAV_ALTITUDE, cnavAltitude);
             }
@@ -125,7 +138,8 @@ namespace IngameScript.Domain
         public double DistanceToGPS
         {
             get { return distanceToGPS; }
-            set {
+            set 
+            {
                 distanceToGPS = value;
                 UpdateIni(ParamsSection, DISTANCE_TO_GPS, distanceToGPS);
             }
@@ -275,7 +289,13 @@ namespace IngameScript.Domain
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
 
             //ParamsSection
-            maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
+            string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
+
+            maxSpeed = (s == "Infinity" || s == "Infinite" || s == "" || s == "00")
+                ? double.PositiveInfinity
+                : double.Parse(s);
+
+            cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
             cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(CnavAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
@@ -321,6 +341,7 @@ namespace IngameScript.Domain
 
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CRUISE_SPEED, CruiseSpeed);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, CnavAltitude);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);

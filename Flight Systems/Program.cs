@@ -69,6 +69,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+
             if (!string.IsNullOrEmpty(argument))
             {
                 if (argument.ToLowerInvariant() == "settings")
@@ -92,20 +93,28 @@ namespace IngameScript
                 settingsIsLocked = false;
             }
 
-            if (!settingsIsLocked && gc.LcdsSettings.Count > 0)
+            if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
-                if (settingsToggle) EditSettingsSprite();
+
+                if (selectedRow == 0 && pi.Space())
+                {
+                    settingsToggle = false; 
+                    pi.ResetControllers(gc.Controllers);
+                    return;
+                }
+
+                EditSettingsSprite();
 
                 switch (selectedPage)
                 {
                     case 1:
-                        if (selectedRow < 1) selectedRow = 8;
+                        if (selectedRow < 0) selectedRow = 8;
                         else if (selectedRow > 8) selectedRow = 1;
 
                         (settingsToggle ? (Action)ToggleSectionEdit : ToggleSection)(); 
                         break;
                     case 2:
-                        if (selectedRow < 1) selectedRow = 4;
+                        if (selectedRow < 0) selectedRow = 4;
                         else if (selectedRow > 4) selectedRow = 1;
 
                         (settingsToggle ? (Action)ParamSectionEdit : ParamSection)(); 
@@ -406,7 +415,7 @@ namespace IngameScript
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, CommandParam param)
         {
-            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed + 5);
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
 
             switch (param.Text.ToLowerInvariant())
             {
@@ -657,8 +666,7 @@ namespace IngameScript
                     .ReloadGyros()
                     .ReloadGears();
 
-                GridContext.ResetThrusters(gc.Thrusters);
-                GridContext.ResetGyros(gc.Gyros);
+                SoftAbort(gc);
 
                 b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
             }
@@ -708,7 +716,7 @@ namespace IngameScript
         {
             if (pc.ForwardVelocity > ic.MaxSpeed)
             {
-                GridContext.ResetThrusters(gc.Thrusters);
+                GridContext.ResetThrusters(gc.ForwardThrusters);
                 return;
             }
 
@@ -745,30 +753,35 @@ namespace IngameScript
             else if (diffF < -step) diffF = -step;
             currentOverride += diffF;
 
-            // move currentBrake toward desiredBrake by at most step
-            double diffB = desiredBrake - currentBrake;
-            if (diffB > step) diffB = step;
-            else if (diffB < -step) diffB = -step;
-            currentBrake += diffB;
-
-            // Prevent both fighting: if both non-zero, reduce them proportionally so they don't sum >1
-            if (currentOverride > 0 && currentBrake > 0)
+            if (ic.MaxSpeed != double.PositiveInfinity && cruiseSpeed < ic.MaxSpeed)
             {
-                double sum = currentOverride + currentBrake;
-                if (sum > 1.0)
+                // move currentBrake toward desiredBrake by at most step
+                double diffB = desiredBrake - currentBrake;
+                if (diffB > step) diffB = step;
+                else if (diffB < -step) diffB = -step;
+                currentBrake += diffB;
+
+                // Prevent both fighting: if both non-zero, reduce them proportionally so they don't sum >1
+                if (currentOverride > 0 && currentBrake > 0)
                 {
-                    currentOverride /= sum;
-                    currentBrake /= sum;
+                    double sum = currentOverride + currentBrake;
+                    if (sum > 1.0)
+                    {
+                        currentOverride /= sum;
+                        currentBrake /= sum;
+                    }
+                }
+
+                // Apply thrusters: enable brake thrusters only when brake significant
+                bool useBrakes = currentBrake > 1e-4;
+
+                foreach (var bt in gc.BreakingThrusters)
+                {
+                    bt.Enabled = useBrakes;
+                    bt.ThrustOverridePercentage = (float)currentBrake;
                 }
             }
-
-            // Apply thrusters: enable brake thrusters only when brake significant
-            bool useBrakes = currentBrake > 1e-4;
-            foreach (var bt in gc.BreakingThrusters)
-            {
-                bt.Enabled = useBrakes;
-                bt.ThrustOverridePercentage = (float)currentBrake;
-            }
+            else GridManager.KillThrusters(gc.BreakingThrusters);
 
             // Apply forward thrusters
             bool useForward = currentOverride > 1e-4;
@@ -944,6 +957,7 @@ namespace IngameScript
             int row = 1;
 
             if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
+            else if (selectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed);
             else if (selectedRow == row++) ic.CnavAltitude = IncrementedValue(ic.CnavAltitude);
             else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
             else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
@@ -952,6 +966,7 @@ namespace IngameScript
 
             spt.Add($"{IniContext.ParamsSection}");
             spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
@@ -982,6 +997,7 @@ namespace IngameScript
 
             spt.Add($"{IniContext.ParamsSection}");
             spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}");
+            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}");
             spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}");
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}");
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}");
@@ -1049,11 +1065,7 @@ namespace IngameScript
 
             command = Command.Empty;
 
-            gc.Controller.DampenersOverride = true;
-            b.autoPilotToggle = false;
-
-            GridContext.ResetGyros(gc.Gyros);
-            GridContext.ResetThrusters(gc.Thrusters);
+            SoftAbort(gc);
         }
 
         void SoftAbort(GridContext gc)
