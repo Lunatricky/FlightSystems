@@ -7,6 +7,19 @@ namespace IngameScript
     {
         static Dictionary<Color, string> ByColor;
 
+        public static Color SelectedColor(string colStr, float factor)
+        {
+            return SelectedColor(GetColorFromString(colStr), factor);
+        }
+
+        public static Color SelectedColor(Color col, float factor)
+        {
+            float R = col.R + factor > 255 ? col.R - factor : col.R + factor;
+            float G = col.G + factor > 255 ? col.G - factor : col.G + factor;
+            float B = col.B + factor > 255 ? col.B - factor : col.B + factor;
+            return new Color(R, G, B + factor);
+        }
+
         public static Color GetColorFromString(string nameString)
         {
             Color c;

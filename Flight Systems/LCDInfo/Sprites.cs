@@ -1,4 +1,5 @@
-﻿using Sandbox.ModAPI.Ingame;
+﻿using IngameScript.Domain;
+using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
@@ -7,16 +8,31 @@ namespace IngameScript
 {
     partial class Sprites
    {
-        readonly List<string> texts = new List<string>();
-        readonly List<string> colors = new List<string>();
+        IniContext ic;
 
-        public void Add(string s, string c = null)
+        readonly List<string> texts = new List<string>();
+        readonly List<Color> colors = new List<Color>();
+
+        Color backgroundColor;
+
+        public Sprites(IniContext ic)
+        {
+            this.ic = ic;
+            backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
+        }
+
+        public void Add(string s)
+        {
+            texts.Add(s);
+            colors.Add(ColorMap.GetColorFromString(ic.SpriteBackgroundColor));
+        }
+
+        public void Add(string s, Color c)
         {
             texts.Add(s);
             colors.Add(c);
         }
 
-        // Usage example
         public void DrawInfoPanel(IMyTextSurface panel, Color fontColor, Color backgroundColor, int col)
         {
             List<MySprite> sprites = new List<MySprite>();
@@ -99,9 +115,9 @@ namespace IngameScript
 
                 if (6 / rows < 1) scale = scale * 6 / rows;
 
-                if (colors[i] != null)
+                if (colors[i] != this.backgroundColor)
                 {
-                    sprites.Add(MakeRectSprite(centerRec, sizeRec, ColorMap.GetColorFromString(colors[i])));
+                    sprites.Add(MakeRectSprite(centerRec, sizeRec, colors[i]));
                     sprites.Add(MakeTextSprite(centerText, sizeText, Color.Black, texts[i], scale));
                 } else
                 {

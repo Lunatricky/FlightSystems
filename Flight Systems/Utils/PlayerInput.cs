@@ -11,8 +11,9 @@ namespace IngameScript.Utils
         /// </summary>
         /// 
 
-        float DeadZone;
         IMyShipController controller;
+        float DeadZone;
+
 
         public PlayerInput(List<IMyShipController> controllers, float deadZone = 0.1f)
         {
@@ -23,12 +24,8 @@ namespace IngameScript.Utils
         {
             foreach (IMyShipController controller in controllers)
             {
-                if (controller.IsUnderControl)
-                {
-                    this.controller = controller;
-                    //PrepareController();
-                    return;
-                }
+                if (controller.IsUnderControl) this.controller = controller;
+                else controller.IsMainCockpit = true;
             }
         }
 
@@ -38,8 +35,12 @@ namespace IngameScript.Utils
             controller.ControlWheels = false;
         }
 
-        public void ResetController()
+        public void ResetControllers(List<IMyShipController> controllers)
         {
+            foreach (IMyShipController controller in controllers)
+            {
+                controller.IsMainCockpit = false;
+            }
             if (controller == null) return;
             controller.ControlThrusters = true;
             controller.ControlWheels = true;

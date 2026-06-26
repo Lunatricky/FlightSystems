@@ -80,22 +80,37 @@ namespace IngameScript
                         pi.OcupiedController(gc.Controllers);
                         pi.PrepareController();
                     }
-                    else pi.ResetController();
+                    else pi.ResetControllers(gc.Controllers);
                 }
                 else command = new Command(argument);
             }
 
             inputLock++;
-            if (inputLock > 35)
+            if (inputLock > 25)
             {
                 inputLock = 0;
                 settingsIsLocked = false;
             }
 
-            if (gc.LcdsSettings.Count > 0)
+            if (!settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
                 if (settingsToggle) EditSettingsSprite();
-                else LCDSettingsSprites();
+
+                switch (selectedPage)
+                {
+                    case 1:
+                        if (selectedRow < 1) selectedRow = 8;
+                        else if (selectedRow > 8) selectedRow = 1;
+
+                        (settingsToggle ? (Action)ToggleSectionEdit : ToggleSection)(); 
+                        break;
+                    case 2:
+                        if (selectedRow < 1) selectedRow = 4;
+                        else if (selectedRow > 4) selectedRow = 1;
+
+                        (settingsToggle ? (Action)ParamSectionEdit : ParamSection)(); 
+                        break;
+                }
             }
 
             if (ic.AnalogThrotle && command.State == MainState.Idle)
@@ -688,6 +703,7 @@ namespace IngameScript
         const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
         double OVERRIDE_STEP = 0.01;                  // max absolute change per tick (smoothness)
         const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
+        private const int DarkenFactor = 40;
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
@@ -768,7 +784,7 @@ namespace IngameScript
 
         private void LCD1Sprite()
         {
-            Sprites spt = new Sprites();
+            Sprites spt = new Sprites(ic);
             spt.Add(gc.GridName);
 
             StringBuilder state = new StringBuilder();
@@ -793,7 +809,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", ColorMap.GetStringFromColor(color));
+                spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color);
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
             color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
@@ -802,7 +818,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", ColorMap.GetStringFromColor(color));
+                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color);
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
             DrawSprites(spt, gc.Lcds1);
@@ -810,7 +826,7 @@ namespace IngameScript
 
         void LCD2Sprite()
         {
-            Sprites spt = new Sprites();
+            Sprites spt = new Sprites(ic);
 
             if (pc.Gravity > 0)
             {
@@ -824,9 +840,9 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", ColorMap.GetStringFromColor(color));
+                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", ColorMap.GetStringFromColor(color));
+                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
@@ -857,89 +873,178 @@ namespace IngameScript
             DrawSprites(spt, gc.Lcds2);
         }
 
-        int selectedSprite = 1;
+        int selectedRow = 1;
+        int selectedPage = 1;
 
         void EditSettingsSprite()
         {
-            if (!settingsIsLocked && pi.W())
+            if (pi.W())
             {
                 settingsIsLocked = true;
-                selectedSprite--;
+                selectedRow--;
             }
 
-            if (!settingsIsLocked && pi.S())
+            if (pi.S())
             {
                 settingsIsLocked = true;
-                selectedSprite++;
+                selectedRow++;
             }
 
-            if (selectedSprite < 1) selectedSprite = 8;
-            else if (selectedSprite > 8) selectedSprite = 1;
-
-            if (!settingsIsLocked && pi.Space())
+            if (pi.A())
             {
                 settingsIsLocked = true;
-                switch (selectedSprite)
-                {
-                    case 1: ic.AllowFlightSystems = !ic.AllowFlightSystems; break;
-                    case 2: ic.AnalogThrotle = !ic.AnalogThrotle; break;
-                    case 3: ic.AllowLowFuelLand = !ic.AllowLowFuelLand; break;
-                    case 4: ic.AllowDockMode = !ic.AllowDockMode; break;
-                    case 5: ic.ControlAntennas = !ic.ControlAntennas; break;
-                    case 6: ic.RenameSubgrids = !ic.RenameSubgrids; break;
-                    case 7: ic.PaintSurfaces = !ic.PaintSurfaces; break;
-                    case 8: ic.TransparentLCD = !ic.TransparentLCD; break;
-                }
+                selectedPage--;
             }
 
-            Sprites spt = new Sprites();
-            spt.Add($"{IniContext.TogglesSection}");
+            if (pi.D())
+            {
+                settingsIsLocked = true;
+                selectedPage++;
+            }
 
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", SpriteColor(selectedSprite == 1, ic.AllowFlightSystems));
-            spt.Add($"{IniContext.ANALOG_THROTLE}", SpriteColor(selectedSprite == 2, ic.AnalogThrotle));
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", SpriteColor(selectedSprite == 3, ic.AllowLowFuelLand));
-            spt.Add($"{IniContext.DOCK_MODE}", SpriteColor(selectedSprite == 4, ic.AllowDockMode));
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", SpriteColor(selectedSprite == 5, ic.ControlAntennas));
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", SpriteColor(selectedSprite == 6, ic.RenameSubgrids));
-            spt.Add($"{IniContext.PAINT_SURFACES}", SpriteColor(selectedSprite == 7, ic.PaintSurfaces));
-            spt.Add($"{IniContext.TRANSPARENTLCD}", SpriteColor(selectedSprite == 8, ic.TransparentLCD));
-            
+            if (selectedPage < 1) selectedPage = 2;
+            else if (selectedPage > 2) selectedPage = 1;
+        }
+
+        void ToggleSectionEdit()
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+
+            if (pi.Space())
+            {
+                settingsIsLocked = true;
+                if (selectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
+                else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
+                else if (selectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
+                else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
+                else if (selectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
+                else if (selectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
+                else if (selectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
+                else if (selectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
+            }
+
+            row = 1;
+
+            spt.Add($"{IniContext.ToggleSection}");
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(selectedRow == row++, ic.AllowFlightSystems));
+            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(selectedRow == row++, ic.AnalogThrotle));
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(selectedRow == row++, ic.AllowLowFuelLand));
+            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(selectedRow == row++, ic.AllowDockMode));
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(selectedRow == row++, ic.ControlAntennas));
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(selectedRow == row++, ic.RenameSubgrids));
+            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(selectedRow == row++, ic.PaintSurfaces));
+            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(selectedRow == row++, ic.TransparentLCD));
+
             DrawSprites(spt, gc.LcdsSettings);
         }
 
-        private void LCDSettingsSprites()
+        void ParamSectionEdit()
         {
-            Sprites spt = new Sprites();
+            Sprites spt = new Sprites(ic);
+            int row = 1;
 
-            spt.Add($"{IniContext.TogglesSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", SpriteColor(false, ic.AllowFlightSystems));
-            spt.Add($"{IniContext.ANALOG_THROTLE}", SpriteColor(false, ic.AnalogThrotle));
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", SpriteColor(false, ic.AllowLowFuelLand));
-            spt.Add($"{IniContext.DOCK_MODE}", SpriteColor(false, ic.AllowDockMode));
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", SpriteColor(false, ic.ControlAntennas));
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", SpriteColor(false, ic.RenameSubgrids));
-            spt.Add($"{IniContext.PAINT_SURFACES}", SpriteColor(false, ic.PaintSurfaces));
-            spt.Add($"{IniContext.TRANSPARENTLCD}", SpriteColor(false, ic.TransparentLCD));
+            if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
+            else if (selectedRow == row++) ic.CnavAltitude = IncrementedValue(ic.CnavAltitude);
+            else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
+            else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
+
+            row = 1;
+
+            Color selectedColor = ColorMap.SelectedColor(ColorMap.GetColorFromString(ic.SpriteFontColor), 10);
+            spt.Add($"{IniContext.ParamsSection}");
+            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row++));
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", RowColor(row++));
+            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row++));
+            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row++));
 
             DrawSprites(spt, gc.LcdsSettings);
         }
 
-        private string SpriteColor(bool isSelected, bool toggle)
+        void ToggleSection()
         {
-            return ColorMap.GetStringFromColor(
-                isSelected ? 
+            Sprites spt = new Sprites(ic);
+
+            spt.Add($"{IniContext.ToggleSection}");
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(ic.AllowFlightSystems));
+            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(ic.AnalogThrotle));
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(ic.AllowLowFuelLand));
+            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(ic.AllowDockMode));
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(ic.ControlAntennas));
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(ic.RenameSubgrids));
+            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(ic.PaintSurfaces));
+            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(ic.TransparentLCD));
+
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        void ParamSection()
+        {
+            Sprites spt = new Sprites(ic);
+            Color fontColor = ColorMap.GetColorFromString(ic.SpriteFontColor);
+
+            spt.Add($"{IniContext.ParamsSection}");
+            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", fontColor);
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", fontColor);
+            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", fontColor);
+            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", fontColor);
+
+
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        Color RowColor(int row)
+        {
+            return selectedRow == row ? ColorMap.SelectedColor(ic.SpriteFontColor, DarkenFactor) : ColorMap.GetColorFromString(ic.SpriteFontColor);
+        }
+
+        double IncrementedValue(double value)
+        {
+            double increment;
+            if (value < 1) increment = 0.1;
+            else if(value < 10) increment = 1;
+            else if (value < 50) increment = 5;
+            else if (value < 100) increment = 10;
+            else if (value < 500) increment = 50;
+            else if (value < 1000) increment = 100;
+            else if (value < 5000) increment = 500;
+            else increment = 1000;
+
+            if (pi.Space())
+            {
+                settingsIsLocked = true;
+                value += increment;
+            }
+
+            if (pi.C())
+            {
+                settingsIsLocked = true;
+                value -= increment;
+            }
+
+            return value;
+        }
+
+        Color BoolSpriteColor(bool isSelected, bool toggle)
+        {
+            return (isSelected ? 
                 toggle ? Color.Green : Color.Red : 
-                toggle ? Color.LightGreen : Color.OrangeRed
-                );
+                toggle ? Color.LightGreen : Color.OrangeRed);
         }
 
-        private void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces, int col = 1)
+        Color BoolSpriteColor(bool toggle)
+        {
+            return (toggle ? Color.LightGreen : Color.OrangeRed);
+        }
+                
+        void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces, int col = 1)
         {
             foreach (IMyTextSurface surface in surfaces)
             {
                 Color backgroundColor;
                 if (ic.TransparentLCD && surface.Name.ToLower().Contains("transparent")) backgroundColor = Color.Black;
                 else backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
+
                 spt.DrawInfoPanel(surface, ColorMap.GetColorFromString(ic.SpriteFontColor), backgroundColor, col);
             }
         }

@@ -12,8 +12,8 @@ namespace IngameScript.Domain
         public Dictionary<string, string> IniSnapshot;
         bool iniChanged;
 
-        //TogglesSection
-        public const string TogglesSection = "Toggles";
+        //ToggleSection
+        public const string ToggleSection = "Toggles";
 
         public const string FLIGHT_SYSTEMS = "Flight Systems";
         public const string ANALOG_THROTLE = "Analog Throtle";
@@ -58,10 +58,10 @@ namespace IngameScript.Domain
         //ParamsSection
         public const string ParamsSection = "Params";
 
-        const string MAX_SPEED = "Max Speed";
-        const string CNAV_ALTITUDE = "Cnav Altitude";
-        const string DISTANCE_TO_GPS = "Distance to GPS";
-        const string MINIMUM_ACCEPTED_FUEL = "Minimum Accepted Fuel";
+        public const string MAX_SPEED = "Max Speed";
+        public const string CNAV_ALTITUDE = "Cnav Altitude";
+        public const string DISTANCE_TO_GPS = "Distance to GPS";
+        public const string MINIMUM_ACCEPTED_FUEL = "Minimum Fuel";
 
         double maxSpeed = 99; // m/s
         double cnavAltitude = 1000; // m
@@ -103,18 +103,46 @@ namespace IngameScript.Domain
         public string Lcd2Tag => lcd2Tag;
         public string LcdSettingsTag => lcdSettingsTag;
         public string BackupBatteryTag => backupBatteryTag;
-        public double MaxSpeed => maxSpeed;
-        public double CnavAltitude => cnavAltitude;
-        public double DistanceToGPS => distanceToGPS;
-        public double MinimumAcceptedFuel => minimumAcceptedFuel;
-
+        public double MaxSpeed
+        {
+            get { return maxSpeed; }
+            set {
+                maxSpeed = value;
+                UpdateIni(ParamsSection, MAX_SPEED, maxSpeed);
+            }
+        }
+        public double CnavAltitude
+        {
+            get { return cnavAltitude; }
+            set {
+                cnavAltitude = value;
+                UpdateIni(ParamsSection, CNAV_ALTITUDE, cnavAltitude);
+            }
+        }
+        public double DistanceToGPS
+        {
+            get { return distanceToGPS; }
+            set {
+                distanceToGPS = value;
+                UpdateIni(ParamsSection, DISTANCE_TO_GPS, distanceToGPS);
+            }
+        }
+        public double MinimumAcceptedFuel
+        {
+            get { return minimumAcceptedFuel; }
+            set 
+            { 
+                minimumAcceptedFuel = value;
+                UpdateIni(ParamsSection, MINIMUM_ACCEPTED_FUEL, minimumAcceptedFuel);
+            }
+        }
         public bool AllowFlightSystems
         {
             get {return allowFlightSystems;}
             set 
             {
                 allowFlightSystems = value;
-                UpdateIni(TogglesSection, FLIGHT_SYSTEMS, allowFlightSystems);
+                UpdateIni(ToggleSection, FLIGHT_SYSTEMS, allowFlightSystems);
             }
         }
 
@@ -124,7 +152,7 @@ namespace IngameScript.Domain
             set 
             {
                 analogThrotle = value;
-                UpdateIni(TogglesSection, ANALOG_THROTLE, analogThrotle);
+                UpdateIni(ToggleSection, ANALOG_THROTLE, analogThrotle);
             }
         }
 
@@ -134,7 +162,7 @@ namespace IngameScript.Domain
             set
             {
                 allowLowFuelLand = value;
-                UpdateIni(TogglesSection, LOW_FUEL_LAND, allowLowFuelLand);
+                UpdateIni(ToggleSection, LOW_FUEL_LAND, allowLowFuelLand);
             }
         }
 
@@ -144,7 +172,7 @@ namespace IngameScript.Domain
             set
             {
                 allowDockMode = value;
-                UpdateIni(TogglesSection, DOCK_MODE, allowDockMode);
+                UpdateIni(ToggleSection, DOCK_MODE, allowDockMode);
             }
         }
 
@@ -154,7 +182,7 @@ namespace IngameScript.Domain
             set
             {
                 controlAntennas = value;
-                UpdateIni(TogglesSection, CONTROL_ANTENNAS, controlAntennas);
+                UpdateIni(ToggleSection, CONTROL_ANTENNAS, controlAntennas);
             }
         }
 
@@ -164,7 +192,7 @@ namespace IngameScript.Domain
             set
             {
                 renameSubgrids = value;
-                UpdateIni(TogglesSection, RENAME_SUBGRIDS, renameSubgrids);
+                UpdateIni(ToggleSection, RENAME_SUBGRIDS, renameSubgrids);
             }
         }
 
@@ -174,7 +202,7 @@ namespace IngameScript.Domain
             set
             {
                 paintSurfaces = value;
-                UpdateIni(TogglesSection, PAINT_SURFACES, paintSurfaces);
+                UpdateIni(ToggleSection, PAINT_SURFACES, paintSurfaces);
             }
         }
 
@@ -184,7 +212,7 @@ namespace IngameScript.Domain
             set
             {
                 transparentLCD = value;
-                UpdateIni(TogglesSection, TRANSPARENTLCD, transparentLCD);
+                UpdateIni(ToggleSection, TRANSPARENTLCD, transparentLCD);
             }
         }
 
@@ -205,7 +233,7 @@ namespace IngameScript.Domain
             if (!ini.TryParse(gc.Me.CustomData)) return IniChanged;
 
             List<string> sectionsNames = new List<string>();
-            string[] array = { NamesTagsSection, ParamsSection, TogglesSection };
+            string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
             sectionsNames.AddArray(array);
 
             foreach (string sectionName in sectionsNames)
@@ -219,15 +247,15 @@ namespace IngameScript.Domain
             // Read PB Custom Data and populate properties
             // ───────────────────────────────────────────
 
-            //TogglesSection
-            allowFlightSystems = ini.Get(TogglesSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
-            analogThrotle = ini.Get(TogglesSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
-            allowLowFuelLand = ini.Get(TogglesSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
-            allowDockMode = ini.Get(TogglesSection, DOCK_MODE).ToBoolean(AllowDockMode);
-            controlAntennas = ini.Get(TogglesSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
-            renameSubgrids = ini.Get(TogglesSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
-            paintSurfaces = ini.Get(TogglesSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
-            transparentLCD = ini.Get(TogglesSection, TRANSPARENTLCD).ToBoolean(TransparentLCD);
+            //ToggleSection
+            allowFlightSystems = ini.Get(ToggleSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
+            analogThrotle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
+            allowLowFuelLand = ini.Get(ToggleSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
+            allowDockMode = ini.Get(ToggleSection, DOCK_MODE).ToBoolean(AllowDockMode);
+            controlAntennas = ini.Get(ToggleSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
+            renameSubgrids = ini.Get(ToggleSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
+            paintSurfaces = ini.Get(ToggleSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
+            transparentLCD = ini.Get(ToggleSection, TRANSPARENTLCD).ToBoolean(TransparentLCD);
 
             //NamesTagsSection
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
@@ -265,15 +293,15 @@ namespace IngameScript.Domain
             // Populate PB Custom Data whilst checking if any value changed to force ReloadGridContext
             // ───────────────────────────────────────────────────────────────────────────────────────
 
-            //TogglesSection
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, FLIGHT_SYSTEMS, AllowFlightSystems);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, ANALOG_THROTLE, AnalogThrotle);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, LOW_FUEL_LAND, AllowLowFuelLand);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, DOCK_MODE, AllowDockMode);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, CONTROL_ANTENNAS, ControlAntennas);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, RENAME_SUBGRIDS, RenameSubgrids);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, PAINT_SURFACES, PaintSurfaces);
-            iniChanged |= ReadAndDetectChange(ini, TogglesSection, TRANSPARENTLCD, TransparentLCD);
+            //ToggleSection
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, FLIGHT_SYSTEMS, AllowFlightSystems);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, ANALOG_THROTLE, AnalogThrotle);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, LOW_FUEL_LAND, AllowLowFuelLand);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, DOCK_MODE, AllowDockMode);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, CONTROL_ANTENNAS, ControlAntennas);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, RENAME_SUBGRIDS, RenameSubgrids);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, TRANSPARENTLCD, TransparentLCD);
 
             //NamesTagsSection
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
