@@ -406,7 +406,7 @@ namespace IngameScript
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, CommandParam param)
         {
-            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed);
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed + 5);
 
             switch (param.Text.ToLowerInvariant())
             {
@@ -703,7 +703,6 @@ namespace IngameScript
         const double SPEED_TOLERANCE = 0.25;   // deadzone while cruising
         double OVERRIDE_STEP = 0.01;                  // max absolute change per tick (smoothness)
         const double MAX_INTEGRAL = 1.0;       // anti-windup clamp
-        private const int DarkenFactor = 40;
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
@@ -809,7 +808,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color);
+                spt.AddB($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color);
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
             color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
@@ -818,7 +817,7 @@ namespace IngameScript
                 : new Color();
 
             if (!color.Equals(new Color()))
-                spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color);
+                spt.AddB($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color);
             else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
 
             DrawSprites(spt, gc.Lcds1);
@@ -840,9 +839,9 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.Add($"Ground level: {pc.GroundLevel:F1} m", color);
+                    spt.AddB($"Ground level: {pc.GroundLevel:F1} m", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
+                    spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
@@ -927,14 +926,14 @@ namespace IngameScript
             row = 1;
 
             spt.Add($"{IniContext.ToggleSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(selectedRow == row++, ic.AllowFlightSystems));
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(selectedRow == row++, ic.AnalogThrotle));
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(selectedRow == row++, ic.AllowLowFuelLand));
-            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(selectedRow == row++, ic.AllowDockMode));
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(selectedRow == row++, ic.ControlAntennas));
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(selectedRow == row++, ic.RenameSubgrids));
-            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(selectedRow == row++, ic.PaintSurfaces));
-            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(selectedRow == row++, ic.TransparentLCD));
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(selectedRow == row++, ic.AllowFlightSystems), Color.Black);
+            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(selectedRow == row++, ic.AnalogThrotle), Color.Black);
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(selectedRow == row++, ic.AllowLowFuelLand), Color.Black);
+            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(selectedRow == row++, ic.AllowDockMode), Color.Black);
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(selectedRow == row++, ic.ControlAntennas), Color.Black);
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(selectedRow == row++, ic.RenameSubgrids), Color.Black);
+            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(selectedRow == row++, ic.PaintSurfaces), Color.Black);
+            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(selectedRow == row++, ic.TransparentLCD), Color.Black);
 
             DrawSprites(spt, gc.LcdsSettings);
         }
@@ -951,12 +950,11 @@ namespace IngameScript
 
             row = 1;
 
-            Color selectedColor = ColorMap.SelectedColor(ColorMap.GetColorFromString(ic.SpriteFontColor), 10);
             spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row++));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", RowColor(row++));
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row++));
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row++));
+            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 
             DrawSprites(spt, gc.LcdsSettings);
         }
@@ -966,14 +964,14 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
 
             spt.Add($"{IniContext.ToggleSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(ic.AllowFlightSystems));
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(ic.AnalogThrotle));
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(ic.AllowLowFuelLand));
-            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(ic.AllowDockMode));
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(ic.ControlAntennas));
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(ic.RenameSubgrids));
-            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(ic.PaintSurfaces));
-            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(ic.TransparentLCD));
+            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(ic.AllowFlightSystems), Color.Black);
+            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(ic.AnalogThrotle), Color.Black);
+            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(ic.AllowLowFuelLand), Color.Black);
+            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(ic.AllowDockMode), Color.Black);
+            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(ic.ControlAntennas), Color.Black);
+            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(ic.RenameSubgrids), Color.Black);
+            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(ic.PaintSurfaces), Color.Black);
+            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(ic.TransparentLCD), Color.Black);
 
             DrawSprites(spt, gc.LcdsSettings);
         }
@@ -981,21 +979,21 @@ namespace IngameScript
         void ParamSection()
         {
             Sprites spt = new Sprites(ic);
-            Color fontColor = ColorMap.GetColorFromString(ic.SpriteFontColor);
 
             spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", fontColor);
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", fontColor);
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", fontColor);
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", fontColor);
+            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}");
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}");
+            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}");
+            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}");
 
 
             DrawSprites(spt, gc.LcdsSettings);
         }
 
-        Color RowColor(int row)
+        Color RowColor(int row, Color color)
         {
-            return selectedRow == row ? ColorMap.SelectedColor(ic.SpriteFontColor, DarkenFactor) : ColorMap.GetColorFromString(ic.SpriteFontColor);
+            double DarkenFactor = 0.2;
+            return selectedRow == row ? ColorMap.SelectedColor(color, DarkenFactor) : color;
         }
 
         double IncrementedValue(double value)
@@ -1041,11 +1039,7 @@ namespace IngameScript
         {
             foreach (IMyTextSurface surface in surfaces)
             {
-                Color backgroundColor;
-                if (ic.TransparentLCD && surface.Name.ToLower().Contains("transparent")) backgroundColor = Color.Black;
-                else backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
-
-                spt.DrawInfoPanel(surface, ColorMap.GetColorFromString(ic.SpriteFontColor), backgroundColor, col);
+                spt.DrawInfoPanel(surface, col);
             }
         }
 

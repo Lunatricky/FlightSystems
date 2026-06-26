@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame.Utilities;
+using VRageMath;
 
 namespace IngameScript.Domain
 {
@@ -73,11 +74,13 @@ namespace IngameScript.Domain
 
         const string LCDBACKGROUNDCOLOR = "LCD Background Color";
         const string LCDFONTCOLOR = "LCD Font Color";
+        const string SPRITEMENUCOLOR = "Sprite Menu Color";
         const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
         const string SPRITEFONTCOLOR = "Sprite Font Color";
 
         string lcdBackgroundColor = "Black";
         string lcdFontColor = "White";
+        string spriteMenuColor = "White";
         string spriteBackgroundColor = "Black";
         string spriteFontColor = "White";
 
@@ -218,8 +221,9 @@ namespace IngameScript.Domain
 
         public string LcdBackgroundColor => lcdBackgroundColor;
         public string LcdFontColor => lcdFontColor;
-        public string SpriteBackgroundColor => spriteBackgroundColor;
-        public string SpriteFontColor => spriteFontColor;
+        public Color SpriteMenuColor => ColorMap.GetColorFromString(spriteMenuColor);
+        public Color SpriteBackgroundColor => ColorMap.GetColorFromString(spriteBackgroundColor);
+        public Color SpriteFontColor => ColorMap.GetColorFromString(spriteFontColor);
 
 
         // ───────────────────────────────────────
@@ -279,8 +283,9 @@ namespace IngameScript.Domain
             //SurfaceColorsSection
             lcdBackgroundColor = ini.Get(SurfaceColorsSection, LCDBACKGROUNDCOLOR).ToString(LcdBackgroundColor);
             lcdFontColor = ini.Get(SurfaceColorsSection, LCDFONTCOLOR).ToString(LcdFontColor);
-            spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(SpriteBackgroundColor);
-            spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(SpriteFontColor);
+            spriteMenuColor = ini.Get(SurfaceColorsSection, SPRITEMENUCOLOR).ToString(ColorMap.GetStringFromColor(SpriteMenuColor));
+            spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(ColorMap.GetStringFromColor(SpriteBackgroundColor));
+            spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(ColorMap.GetStringFromColor(SpriteFontColor));
 
 
             // ───────────────────── 
@@ -323,8 +328,9 @@ namespace IngameScript.Domain
             //SurfaceColorsSection
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, LcdBackgroundColor);
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, LcdFontColor);
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, SpriteBackgroundColor);
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, SpriteFontColor);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEMENUCOLOR, ColorMap.GetStringFromColor(SpriteMenuColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, ColorMap.GetStringFromColor(SpriteBackgroundColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, ColorMap.GetStringFromColor(SpriteFontColor));
 
             ini.Set(AvailableColorsSection, COLORS, colors);
 

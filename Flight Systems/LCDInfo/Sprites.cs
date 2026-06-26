@@ -11,34 +11,48 @@ namespace IngameScript
         IniContext ic;
 
         readonly List<string> texts = new List<string>();
-        readonly List<Color> colors = new List<Color>();
-
-        Color backgroundColor;
-
+        readonly List<Color> BackgroundColors = new List<Color>();
+        readonly List<Color> FontColors = new List<Color>();
+        
         public Sprites(IniContext ic)
         {
             this.ic = ic;
-            backgroundColor = ColorMap.GetColorFromString(ic.SpriteBackgroundColor);
         }
 
         public void Add(string s)
         {
             texts.Add(s);
-            colors.Add(ColorMap.GetColorFromString(ic.SpriteBackgroundColor));
+            BackgroundColors.Add(ic.SpriteBackgroundColor);
+            FontColors.Add(ic.SpriteFontColor);
         }
 
-        public void Add(string s, Color c)
+        public void AddB(string s, Color b)
         {
             texts.Add(s);
-            colors.Add(c);
+            BackgroundColors.Add(b);
+            FontColors.Add(ic.SpriteFontColor);
         }
 
-        public void DrawInfoPanel(IMyTextSurface panel, Color fontColor, Color backgroundColor, int col)
+        public void AddF(string s, Color f)
+        {
+            texts.Add(s);
+            BackgroundColors.Add(ic.SpriteBackgroundColor);
+            FontColors.Add(f);
+        }
+
+        public void Add(string s, Color b, Color f)
+        {
+            texts.Add(s);
+            BackgroundColors.Add(b);
+            FontColors.Add(f);
+        }
+
+        public void DrawInfoPanel(IMyTextSurface panel, int col)
         {
             List<MySprite> sprites = new List<MySprite>();
 
             if (texts != null && texts.Count > 0)
-                sprites = BuildSprites(panel, fontColor, backgroundColor, col);
+                sprites = BuildSprites(panel, col);
 
             using (var frame = panel.DrawFrame())
             {
@@ -78,7 +92,7 @@ namespace IngameScript
         }
 
         // Build sprites for a list of InfoItem
-        List<MySprite> BuildSprites(IMyTextSurface panel, Color fontColor, Color backgroundColor, int col)
+        List<MySprite> BuildSprites(IMyTextSurface panel, int col)
         {
             Vector2 surfaceSize = panel.SurfaceSize;
             Vector2 textureSize = panel.TextureSize;
@@ -86,7 +100,7 @@ namespace IngameScript
             // background
             var sprites = new List<MySprite>();
 
-            sprites.Add(MakeRectSprite(new Vector2(0, 0), 2 * textureSize, fontColor));
+            sprites.Add(MakeRectSprite(new Vector2(0, 0), 2 * textureSize, ic.SpriteMenuColor));
 
             int rows = texts.Count;
             int margin = 5;
@@ -101,7 +115,7 @@ namespace IngameScript
 
                 var centerText = new Vector2(
                     3 * margin + (textureSize.X - surfaceSize.X) / 2 / col,
-                    margin + (textureSize.Y - surfaceSize.Y) / 2 + i * (surfaceSize.Y) / rows
+                    (textureSize.Y - surfaceSize.Y) / 2 + i * (surfaceSize.Y) / rows
                     );
 
                 //Sizes
@@ -115,14 +129,15 @@ namespace IngameScript
 
                 if (6 / rows < 1) scale = scale * 6 / rows;
 
-                if (colors[i] != this.backgroundColor)
+                if (ic.TransparentLCD && panel.Name.ToLower().Contains("transparent"))
                 {
-                    sprites.Add(MakeRectSprite(centerRec, sizeRec, colors[i]));
-                    sprites.Add(MakeTextSprite(centerText, sizeText, Color.Black, texts[i], scale));
-                } else
+                    sprites.Add(MakeRectSprite(centerRec, sizeRec, Color.Black));
+                    sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i], scale));
+                }
+                else
                 {
-                    sprites.Add(MakeRectSprite(centerRec, sizeRec, backgroundColor));
-                    sprites.Add(MakeTextSprite(centerText, sizeText, fontColor, texts[i], scale));
+                    sprites.Add(MakeRectSprite(centerRec, sizeRec, BackgroundColors[i]));
+                    sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i], scale));
                 }
             }
 
