@@ -114,8 +114,8 @@ namespace IngameScript
                         (settingsToggle ? (Action)ToggleSectionEdit : ToggleSection)(); 
                         break;
                     case 2:
-                        if (selectedRow < 0) selectedRow = 4;
-                        else if (selectedRow > 4) selectedRow = 1;
+                        if (selectedRow < 0) selectedRow = 5;
+                        else if (selectedRow > 5) selectedRow = 1;
 
                         (settingsToggle ? (Action)ParamSectionEdit : ParamSection)(); 
                         break;
