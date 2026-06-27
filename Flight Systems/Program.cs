@@ -311,8 +311,12 @@ namespace IngameScript
                     CruiseControlStateSwitch(gc, ic, command.Param);
                     break;
                 case MainState.CNav: // Circumnavigation
-                    gc.Controller.DampenersOverride = true;
-                    CircumNavigateStateSwitch(gc, ic, command.Param);
+                    if (pc.Gravity > 0)
+                    {
+                        gc.Controller.DampenersOverride = true;
+                        CircumNavigateStateSwitch(gc, ic, command.Param);
+                    }
+                    else AbortShipContext(gc);
                     break;
                 case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
@@ -329,7 +333,8 @@ namespace IngameScript
                     break;
                 case MainState.Gps:
                     b.autoPilotToggle = true;
-                    CircumNavigateStateSwitch(gc, ic, command.Param);
+                    if (pc.Gravity > 0) CircumNavigateStateSwitch(gc, ic, command.Param);
+                    else; //TODO New Method for when there is no gravity
                     break;
             }
 
