@@ -333,7 +333,8 @@ namespace IngameScript
                     break;
                 case MainState.Gps:
                     b.autoPilotToggle = true;
-                    CircumNavigateStateSwitch(gc, ic, command.Param);
+                    if (pc.Gravity > 0) CircumNavigateStateSwitch(gc, ic, command.Param);
+                    else; //TODO New Method for when there is no gravity
                     break;
             }
 
@@ -522,11 +523,7 @@ namespace IngameScript
                         command.State = MainState.Land;
                         b.autoPilotToggle = false;
                     }
-                    else if (pc.Gravity > 0)
-                    {
-                        if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates)) ;
-                    }
-                    else AlignToVector(gc, gc.Controller.WorldMatrix.Forward, false, command.Param.TargetCoordinates);
+                    else if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates)) ;
                     break;
                 case "off":
                     AbortShipContext(gc);
