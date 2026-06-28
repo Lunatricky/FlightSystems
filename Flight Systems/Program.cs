@@ -69,7 +69,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-
             if (!string.IsNullOrEmpty(argument))
             {
                 if (argument.ToLowerInvariant() == "settings")
@@ -490,7 +489,7 @@ namespace IngameScript
 
         void CircumNavigateStateSwitch(GridContext gc, IniContext ic, CommandParam param)
         {
-            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.MaxSpeed);
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
             switch (param.Text.ToLowerInvariant())
             {
                 case "toggle":
@@ -543,7 +542,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (pc.UpVelocity > -(ic.MaxSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopZDist)
+                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopZDist)
                     {
                         command.State = MainState.Land;
                         command.Param.AutoLandState = AutoLandState.Drop;
@@ -714,7 +713,7 @@ namespace IngameScript
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
-            if (pc.ForwardVelocity > ic.MaxSpeed)
+            if (pc.ForwardVelocity > ic.CruiseSpeed)
             {
                 GridContext.ResetThrusters(gc.ForwardThrusters);
                 return;
@@ -753,25 +752,25 @@ namespace IngameScript
             else if (diffF < -step) diffF = -step;
             currentOverride += diffF;
 
+            // move currentBrake toward desiredBrake by at most step
+            double diffB = desiredBrake - currentBrake;
+            if (diffB > step) diffB = step;
+            else if (diffB < -step) diffB = -step;
+            currentBrake += diffB;
+
+            // Prevent both fighting: if both non-zero, reduce them proportionally so they don't sum >1
+            if (currentOverride > 0 && currentBrake > 0)
+            {
+                double sum = currentOverride + currentBrake;
+                if (sum > 1.0)
+                {
+                    currentOverride /= sum;
+                    currentBrake /= sum;
+                }
+            }
+
             if (ic.MaxSpeed != double.PositiveInfinity && cruiseSpeed < ic.MaxSpeed)
             {
-                // move currentBrake toward desiredBrake by at most step
-                double diffB = desiredBrake - currentBrake;
-                if (diffB > step) diffB = step;
-                else if (diffB < -step) diffB = -step;
-                currentBrake += diffB;
-
-                // Prevent both fighting: if both non-zero, reduce them proportionally so they don't sum >1
-                if (currentOverride > 0 && currentBrake > 0)
-                {
-                    double sum = currentOverride + currentBrake;
-                    if (sum > 1.0)
-                    {
-                        currentOverride /= sum;
-                        currentBrake /= sum;
-                    }
-                }
-
                 // Apply thrusters: enable brake thrusters only when brake significant
                 bool useBrakes = currentBrake > 1e-4;
 
@@ -1159,7 +1158,6 @@ namespace IngameScript
 
             gc.Controller.DampenersOverride = false;
             AlignToGravity(gc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -ic.MaxSpeed - 10 );
             return pc.EffectiveAlt < 1.3 * pc.StopYDist + gc.GridHeight;
         }
 
