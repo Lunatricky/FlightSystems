@@ -126,7 +126,7 @@ namespace IngameScript.Domain
                 UpdateIni(ParamsSection, CRUISE_SPEED, cruiseSpeed);
             }
         }
-        public double CnavAltitude
+        public double safeAltitude
         {
             get { return cnavAltitude; }
             set 
@@ -296,7 +296,7 @@ namespace IngameScript.Domain
                 : double.Parse(s);
 
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
-            cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(CnavAltitude);
+            cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(safeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
@@ -342,7 +342,7 @@ namespace IngameScript.Domain
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, CRUISE_SPEED, CruiseSpeed);
-            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, CnavAltitude);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, safeAltitude);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
 

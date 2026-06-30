@@ -21,6 +21,8 @@ namespace IngameScript
         PlayerInput pi;
 
         Command command = Command.Empty;
+
+        int inputLock = 0;
         int tickSplit = 3;
         int tick;
         int tickCount;
@@ -41,31 +43,26 @@ namespace IngameScript
         {
             public bool cruiseToggle;
             public bool circumnavToggle;
-            public bool circumnavCheckAltitude;
+            public bool gpsToggle;
             public bool lastCheckIsOnNatGrav;
             public bool stopCruiseWhenOutOfGrav;
-            public bool autoPilotToggle;
         }
 
         Booleans b;
                 
         public Program()
         {
-
             scriptInfo = new StringBuilder();
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+
             gc = new GridContext(GridTerminalSystem, Me);
             ic = new IniContext(gc);
             CheckIni();
-
             b = new Booleans();
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
-
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
             ReloadGridContext(gc, ic);
         }
-
-        int inputLock = 0;
 
         public void Main(string argument)
         {
@@ -171,7 +168,7 @@ namespace IngameScript
             switch (tick % tickSplit)
             {
                 case 0:
-                    pc.NewRun(timeSinceLastRun);
+                    pc.NewRun(timeSinceLastRun, command.Param.TargetCoordinates);
                     scriptInfo = ScriptInfo();
                     break;
                 case 1:
@@ -297,6 +294,14 @@ namespace IngameScript
                 }
             }
 
+            // Stop cruise control when leaves gravity well
+            if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
+            {
+                AbortShipContext(gc);
+                return;
+            }
+            else b.lastCheckIsOnNatGrav = pc.Gravity > 0.0;
+
             switch (command.State)
             {
                 case MainState.Reload:
@@ -310,8 +315,15 @@ namespace IngameScript
                     CruiseControlStateSwitch(gc, ic, command.Param);
                     break;
                 case MainState.CNav: // Circumnavigation
+                    if (pc.Gravity > 0)
+                    {
+                        gc.Controller.DampenersOverride = true;
+                        CircumNavigateStateSwitch(gc, ic, command.Param);
+                    } else AbortShipContext(gc);
+                    break;
+                case MainState.Gps:
                     gc.Controller.DampenersOverride = true;
-                    CircumNavigateStateSwitch(gc, ic, command.Param);
+                    GPSStateSwitch(gc, ic, command.Param);
                     break;
                 case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
@@ -326,21 +338,6 @@ namespace IngameScript
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
                     SuicideBurnStateSwitch(gc, command.Param);
                     break;
-                case MainState.Gps:
-                    b.autoPilotToggle = true;
-                    CircumNavigateStateSwitch(gc, ic, command.Param);
-                    break;
-            }
-
-            // Stop cruise control when leaves gravity well
-            if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
-            {
-                b.stopCruiseWhenOutOfGrav = b.lastCheckIsOnNatGrav = b.cruiseToggle = false;
-                AbortShipContext(gc);
-            }
-            else
-            {
-                b.lastCheckIsOnNatGrav = pc.Gravity > 0.0;
             }
         }
 
@@ -431,54 +428,19 @@ namespace IngameScript
                     AbortShipContext(gc);
                     break;
                 case "orbit":
-                    b.cruiseToggle = !b.cruiseToggle;
-                    if (b.cruiseToggle)
-                    {
-                        command.Param.Text = "align";
-                        b.stopCruiseWhenOutOfGrav = true;
-                        CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    }
-                    else
-                    {
-                        if (b.autoPilotToggle)
-                        {
-                            command.State = MainState.Gps;
-                            command.Param.Text = "on";
-                        } else
-                        {
-                            AbortShipContext(gc);
-                        }
-                    }
-                    break;
-                case "align":
-                    if (AlignToGravity(gc))
+                    if (GravityAlignedOverride(gc))
                     {
                         command.Param.Text = "climb";
                         desiredUp = pc.DesiredUpVector;
+                        return;
                     }
                     break;
                 case "climb":
-                    if (b.circumnavCheckAltitude && pc.EffectiveAlt > ic.CnavAltitude)
-                    {
-                        if (b.autoPilotToggle)
-                        {
-                            command.State = MainState.Gps;
-                            command.Param.Text = "on";
-                            break;
-                        }
-                        else
-                        {
-                            AbortShipContext(gc);
-                            command.State = MainState.CNav;
-                        }
-                    }
-                    Vector3D shipUp = gc.Controller.WorldMatrix.Up;
-                    AlignToVector(gc, shipUp, false, desiredUp);
-                    CruiseControl(CruiseSpeed, timeSinceLastRun);
+                    Climb(gc, ic.CruiseSpeed, desiredUp);
                     break;
                 case "glide":
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.EffectiveAlt < 500 + pc.StopYDist)
+                    if (pc.EffectiveAlt < ic.safeAltitude + pc.StopYDist)
                     {
                         AbortShipContext(gc);
                         command.State = MainState.Land;
@@ -499,30 +461,86 @@ namespace IngameScript
                     else command.Param.Text = "off";
                     break;
                 case "on":
-                    if (pc.EffectiveAlt < ic.CnavAltitude)
+                    if (pc.EffectiveAlt < ic.safeAltitude)
                     {
                         SoftAbort(gc);
-                        b.circumnavCheckAltitude = true;
-                        command.State = MainState.Cruise;
-                        command.Param.Text = "orbit";
+                        command.Param.Text = "climb";
+                        desiredUp = pc.DesiredUpVector;
                     }
-
-                    CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (!b.autoPilotToggle)
+                    else
                     {
-                        AlignToGravity(gc);
+                        GravityAlignedOverride(gc);
+                        CruiseControl(CruiseSpeed, timeSinceLastRun); 
                     }
-                    else if (pc.DistanceToLine < ic.DistanceToGPS + pc.StopZDist)
-                    {
-                        command.State = MainState.Land;
-                        b.autoPilotToggle = false;
-                    }
-                    else if (AlignToGravity(gc) && b.autoPilotToggle && AimYawOnlyAt(gc, param.TargetCoordinates)) ;
                     break;
                 case "off":
                     AbortShipContext(gc);
                     break;
+                case "climb":
+                    if (pc.EffectiveAlt > ic.safeAltitude)
+                    {
+                        AbortShipContext(gc);
+                        command.State = MainState.CNav;
+                        command.Param.Text = "on";
+                    }
+                    Climb(gc, CruiseSpeed, desiredUp);
+                    break;
             }
+        }
+
+        void GPSStateSwitch(GridContext gc, IniContext ic, CommandParam param)
+        {
+            switch (param.Text.ToLowerInvariant())
+            {
+                case "toggle":
+                case "":
+                    b.gpsToggle = !b.gpsToggle;
+                    if (b.gpsToggle) command.Param.Text = "on";
+                    else command.Param.Text = "off";
+                    break;
+                case "on":
+                    if (b.gpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                    {
+                        command.State = MainState.Land;
+                        b.gpsToggle = false;
+                        previousRate = PREV_RATE;
+                        return;
+                    }
+
+                    if (pc.EffectiveAlt < ic.safeAltitude)
+                    {
+                        SoftAbort(gc);
+                        command.Param.Text = "climb";
+                        desiredUp = pc.DesiredUpVector;
+                        return;
+                    }
+
+                    if (pc.Gravity > 0 && GravityAlignedOverride(gc) && GravAlignedYawOverride(gc, param.TargetCoordinates))
+                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                    else if (pc.Gravity == 0 && VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - param.TargetCoordinates))
+                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+
+                    break;
+                case "off":
+                    AbortShipContext(gc);
+                    break;
+                case "climb":
+                    if (pc.EffectiveAlt > ic.safeAltitude)
+                    {
+                        AbortShipContext(gc);
+                        command.State = MainState.Gps;
+                        command.Param.Text = "on";
+                        return;
+                    }
+                    Climb(gc, ic.CruiseSpeed, desiredUp);
+                    break;
+            }
+        }
+
+        private void Climb(GridContext gc, double CruiseSpeed, Vector3D desiredUp)
+        {
+            VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, desiredUp);
+            CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
         void SuicideBurnStateSwitch(GridContext gc, CommandParam param)
@@ -534,7 +552,7 @@ namespace IngameScript
 
                 case AutoLandState.Align:
                     SoftAbort(gc);
-                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
@@ -561,7 +579,7 @@ namespace IngameScript
 
                 case AutoLandState.Align:
                     SoftAbort(gc);
-                    if (AlignToGravity(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
@@ -574,79 +592,9 @@ namespace IngameScript
             }
         }
 
-        bool AimYawOnlyAt(GridContext gc, Vector3D targetGps)
-        {
-            if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
-            if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
-
-            // Yaw axis: away-from-gravity (up)
-            Vector3D up = Vector3D.Normalize(pc.NaturalGravity);
-
-            // Ship position and forward (use ShipContext.Controller forward in world)
-            Vector3D shipPos = gc.Controller.GetPosition();
-            Vector3D shipForward = gc.Controller.WorldMatrix.Forward;
-
-            // Vector to target
-            Vector3D toTarget = targetGps - shipPos;
-            if (toTarget.LengthSquared() < 1e-6) return true; // target at ship
-
-            // Project both onto plane perpendicular to up (horizon plane)
-            Vector3D targetProj = toTarget - up * Vector3D.Dot(toTarget, up);
-            if (targetProj.LengthSquared() < 1e-9) return true; // target exactly above/below — no yaw defined
-            targetProj = Vector3D.Normalize(targetProj);
-
-            Vector3D forwardProj = shipForward - up * Vector3D.Dot(shipForward, up);
-            if (forwardProj.LengthSquared() < 1e-9)
-            {
-                // degenerate forward: pick any perp on plane
-                forwardProj = Vector3D.Cross(up, Math.Abs(up.X) < 0.9 ? Vector3D.UnitX : Vector3D.UnitY);
-            }
-            forwardProj = Vector3D.Normalize(forwardProj);
-
-            // Signed yaw angle from forwardProj -> targetProj around up
-            double cosA = Vector3D.Dot(forwardProj, targetProj);
-            cosA = Math.Max(-1.0, Math.Min(1.0, cosA));
-            double angleMag = Math.Acos(cosA);
-            double sign = Math.Sign(Vector3D.Dot(forwardProj.Cross(targetProj), up));
-            double yawAngle = sign * angleMag; // radians; + = rotate around 'up' by right-hand rule
-
-            // Finished if small
-            const double ANGLE_EPS = 0.01; // ~0.57 deg
-            if (Math.Abs(yawAngle) < ANGLE_EPS)
-            {
-                foreach (var g in gc.Gyros) g.GyroOverride = false;
-                return true;
-            }
-
-            // Desired angular rate around up only
-            const double MAX_ROT_RATE = 3.0;
-            const double RESPONSE = 1.0;
-            double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
-            Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
-
-            // PD correction (use full angular velocity but we'll only command yaw to sc.Gyros)
-            Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
-            Vector3D correction = desiredRate - angVel;
-
-            // Apply to sc.Gyros but zero pitch & roll commands so only yaw moves
-            foreach (var g in gc.Gyros)
-            {
-                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D local = Vector3D.TransformNormal(correction, inv);
-
-                g.GyroOverride = true;
-                g.Pitch = 0f;
-                // Some sc.Gyros have inverted yaw axis; if direction is reversed, invert local.Y here
-                g.Yaw = (float)MathHelper.Clamp(-local.Y / 2, -3, 3);
-                g.Roll = 0f;
-            }
-
-            return false;
-        }
-
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
-            pc = new PhysicsContext(gc, stt, command, timeSinceLastRun);
+            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
 
             gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag, ic.LcdSettingsTag)
                     .ReloadH2Tanks()
@@ -670,31 +618,31 @@ namespace IngameScript
                 b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
             }
 
-            // Dock cached blocks
-            if (ic.AllowDockMode)
-                gc.ReloadConnectors()
-                .ReloadGears()
-                .ReloadTanks()
-                .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
+                // Dock cached blocks
+                if (ic.AllowDockMode)
+                    gc.ReloadConnectors()
+                    .ReloadGears()
+                    .ReloadTanks()
+                    .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
 
-            if (ic.ControlAntennas)
-                gc.ReloadAntennas(ic.ControlAntennas);
+                if (ic.ControlAntennas)
+                    gc.ReloadAntennas(ic.ControlAntennas);
 
-            if (ic.RenameSubgrids)
-            {
-                IMyCubeGrid mainGrid = gc.Me.CubeGrid;
-                if (mainGrid != null)
+                if (ic.RenameSubgrids)
                 {
-                    RenameSubgrids.GetSubgridsAndRename(gc.GridTS, mainGrid);
+                    IMyCubeGrid mainGrid = gc.Me.CubeGrid;
+                    if (mainGrid != null)
+                    {
+                        RenameSubgrids.GetSubgridsAndRename(gc.GridTS, mainGrid);
+                    }
                 }
-            }
 
-            if (ic.PaintSurfaces)
-            {
-                gc.ReloadSurfaces();
+                if (ic.PaintSurfaces)
+                {
+                    gc.ReloadSurfaces();
 
-                GridContext.PaintSurfaces(ic, gc.Surfaces);
-            }
+                    GridContext.PaintSurfaces(ic, gc.Surfaces);
+                }
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command
@@ -866,9 +814,9 @@ namespace IngameScript
             spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
             spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
 
-            if (b.autoPilotToggle)
+            if (b.gpsToggle)
             {
-                spt.Add($"\nETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
+                spt.Add($"ETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
             else if (command.State == MainState.Land || command.State == MainState.SBurn)
             {
@@ -957,7 +905,7 @@ namespace IngameScript
 
             if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
             else if (selectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed);
-            else if (selectedRow == row++) ic.CnavAltitude = IncrementedValue(ic.CnavAltitude);
+            else if (selectedRow == row++) ic.safeAltitude = IncrementedValue(ic.safeAltitude);
             else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
             else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
 
@@ -966,7 +914,7 @@ namespace IngameScript
             spt.Add($"{IniContext.ParamsSection}");
             spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 
@@ -997,7 +945,7 @@ namespace IngameScript
             spt.Add($"{IniContext.ParamsSection}");
             spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}");
             spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}");
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.CnavAltitude}");
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}");
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}");
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}");
 
@@ -1015,12 +963,12 @@ namespace IngameScript
         {
             double increment;
             if (value < 1) increment = 0.1;
-            else if(value < 10) increment = 1;
-            else if (value < 50) increment = 5;
-            else if (value < 100) increment = 10;
-            else if (value < 500) increment = 50;
-            else if (value < 1000) increment = 100;
-            else if (value < 5000) increment = 500;
+            else if(1 <= value && value < 10) increment = 1;
+            else if (10 <= value && value < 50) increment = 5;
+            else if (50 <= value && value < 100) increment = 10;
+            else if (100 <= value && value < 500) increment = 50;
+            else if (500 <= value && value < 1000) increment = 100;
+            else if (1000 <= value && value < 5000) increment = 500;
             else increment = 1000;
 
             if (pi.Space())
@@ -1035,7 +983,7 @@ namespace IngameScript
                 value -= increment;
             }
 
-            return value;
+            return value < 0 ? 0 : value;
         }
 
         Color BoolSpriteColor(bool isSelected, bool toggle)
@@ -1064,6 +1012,8 @@ namespace IngameScript
 
             command = Command.Empty;
 
+            previousRate = PREV_RATE;
+
             SoftAbort(gc);
         }
 
@@ -1080,33 +1030,47 @@ namespace IngameScript
         /// FLIGHT
         ////////////////////////////////////////////////////////
 
-        bool AlignToGravity(GridContext gc)
+        bool GravityAlignedOverride(GridContext gc)
         {
-            return AlignToGravity(gc, false);
+            return GravityAlignedOverride(gc, false);
         }
 
-        bool AlignToGravity(GridContext gc, bool checkSpeed)
+        bool GravityAlignedOverride(GridContext gc, bool checkSpeed)
         {
             Vector3D shipUp = gc.Controller.WorldMatrix.Up;
 
-            return AlignToVector(gc, shipUp, checkSpeed, Vector3D.Normalize(pc.NaturalGravity));
+            return VectorAlignedOverride(gc, shipUp, checkSpeed, Vector3D.Normalize(pc.NaturalGravity));
         }
 
-        bool AlignToVector(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
+        double PREV_RATE = 0.5;
+        double previousRate;
+
+        bool VectorAlignedOverride(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
         {
-            if (pc.Gravity < 0.01)
-                return false;
+            if (previousRate == 0) previousRate = PREV_RATE;
 
             Vector3D axis = shipUp.Cross(desiredUpVector);
-            double angle = axis.Length();
+            double angle = axis.Length(); double maxRate; double RESPONSE;
 
             if (angle < 0.005 && (!checkSpeed || pc.IsStopped))
             {
-                foreach (var g in gc.Gyros)
-                    g.GyroOverride = false;
-
+                GridContext.ResetGyros(gc.Gyros);
                 return true;
             }
+
+            if (pc.Gravity > 0)
+            {
+                maxRate = 1;
+                RESPONSE = 1;
+            }
+            else
+            {
+                maxRate = PREV_RATE * (1.0 - Math.Exp(-angle / 40));
+                maxRate = Math.Min(maxRate, previousRate);
+                RESPONSE = 0.05;
+            }
+
+            previousRate = maxRate;
 
             axis /= angle;
 
@@ -1116,19 +1080,14 @@ namespace IngameScript
             // ⭐ ANGULAR RATE LIMIT
             //-----------------------------------
 
-            const double MAX_ROT_RATE = 0.6; // radians/sec
-            const double RESPONSE = 1.0;     // lower = smoother
-
-            Vector3D desiredRate = axis * Math.Min(angle * RESPONSE, MAX_ROT_RATE);
+            Vector3D desiredRate = axis * Math.Min(angle * RESPONSE, maxRate);
 
             //-----------------------------------
             // PD ShipContext.Controller on angular velocity
             //-----------------------------------
 
             Vector3D correction = desiredRate - angVel;
-
             //-----------------------------------
-
             foreach (var g in gc.Gyros)
             {
                 MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
@@ -1139,6 +1098,75 @@ namespace IngameScript
                 g.Pitch = (float)MathHelper.Clamp(local.X / 2, -3, 3);
                 g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -3, 3);
                 g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
+            }
+
+            return false;
+        }
+
+        bool GravAlignedYawOverride(GridContext gc, Vector3D targetGps)
+        {
+            if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
+            if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
+
+            // Yaw axis: away-from-gravity (up)
+            Vector3D up = Vector3D.Normalize(pc.NaturalGravity);
+
+            // Ship position and forward (use ShipContext.Controller forward in world)
+            Vector3D shipPos = gc.Controller.GetPosition();
+            Vector3D shipForward = gc.Controller.WorldMatrix.Forward;
+
+            // Vector to target
+            Vector3D toTarget = targetGps - shipPos;
+
+            // Project both onto plane perpendicular to up (horizon plane)
+            Vector3D targetProj = toTarget - up * Vector3D.Dot(toTarget, up);
+            if (targetProj.LengthSquared() < 1e-9) return true; // target exactly above/below — no yaw defined
+            targetProj = Vector3D.Normalize(targetProj);
+
+            Vector3D forwardProj = shipForward - up * Vector3D.Dot(shipForward, up);
+            if (forwardProj.LengthSquared() < 1e-9)
+            {
+                // degenerate forward: pick any perp on plane
+                forwardProj = Vector3D.Cross(up, Math.Abs(up.X) < 0.9 ? Vector3D.UnitX : Vector3D.UnitY);
+            }
+            forwardProj = Vector3D.Normalize(forwardProj);
+
+            // Signed yaw angle from forwardProj -> targetProj around up
+            double cosA = Vector3D.Dot(forwardProj, targetProj);
+            cosA = Math.Max(-1.0, Math.Min(1.0, cosA));
+            double angleMag = Math.Acos(cosA);
+            double sign = Math.Sign(Vector3D.Dot(forwardProj.Cross(targetProj), up));
+            double yawAngle = sign * angleMag; // radians; + = rotate around 'up' by right-hand rule
+
+            // Finished if small
+            const double ANGLE_EPS = 0.01; // ~0.57 deg
+            if (Math.Abs(yawAngle) < ANGLE_EPS)
+            {
+                GridContext.ResetGyros(gc.Gyros);
+                return true;
+            }
+
+            // Desired angular rate around up only
+            const double MAX_ROT_RATE = 6.0;
+            const double RESPONSE = 2.0;
+            double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
+            Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
+
+            // PD correction (use full angular velocity but we'll only command yaw to sc.Gyros)
+            Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
+            Vector3D correction = desiredRate - angVel;
+
+            // Apply to sc.Gyros but zero pitch & roll commands so only yaw moves
+            foreach (var g in gc.Gyros)
+            {
+                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
+                Vector3D local = Vector3D.TransformNormal(correction, inv);
+
+                g.GyroOverride = true;
+                g.Pitch = 0f;
+                // Some sc.Gyros have inverted yaw axis; if direction is reversed, invert local.Y here
+                g.Yaw = (float)MathHelper.Clamp(-local.Y / 2, -6, 6);
+                g.Roll = 0f;
             }
 
             return false;
@@ -1157,7 +1185,7 @@ namespace IngameScript
             }
 
             gc.Controller.DampenersOverride = false;
-            AlignToGravity(gc);
+            GravityAlignedOverride(gc);
             return pc.EffectiveAlt < 1.3 * pc.StopYDist + gc.GridHeight;
         }
 
@@ -1171,7 +1199,7 @@ namespace IngameScript
             }
 
             gc.Controller.DampenersOverride = false;
-            AlignToGravity(gc);
+            GravityAlignedOverride(gc);
 
             double speedFromAlt = (100 + pc.GroundLevel) * 0.08;
             double speedFromAccel = 20 * pc.NetDecel;
@@ -1183,7 +1211,7 @@ namespace IngameScript
 
         bool TryLock(GridContext gc)
         {
-            AlignToGravity(gc);
+            GravityAlignedOverride(gc);
             VectorHelper.MatchVerticalSpeed(gc, pc, -2);
             gc.Controller.DampenersOverride = true;
 

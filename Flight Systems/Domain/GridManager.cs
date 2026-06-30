@@ -55,6 +55,9 @@ namespace IngameScript.Domain
         {
             foreach (var g in gyros)
             {
+                g.Pitch = 0f;
+                g.Yaw = 0f;
+                g.Roll = 0f;
                 g.GyroOverride = false;
                 g.Enabled = true;
             }

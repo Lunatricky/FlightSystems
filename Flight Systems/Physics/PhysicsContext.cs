@@ -12,7 +12,6 @@ namespace IngameScript.Physics
     {
         GridContext gc;
         SpeedTimeTracker stt;
-        Command command;
 
         double accumulatedTime = 0;
         double timeSinceLastRun = 0.00001;
@@ -49,7 +48,7 @@ namespace IngameScript.Physics
         double rightVelocity;
         double upVelocity;
         double netDecel;
-        double distanceToLine;
+        double distanceToGPS;
 
         bool isStopped;
 
@@ -63,17 +62,16 @@ namespace IngameScript.Physics
 
         const double ALPHA = 0.2;
 
-        public PhysicsContext(GridContext gc, SpeedTimeTracker stt, Command command, double timeSinceLastRun)
+        public PhysicsContext(GridContext gc, SpeedTimeTracker stt, double timeSinceLastRun)
         {
             this.gc = gc;
             this.stt = stt;
-            this.command = command;
 
             if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
         }
 
         // Call at start of each Program.Run with Runtime.TimeSinceLastRun.TotalSeconds
-        public void NewRun(double timeSinceLastRun)
+        public void NewRun(double timeSinceLastRun, Vector3D targetCoordinates)
         {
             if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
             accumulatedTime += timeSinceLastRun;
@@ -109,9 +107,9 @@ namespace IngameScript.Physics
             timeToImpact = GroundLevel / Math.Abs(VEffectiveYSpeed);
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
-            timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToLine, timeSinceLastRun);
             netDecel = ComputeNetDecel(gc);
-            distanceToLine = DistanceToGps(gc.Controller, command.Param.TargetCoordinates);
+            distanceToGPS = gravity > 0 ?  GetDistanceToGps(gc.Controller, targetCoordinates) : (targetCoordinates - gc.Controller.GetPosition()).Length();
+            timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
             isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
             h2Cache = ComputeH2Totals();
             batCache = ComputeBatTotals();
@@ -153,7 +151,7 @@ namespace IngameScript.Physics
         public double RightVelocity => rightVelocity;
         public double UpVelocity => upVelocity;
         public double NetDecel => netDecel;
-        public double DistanceToLine => distanceToLine;
+        public double DistanceToGPS => distanceToGPS;
         public bool IsStopped => isStopped;
         public H2Totals H2Cache => h2Cache;
         public BatTotals BatCache => batCache;
@@ -251,7 +249,7 @@ namespace IngameScript.Physics
             return (thrust / Mass.PhysicalMass) - Gravity;
         }
 
-        double DistanceToGps(IMyShipController controller, Vector3D gps)
+        double GetDistanceToGps(IMyShipController controller, Vector3D gps)
         {
             Vector3D shipPos = controller.GetPosition();
             double vertical;
