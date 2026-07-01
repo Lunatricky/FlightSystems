@@ -30,6 +30,7 @@ namespace IngameScript
         StringBuilder scriptInfo;
 
         //Dock Mode
+        bool isDocked;
         bool isDockMode;
         bool lastDockMode;
         bool anyConnected;
@@ -68,7 +69,7 @@ namespace IngameScript
         {
             if (!string.IsNullOrEmpty(argument))
             {
-                if (argument.ToLowerInvariant() == "settings")
+                if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     settingsToggle = !settingsToggle;
 
@@ -128,13 +129,12 @@ namespace IngameScript
             {
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = GridContext.IsAnyConnectorConnected(gc);
+                isDocked = anyConnected || isGearlocked;
                 return;
             }
 
             if (ic.AllowDockMode)
             {
-                bool isDocked = anyConnected || isGearlocked;
-
                 if (!isDocked) isDockMode = false;
                 else if (isDocked && !isDockMode) isDockMode = true;
 
@@ -430,9 +430,16 @@ namespace IngameScript
                 case "orbit":
                     if (GravityAlignedOverride(gc))
                     {
-                        command.Param.Text = "climb";
+                        command.Param.Text = "preclimb";
                         desiredUp = pc.DesiredUpVector;
                         return;
+                    }
+                    break;
+                case "preclimb":
+                    if (GravityAlignedOverride(gc, true))
+                    {
+                        SoftAbort(gc);
+                        command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
@@ -464,7 +471,7 @@ namespace IngameScript
                     if (pc.EffectiveAlt < ic.safeAltitude)
                     {
                         SoftAbort(gc);
-                        command.Param.Text = "climb";
+                        command.Param.Text = "preclimb";
                         desiredUp = pc.DesiredUpVector;
                     }
                     else
@@ -475,6 +482,13 @@ namespace IngameScript
                     break;
                 case "off":
                     AbortShipContext(gc);
+                    break;
+                case "preclimb":
+                    if (GravityAlignedOverride(gc, true))
+                    {
+                        SoftAbort(gc);
+                        command.Param.Text = "climb";
+                    }
                     break;
                 case "climb":
                     if (pc.EffectiveAlt > ic.safeAltitude)
@@ -510,7 +524,7 @@ namespace IngameScript
                     if (pc.EffectiveAlt < ic.safeAltitude)
                     {
                         SoftAbort(gc);
-                        command.Param.Text = "climb";
+                        command.Param.Text = "preclimb";
                         desiredUp = pc.DesiredUpVector;
                         return;
                     }
@@ -523,6 +537,13 @@ namespace IngameScript
                     break;
                 case "off":
                     AbortShipContext(gc);
+                    break;
+                case "preclimb":
+                    if (GravityAlignedOverride(gc, true))
+                    {
+                        SoftAbort(gc);
+                        command.Param.Text = "climb";
+                    }
                     break;
                 case "climb":
                     if (pc.EffectiveAlt > ic.safeAltitude)
@@ -1102,61 +1123,72 @@ namespace IngameScript
 
             return false;
         }
-
         bool GravAlignedYawOverride(GridContext gc, Vector3D targetGps)
         {
             if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
             if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
 
-            // Yaw axis: away-from-gravity (up)
             Vector3D up = Vector3D.Normalize(pc.NaturalGravity);
-
-            // Ship position and forward (use ShipContext.Controller forward in world)
             Vector3D shipPos = gc.Controller.GetPosition();
             Vector3D shipForward = gc.Controller.WorldMatrix.Forward;
 
-            // Vector to target
             Vector3D toTarget = targetGps - shipPos;
 
-            // Project both onto plane perpendicular to up (horizon plane)
+            // **NEW: Check if we're on the wrong side of the planet**
+            // If the ship is moving away from the target (dot product is negative),
+            // it means the target is behind/opposite relative to ship's current position
+            // on the gravity plane. Reject in this case.
             Vector3D targetProj = toTarget - up * Vector3D.Dot(toTarget, up);
-            if (targetProj.LengthSquared() < 1e-9) return true; // target exactly above/below — no yaw defined
+
+            if (targetProj.LengthSquared() < 1e-6)
+            {
+                // Target is nearly vertical (pole case)
+                // Check: is the target in the same hemisphere as the ship?
+                // Compare altitude-adjusted positions
+                double shipAltitude = Vector3D.Dot(shipPos, up);
+                double targetAltitude = Vector3D.Dot(targetGps, up);
+
+                if (Math.Sign(shipAltitude) != Math.Sign(targetAltitude))
+                {
+                    // Target is on opposite pole — don't fly there
+                    return true;
+                }
+
+                // Target is directly above/below on same side — no yaw needed
+                return true;
+            }
+
             targetProj = Vector3D.Normalize(targetProj);
 
             Vector3D forwardProj = shipForward - up * Vector3D.Dot(shipForward, up);
             if (forwardProj.LengthSquared() < 1e-9)
             {
-                // degenerate forward: pick any perp on plane
                 forwardProj = Vector3D.Cross(up, Math.Abs(up.X) < 0.9 ? Vector3D.UnitX : Vector3D.UnitY);
             }
             forwardProj = Vector3D.Normalize(forwardProj);
 
-            // Signed yaw angle from forwardProj -> targetProj around up
+            // Signed yaw angle
             double cosA = Vector3D.Dot(forwardProj, targetProj);
             cosA = Math.Max(-1.0, Math.Min(1.0, cosA));
             double angleMag = Math.Acos(cosA);
             double sign = Math.Sign(Vector3D.Dot(forwardProj.Cross(targetProj), up));
-            double yawAngle = sign * angleMag; // radians; + = rotate around 'up' by right-hand rule
+            double yawAngle = sign * angleMag;
 
-            // Finished if small
-            const double ANGLE_EPS = 0.01; // ~0.57 deg
+            const double ANGLE_EPS = 0.01;
             if (Math.Abs(yawAngle) < ANGLE_EPS)
             {
                 GridContext.ResetGyros(gc.Gyros);
                 return true;
             }
 
-            // Desired angular rate around up only
             const double MAX_ROT_RATE = 6.0;
             const double RESPONSE = 2.0;
             double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
             Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
 
-            // PD correction (use full angular velocity but we'll only command yaw to sc.Gyros)
             Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
             Vector3D correction = desiredRate - angVel;
 
-            // Apply to sc.Gyros but zero pitch & roll commands so only yaw moves
             foreach (var g in gc.Gyros)
             {
                 MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
@@ -1164,13 +1196,13 @@ namespace IngameScript
 
                 g.GyroOverride = true;
                 g.Pitch = 0f;
-                // Some sc.Gyros have inverted yaw axis; if direction is reversed, invert local.Y here
                 g.Yaw = (float)MathHelper.Clamp(-local.Y / 2, -6, 6);
                 g.Roll = 0f;
             }
 
             return false;
         }
+
 
         ////////////////////////////////////////////////////////
         /// SAFE DEscENT

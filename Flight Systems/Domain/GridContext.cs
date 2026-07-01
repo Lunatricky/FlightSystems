@@ -33,6 +33,7 @@ namespace IngameScript.Domain
         List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
         List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
         List<IMyShipController> controllers = new List<IMyShipController>();
+        List<IMyShipController> cockpits = new List<IMyShipController>();
 
         List<IMyThrust> thrusters = new List<IMyThrust>();
         List<IMyThrust> breakingThrusters = new List<IMyThrust>();
@@ -71,7 +72,7 @@ namespace IngameScript.Domain
 
             foreach (IMyRemoteControl remote in remotes)
             {
-                if (Controller == null && remote.CustomName.Contains(controllerTag.ToLower()))
+                if (remote.CustomName.Contains(controllerTag.ToLower()))
                     Controller = remote;
                 Controllers.Add(remote);
             }
@@ -90,6 +91,7 @@ namespace IngameScript.Domain
             foreach (IMyCockpit cockpit in cockpits)
             {
                 Controllers.Add(cockpit);
+                Cockpits.Add(cockpit);
             }
             return this;
         }
@@ -487,6 +489,7 @@ namespace IngameScript.Domain
         public List<IMyBatteryBlock> Batteries => batteries;
         public List<IMyRadioAntenna> Antennas => antennas;
         public List<IMyShipController> Controllers => controllers;
+        public List<IMyShipController> Cockpits => cockpits;
         public List<IMyThrust> Thrusters => thrusters;
         public List<IMyThrust> BreakingThrusters => breakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
