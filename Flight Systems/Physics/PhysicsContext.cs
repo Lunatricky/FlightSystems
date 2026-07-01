@@ -108,7 +108,7 @@ namespace IngameScript.Physics
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
-            distanceToGPS = gravity > 0 ?  GetDistanceToGps(gc.Controller, targetCoordinates) : (targetCoordinates - gc.Controller.GetPosition()).Length();
+            distanceToGPS = gravity > 0 ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : (targetCoordinates - gc.Controller.GetPosition()).Length();
             timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
             isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
             h2Cache = ComputeH2Totals();
@@ -249,22 +249,29 @@ namespace IngameScript.Physics
             return (thrust / Mass.PhysicalMass) - Gravity;
         }
 
-        double GetDistanceToGps(IMyShipController controller, Vector3D gps)
+        double GetDistanceToPlanetGps(IMyShipController controller, Vector3D gps)
         {
             Vector3D shipPos = controller.GetPosition();
-            double vertical;
+            Vector3D up = Vector3D.Normalize(NaturalGravity);
+            up = -up;  // away from planet center
 
-            Vector3D up = Vector3D.Normalize(NaturalGravity); // up direction
-            up = -up;
-            Vector3D toTarget = gps - shipPos;
+            // Assume planet center is at origin
+            Vector3D planetCenter = VectorHelper.TryGetPlanetPosition(controller);
+            double planetRadius = (planetCenter - shipPos).Length();  // distance from ship to planet center
 
-            // vertical distance along up (signed): positive = target is "above" ship in up direction
-            vertical = Vector3D.Dot(toTarget, up);
+            // Normalize positions to unit sphere
+            Vector3D shipDir = Vector3D.Normalize(shipPos - planetCenter);
+            Vector3D gpsDir = Vector3D.Normalize(gps - planetCenter);
 
-            // horizontal vector: component of toTarget on plane perpendicular to up
-            Vector3D horizVec = toTarget - up * vertical;
+            // Angular distance between ship and GPS on the sphere (in radians)
+            double cosAngle = Vector3D.Dot(shipDir, gpsDir);
+            cosAngle = Math.Max(-1.0, Math.Min(1.0, cosAngle));
+            double angle = Math.Acos(cosAngle);
 
-            return horizVec.Length();
+            // Arc distance along planet surface
+            double arcDistance = planetRadius * angle;
+
+            return arcDistance;
         }
 
         double ComputeNetDecel(GridContext gc)

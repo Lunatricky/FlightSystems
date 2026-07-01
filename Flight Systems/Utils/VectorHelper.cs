@@ -70,7 +70,7 @@ namespace IngameScript
             return total;
         }
 
-        Vector3D TryGetPlanetPosition(IMyShipController controller)
+        public static Vector3D TryGetPlanetPosition(IMyShipController controller)
         {
             Vector3D planetCenter;
 
