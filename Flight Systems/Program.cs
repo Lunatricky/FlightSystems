@@ -436,7 +436,7 @@ namespace IngameScript
                     }
                     break;
                 case "preclimb":
-                    if (GravityAlignedOverride(gc, true))
+                    if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
                         command.Param.Text = "climb";
@@ -484,7 +484,7 @@ namespace IngameScript
                     AbortShipContext(gc);
                     break;
                 case "preclimb":
-                    if (GravityAlignedOverride(gc, true))
+                    if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
                         command.Param.Text = "climb";
@@ -539,7 +539,7 @@ namespace IngameScript
                     AbortShipContext(gc);
                     break;
                 case "preclimb":
-                    if (GravityAlignedOverride(gc, true))
+                    if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
                         command.Param.Text = "climb";
@@ -577,7 +577,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.Drop:
-                    if (SuicideBurn(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (SuicideBurn(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
@@ -604,7 +604,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.Drop:
-                    if (AutoLand(gc)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (AutoLand(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
@@ -984,12 +984,12 @@ namespace IngameScript
         {
             double increment;
             if (value < 1) increment = 0.1;
-            else if(1 <= value && value < 10) increment = 1;
-            else if (10 <= value && value < 50) increment = 5;
-            else if (50 <= value && value < 100) increment = 10;
-            else if (100 <= value && value < 500) increment = 50;
-            else if (500 <= value && value < 1000) increment = 100;
-            else if (1000 <= value && value < 5000) increment = 500;
+            else if(value < 10) increment = 1;
+            else if (value < 50) increment = 5;
+            else if (value < 100) increment = 10;
+            else if (value < 500) increment = 50;
+            else if (value < 1000) increment = 100;
+            else if (value < 5000) increment = 500;
             else increment = 1000;
 
             if (pi.Space())
@@ -1124,7 +1124,7 @@ namespace IngameScript
             return false;
         }
         bool GravAlignedYawOverride(GridContext gc, Vector3D targetGps)
-        {
+        {   
             if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
             if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
 
@@ -1207,7 +1207,7 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         /// SAFE DEscENT
         ////////////////////////////////////////////////////////
-        bool SuicideBurn(GridContext gc)
+        bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
         {
             if (pc.NetDecel - 1 < 0)
             {
@@ -1221,7 +1221,7 @@ namespace IngameScript
             return pc.EffectiveAlt < 1.3 * pc.StopYDist + gc.GridHeight;
         }
 
-        bool AutoLand(GridContext gc)
+        bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
         {
             if (pc.NetDecel - 0.5 < 0)
             {
