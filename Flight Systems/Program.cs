@@ -860,30 +860,36 @@ namespace IngameScript
         {
             if (pi.W())
             {
-                settingsIsLocked = true;
+                LockInput();
                 selectedRow--;
             }
 
             if (pi.S())
             {
-                settingsIsLocked = true;
+                LockInput();
                 selectedRow++;
             }
 
             if (pi.A())
             {
-                settingsIsLocked = true;
+                LockInput();
                 selectedPage--;
             }
 
             if (pi.D())
             {
-                settingsIsLocked = true;
+                LockInput();
                 selectedPage++;
             }
 
             if (selectedPage < 1) selectedPage = 2;
             else if (selectedPage > 2) selectedPage = 1;
+        }
+
+        private void LockInput()
+        {
+            settingsIsLocked = true;
+            inputLock = 0;
         }
 
         void ToggleSectionEdit()
@@ -893,7 +899,7 @@ namespace IngameScript
 
             if (pi.Space())
             {
-                settingsIsLocked = true;
+                LockInput();
                 if (selectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
                 else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
                 else if (selectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
@@ -994,13 +1000,13 @@ namespace IngameScript
 
             if (pi.Space())
             {
-                settingsIsLocked = true;
+                LockInput();
                 value += increment;
             }
 
             if (pi.C())
             {
-                settingsIsLocked = true;
+                LockInput();
                 value -= increment;
             }
 
