@@ -90,8 +90,8 @@ namespace IngameScript.Physics
             rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
             upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
 
-            maxYDecel = GetMaxDecel(gc.UpwardThrusters, gc.Controller.WorldMatrix.Down);
-            maxZDecel = GetMaxDecel(gc.BreakingThrusters, gc.Controller.WorldMatrix.Backward);
+            maxYDecel = GetMaxDecel(gc.Controller.WorldMatrix.Down);
+            maxZDecel = GetMaxDecel(gc.Controller.WorldMatrix.Backward);
 
             vEffectiveYSpeed = UpVelocity == 0 ? 0 : ClimbRate + MaxYDecel * timeSinceLastRun;
             vEffectiveZSpeed = ForwardVelocity == 0 ? 0 : ForwardVelocity + MaxZDecel * timeSinceLastRun;
@@ -104,7 +104,7 @@ namespace IngameScript.Physics
             stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
             stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
 
-            timeToImpact = GroundLevel / Math.Abs(VEffectiveYSpeed);
+            timeToImpact = Math.Abs(VEffectiveYSpeed) < 0.1 ? 0 : GroundLevel / Math.Abs(VEffectiveYSpeed);
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
@@ -234,29 +234,31 @@ namespace IngameScript.Physics
             return distance / smoothedSpeed;
         }
 
-        double GetMaxDecel(List<IMyThrust> thrusters, Vector3D direciton)
+        double GetMaxDecel(Vector3D direction)
         {
             double thrust = 0;
 
-            foreach (var t in thrusters)
+            foreach (var t in gc.Thrusters)
             {
-                double dot = t.WorldMatrix.Backward.Dot(direciton);
+                double dot = Vector3D.Dot(t.WorldMatrix.Backward, Vector3D.Normalize(direction));
 
-                if (dot > 0.7)
-                    thrust += t.MaxEffectiveThrust * dot;
+                thrust += Math.Max(0, dot) * t.MaxEffectiveThrust;
             }
 
-            return (thrust / Mass.PhysicalMass) - Gravity;
+            double gravityComponent = - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), direction) * NaturalGravity.Length();
+
+            return (thrust / Mass.PhysicalMass) - gravityComponent;
         }
+
 
         double GetDistanceToPlanetGps(IMyShipController controller, Vector3D gps)
         {
             Vector3D shipPos = controller.GetPosition();
-            Vector3D up = Vector3D.Normalize(NaturalGravity);
-            up = -up;  // away from planet center
 
             // Assume planet center is at origin
-            Vector3D planetCenter = VectorHelper.TryGetPlanetPosition(controller);
+            Vector3D planetCenter;
+            controller.TryGetPlanetPosition(out planetCenter);
+
             double planetRadius = (planetCenter - shipPos).Length();  // distance from ship to planet center
 
             // Normalize positions to unit sphere
