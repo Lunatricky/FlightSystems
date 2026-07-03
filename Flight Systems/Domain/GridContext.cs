@@ -62,13 +62,14 @@ namespace IngameScript.Domain
         public GridContext ReloadControllers(string controllerTag)
         {
             Controllers.Clear();
+            Cockpits.Clear();
             Controller = null;
 
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
 
-            GetOwnGridBlocks(remotes, this, IgnoreTag);
-            GetOwnGridBlocks(cockpits, this, IgnoreTag);
+            GetOwnGridBlocks(remotes, IgnoreTag);
+            GetOwnGridBlocks(cockpits, IgnoreTag);
 
             foreach (IMyRemoteControl remote in remotes)
             {
@@ -90,8 +91,11 @@ namespace IngameScript.Domain
 
             foreach (IMyCockpit cockpit in cockpits)
             {
-                Controllers.Add(cockpit);
-                Cockpits.Add(cockpit);
+                if (cockpit.CanControlShip)
+                {
+                    Controllers.Add(cockpit);
+                    Cockpits.Add(cockpit);
+                }
             }
             return this;
         }
@@ -119,7 +123,7 @@ namespace IngameScript.Domain
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
 
-            GetOwnGridBlocks(Thrusters, this, IgnoreTag);
+            GetOwnGridBlocks(Thrusters, IgnoreTag);
 
             foreach (var thruster in Thrusters)
             {
@@ -140,19 +144,19 @@ namespace IngameScript.Domain
 
         public GridContext ReloadGyros()
         {
-            GetOwnGridBlocks(Gyros, this, IgnoreTag);
+            GetOwnGridBlocks(Gyros, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadGears()
         {
-            GetOwnGridBlocks(Gears, this, IgnoreTag);
+            GetOwnGridBlocks(Gears, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadAntennas(bool controlAntennas)
         {
-            GetOwnGridBlocks(Antennas, this, IgnoreTag);
+            GetOwnGridBlocks(Antennas, IgnoreTag);
             if (controlAntennas)
             {
                 foreach (IMyRadioAntenna antenna in Antennas)
@@ -255,7 +259,7 @@ namespace IngameScript.Domain
         public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GetOwnGridBlocks(Connectors, this, IgnoreTag);
+            GetOwnGridBlocks(Connectors, IgnoreTag);
             SetConnectors();
 
             return this;
@@ -263,14 +267,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadTanks()
         {
-            GetOwnGridBlocks(Tanks, this, IgnoreTag);
+            GetOwnGridBlocks(Tanks, IgnoreTag);
 
             return this;
         }
 
         public GridContext ReloadH2Tanks()
         {
-            GetOwnGridBlocks(Tanks, this, IgnoreTag);
+            GetOwnGridBlocks(Tanks, IgnoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -284,7 +288,7 @@ namespace IngameScript.Domain
 
         public GridContext ReloadBatteries(string backupTag)
         {
-            GetOwnGridBlocks(Batteries, this, IgnoreTag);
+            GetOwnGridBlocks(Batteries, IgnoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -502,5 +506,109 @@ namespace IngameScript.Domain
 
         public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;
+
+        public void GetOwnGridBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        {
+            list.Clear();
+            bool hasIgnore = !string.IsNullOrEmpty(__ignoreTag);
+            GridTS.GetBlocksOfType(list, block =>
+                block.IsSameConstructAs(Me)
+                && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
+                && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
+            );
+        }
+
+
+        public bool IsAnyConnectorConnected()
+        {
+            foreach (IMyShipConnector connector in Connectors)
+            {
+                if (connector.Status == MyShipConnectorStatus.Connected)
+                    return true;
+            }
+            return false;
+        }
+
+        public void SetBlocks(bool enabled, out bool isDockMode)
+        {
+            //Always turn tools OFF when dock/undock
+            ControlledToolBlocks.ForEach(b => b.Enabled = false);
+
+            //Toggle other blocks when dock/undock
+            ControlledBlocks.ForEach(b => b.Enabled = enabled);
+
+            isDockMode = !enabled;
+        }
+
+        public void KillThrusters() => KillThrusters(thrusters);
+        public void KillThrusters(List<IMyThrust> thrusters) => thrusters.ForEach(b => b.Enabled = false);
+
+        public void ResetThrusters() => ResetThrusters(thrusters);
+        public void ResetThrusters(List<IMyThrust> thrusters)
+        {
+            foreach (var t in thrusters)
+            {
+                t.ThrustOverridePercentage = 0f;
+                t.Enabled = true;
+            }
+
+        }
+
+        public void ResetGyros()
+        {
+            foreach (var g in gyros)
+            {
+                g.Pitch = 0f;
+                g.Yaw = 0f;
+                g.Roll = 0f;
+                g.GyroOverride = false;
+                g.Enabled = true;
+            }
+        }
+
+        public void StockpileTanks(bool stockpile)
+        {
+            foreach (IMyGasTank tank in Tanks)
+            {
+                if (tank != null && tank.IsFunctional)
+                    tank.Stockpile = stockpile;
+            }
+        }
+
+        public void ChargeBatteries()
+        {
+            if (BackupBattery != null)
+            {
+                BackupBattery.ChargeMode = ChargeMode.Auto;
+                foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Recharge;
+            }
+            else if (IsAnyConnectorConnected())
+            {
+                foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Recharge;
+            }
+        }
+
+        public void AutoBatteries()
+        {
+            if (BackupBattery != null)
+                BackupBattery.ChargeMode = ChargeMode.Recharge;
+
+            foreach (IMyBatteryBlock battery in Batteries)
+            {
+                battery.ChargeMode = ChargeMode.Auto;
+            }
+        }
+
+        public void CleanSurfaces() => CleanSurfaces(surfaces);
+        public void CleanSurfaces(List<IMyTextSurface> lcds)
+        {
+            foreach (IMyTextSurface lcd in lcds)
+            {
+                lcd.AddImageToSelection("Online");
+                lcd.RemoveImageFromSelection("Online");
+                lcd.ContentType = ContentType.SCRIPT;
+                lcd.Script = "";
+            }
+        }
     }
 }

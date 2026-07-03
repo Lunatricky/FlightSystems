@@ -58,12 +58,17 @@ namespace IngameScript
 
             gc = new GridContext(GridTerminalSystem, Me);
             ic = new IniContext(gc);
-            CheckIni();
             b = new Booleans();
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
-            ReloadGridContext(gc, ic);
+
+            CheckIni();
+
+            if (gc.LcdsSettings.Count > 0) ToggleSection();
         }
+
+        string task;
+        string maxTask;
 
         public void Main(string argument)
         {
@@ -97,6 +102,8 @@ namespace IngameScript
                 {
                     settingsToggle = false; 
                     pi.ResetControllers(gc.Controllers);
+                    task = "Reset Controllers";
+                    Echo(GetRuntimeInfo());
                     return;
                 }
 
@@ -128,8 +135,10 @@ namespace IngameScript
             if (tickCount % 50 == 1)
             {
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
-                anyConnected = GridContext.IsAnyConnectorConnected(gc);
+                anyConnected = gc.IsAnyConnectorConnected();
                 isDocked = anyConnected || isGearlocked;
+                task = "IsDocked";
+                Echo(GetRuntimeInfo());
                 return;
             }
 
@@ -162,21 +171,32 @@ namespace IngameScript
 
             if (tickCount > 500)
             {
-                if (CheckIni()) return;
+                if (CheckIni())
+                {
+                    task = "CheckIni";
+                    Echo(GetRuntimeInfo());
+                    return;
+                }
             }
 
             switch (tick % tickSplit)
             {
                 case 0:
+                    task = "Physics Update";
                     pc.NewRun(timeSinceLastRun, command.Param.TargetCoordinates);
                     scriptInfo = ScriptInfo();
                     break;
                 case 1:
+                    task = "Flight Systems";
                     FlightSystems(gc, ic, pc);
                     break;
                 case 2:
-                    if (gc.Lcds1.Count > 0) LCD1Sprite();
-                    if (gc.Lcds2.Count > 0) LCD2Sprite();
+                    task = "LCDs";
+                    if (IsShipControlled())
+                    {
+                        if (gc.Lcds1.Count > 0) LCD1Sprite();
+                        if (gc.Lcds2.Count > 0) LCD2Sprite();
+                    }
                     pc.CacheValues();
                     break;
             }
@@ -185,6 +205,15 @@ namespace IngameScript
 
             Echo(scriptInfo.ToString());
             Echo(GetRuntimeInfo());
+        }
+
+        private bool IsShipControlled()
+        {
+            foreach (IMyShipController controller in gc.Controllers)
+            {
+                if (controller.IsUnderControl) return true;
+            }
+            return false;
         }
 
         bool CheckIni()
@@ -227,8 +256,8 @@ namespace IngameScript
                 }
             }
 
-            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) GridManager.KillThrusters(gc.BreakingThrusters);
-            else GridManager.ResetThrusters(gc.BreakingThrusters);
+            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
+            else gc.ResetThrusters(gc.BreakingThrusters);
         }
 
         StringBuilder ScriptInfo()
@@ -253,12 +282,18 @@ namespace IngameScript
             }
 
             StringBuilder m_echoBuilder = new StringBuilder(512);
-            m_echoBuilder.Append($"Runtime: {Math.Round(Runtime.LastRunTimeMs, 5)} Ms\n");
+            m_echoBuilder.AppendLine($"Runtime: {Math.Round(Runtime.LastRunTimeMs, 5)} Ms");
 
             double newRuntimeMs = Math.Round(Runtime.LastRunTimeMs, 5);
+            if (newRuntimeMs > maxRuntimeMs)
+            {
+                maxTask = task;
+            }
             maxRuntimeMs = Math.Max(newRuntimeMs, maxRuntimeMs);
 
-            m_echoBuilder.Append($"Max Runtime: {maxRuntimeMs} Ms\n");
+
+            m_echoBuilder.AppendLine($"Max Runtime: {maxRuntimeMs} Ms");
+            m_echoBuilder.AppendLine($"Task: {maxTask}");
             return m_echoBuilder.ToString();
         }
 
@@ -343,15 +378,15 @@ namespace IngameScript
 
         private void DockToggle(GridContext gc, bool isDocked)
         {
-            GridContext.SetBlocks(gc, !isDocked, out isDockMode);
-            GridContext.StockpileTanks(gc, isDocked);
+            gc.SetBlocks(!isDocked, out isDockMode);
+            gc.StockpileTanks(isDocked);
             if (isDocked)
             {
-                GridContext.ChargeBatteries(gc);
+                gc.ChargeBatteries();
             }
             else
             {
-                GridContext.AutoBatteries(gc);
+                gc.AutoBatteries();
             }
         }
 
@@ -486,14 +521,13 @@ namespace IngameScript
                 case "preclimb":
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
-                        SoftAbort(gc);
                         command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
                     if (pc.EffectiveAlt > ic.safeAltitude)
                     {
-                        AbortShipContext(gc);
+                        gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
                         command.Param.Text = "on";
                     }
@@ -541,14 +575,13 @@ namespace IngameScript
                 case "preclimb":
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
-                        SoftAbort(gc);
                         command.Param.Text = "climb";
                     }
                     break;
                 case "climb":
                     if (pc.EffectiveAlt > ic.safeAltitude)
                     {
-                        AbortShipContext(gc);
+                        gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
                         command.Param.Text = "on";
                         return;
@@ -682,9 +715,9 @@ namespace IngameScript
 
         void CruiseControl(double cruiseSpeed, double dt)
         {
-            if (pc.ForwardVelocity > ic.CruiseSpeed)
+            if (pc.ForwardVelocity >= ic.CruiseSpeed)
             {
-                GridContext.ResetThrusters(gc.ForwardThrusters);
+                gc.ResetThrusters(gc.ForwardThrusters);
                 return;
             }
 
@@ -749,7 +782,7 @@ namespace IngameScript
                     bt.ThrustOverridePercentage = (float)currentBrake;
                 }
             }
-            else GridManager.KillThrusters(gc.BreakingThrusters);
+            else gc.KillThrusters(gc.BreakingThrusters);
 
             // Apply forward thrusters
             bool useForward = currentOverride > 1e-4;
@@ -841,7 +874,7 @@ namespace IngameScript
             }
             else if (command.State == MainState.Land || command.State == MainState.SBurn)
             {
-                spt.Add($"TTI: {pc.TimeToImpact:F1} s");
+                spt.Add("TTI: " + (pc.TimeToImpact == 0 ? "--" : $"{pc.TimeToImpact:F0}") + " s");
             }
             else
             {
@@ -1049,8 +1082,8 @@ namespace IngameScript
             gc.Controller.DampenersOverride = true;
             b.stopCruiseWhenOutOfGrav = false;
 
-            GridContext.ResetGyros(gc.Gyros);
-            GridContext.ResetThrusters(gc.Thrusters);
+            gc.ResetGyros();
+            gc.ResetThrusters(gc.Thrusters);
         }
 
         ////////////////////////////////////////////////////////
@@ -1081,7 +1114,7 @@ namespace IngameScript
 
             if (angle < 0.005 && (!checkSpeed || pc.IsStopped))
             {
-                GridContext.ResetGyros(gc.Gyros);
+                gc.ResetGyros();
                 return true;
             }
 
@@ -1183,7 +1216,7 @@ namespace IngameScript
             const double ANGLE_EPS = 0.01;
             if (Math.Abs(yawAngle) < ANGLE_EPS)
             {
-                GridContext.ResetGyros(gc.Gyros);
+                gc.ResetGyros();
                 return true;
             }
 

@@ -47,6 +47,7 @@
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />
+    <Compile Include="UseCases\Class1.cs" />
     <Compile Include="Utils\PlayerInput.cs" />
     <Compile Include="UseCases\Command.cs" />
     <Compile Include="UseCases\CommandParam.cs" />
