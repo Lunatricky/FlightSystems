@@ -1,4 +1,5 @@
-﻿using System;
+﻿using IngameScript.Enums;
+using System;
 using VRageMath;
 
 namespace IngameScript.UseCases
@@ -16,6 +17,13 @@ namespace IngameScript.UseCases
 
         public static Command Empty => new Command(MainState.Idle, CommandParam.Empty);
 
+
+        public Command(MainState state)
+        {
+            State = state;
+            Param = new CommandParam();
+            Param.Step = Step.Toggle;
+        }
 
         public Command(string argument)
         {
@@ -46,7 +54,7 @@ namespace IngameScript.UseCases
             if (double.TryParse(second, out num))
                 Param = new CommandParam(num);
             else
-                Param = new CommandParam(second.ToLowerInvariant());
+                Param = new CommandParam(TryParseStep(second));
         }
 
         MainState TryParseArgument(string input)
@@ -60,6 +68,20 @@ namespace IngameScript.UseCases
                 State = MainState.Abort;
             }
             return State;
+        }
+
+        static Step TryParseStep(string input)
+        {
+            Step mainStateEnum;
+            try
+            {
+                mainStateEnum = (Step)Enum.Parse(typeof(MainState), input, true);
+            }
+            catch
+            {
+                mainStateEnum = Step.Off;
+            }
+            return mainStateEnum;
         }
 
         // GPS parser for "GPS:name:X:Y:Z:color:" format

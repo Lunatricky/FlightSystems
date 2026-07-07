@@ -40,16 +40,67 @@ namespace IngameScript
 
         Vector3D desiredUp;
 
-        struct Booleans
-        {
-            public bool cruiseToggle;
-            public bool circumnavToggle;
-            public bool gpsToggle;
-            public bool lastCheckIsOnNatGrav;
-            public bool stopCruiseWhenOutOfGrav;
-        }
+        SystemBools sb;
 
-        Booleans b;
+        struct SystemBools
+        {
+            public bool CruiseToggle;
+            public bool OrbitToggle;
+            public bool GlideToggle;
+            public bool CNavToggle;
+            public bool LandToggle;
+            public bool SBurnToggle;
+            public bool GpsToggle;
+            public bool LastCheckIsOnNatGrav;
+            public bool StopCruiseWhenOutOfGrav;
+
+            public void SetActiveMode(MainState modeName)
+            {
+                // Get current state of the target mode
+                bool currentState = GetModeState(modeName);
+
+                // Clear all modes
+                CruiseToggle = false;
+                OrbitToggle = false;
+                GlideToggle = false;
+                CNavToggle = false;
+                LandToggle = false;
+                SBurnToggle = false;
+                GpsToggle = false;
+
+                // Toggle the target mode (if it was true, now false; if false, now true)
+                SetModeState(modeName, !currentState);
+            }
+
+            private bool GetModeState(MainState modeName)
+            {
+                switch (modeName)
+                {
+                    case MainState.Cruise: return CruiseToggle;
+                    case MainState.Orbit: return OrbitToggle;
+                    case MainState.Glide: return GlideToggle;
+                    case MainState.CNav: return CNavToggle;
+                    case MainState.Land: return LandToggle;
+                    case MainState.SBurn: return SBurnToggle;
+                    case MainState.Gps: return GpsToggle;
+                    default: return false;
+                }
+            }
+
+            private void SetModeState(MainState modeName, bool value)
+            {
+                switch (modeName)
+                {
+                    case MainState.Cruise: CruiseToggle = value; break;
+                    case MainState.Orbit: OrbitToggle = value; break;
+                    case MainState.Glide: GlideToggle = value; break;
+                    case MainState.CNav: CNavToggle = value; break;
+                    case MainState.Land: LandToggle = value; break;
+                    case MainState.SBurn: SBurnToggle = value; break;
+                    case MainState.Gps: GpsToggle = value; break;
+                }
+            }
+        }
                 
         public Program()
         {
@@ -57,13 +108,13 @@ namespace IngameScript
 
             gc = new GridContext(GridTerminalSystem, Me);
             ic = new IniContext(gc);
-            b = new Booleans();
+            sb = new SystemBools();
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
 
             CheckIni();
 
-            if (gc.LcdsSettings.Count > 0) ToggleSection();
+            if (gc.LcdsSettings.Count > 0) FlightSystemSection();
         }
 
         string task;
@@ -111,12 +162,18 @@ namespace IngameScript
                 switch (selectedPage)
                 {
                     case 1:
+                        if (selectedRow < 0) selectedRow = 7;
+                        else if (selectedRow > 7) selectedRow = 1;
+
+                        (settingsToggle ? (Action)FlightSystemSectionEdit : FlightSystemSection)(); 
+                        break;
+                    case 2:
                         if (selectedRow < 0) selectedRow = 8;
                         else if (selectedRow > 8) selectedRow = 1;
 
                         (settingsToggle ? (Action)ToggleSectionEdit : ToggleSection)(); 
                         break;
-                    case 2:
+                    case 3:
                         if (selectedRow < 0) selectedRow = 5;
                         else if (selectedRow > 5) selectedRow = 1;
 
@@ -133,6 +190,11 @@ namespace IngameScript
             tickCount++;
             if (tickCount % 50 == 1)
             {
+                if (!settingsToggle)
+                {
+                    FlightSystemSection();
+                }
+
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
                 isDocked = anyConnected || isGearlocked;
@@ -306,7 +368,7 @@ namespace IngameScript
                 }
             }
 
-            MainState[] arr = {MainState.CNav, MainState.Cruise, MainState.Land, MainState.SBurn, MainState.Gps};
+            MainState[] arr = {MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps};
             List<MainState> MainStateList = new List<MainState>(arr);
             if (!ic.AllowFlightSystems && MainStateList.Contains(command.State))
             {
@@ -321,18 +383,17 @@ namespace IngameScript
                 }
                 else if (pc.H2Cache.Percent < ic.MinimumAcceptedFuel && gc.Controller.GetNaturalGravity().Length() / 9.81 < 0.75)
                 {
-                    command.State = MainState.Cruise;
-                    command.Param.Text = "orbit";
+                    command.State = MainState.Orbit;
                 }
             }
 
             // Stop cruise control when leaves gravity well
-            if (b.stopCruiseWhenOutOfGrav && b.lastCheckIsOnNatGrav && pc.Gravity == 0.0)
+            if (sb.StopCruiseWhenOutOfGrav && sb.LastCheckIsOnNatGrav && pc.Gravity == 0.0)
             {
                 AbortShipContext(gc);
                 return;
             }
-            else b.lastCheckIsOnNatGrav = pc.Gravity > 0.0;
+            else sb.LastCheckIsOnNatGrav = pc.Gravity > 0.0;
 
             switch (command.State)
             {
@@ -346,6 +407,14 @@ namespace IngameScript
                     gc.Controller.DampenersOverride = true;
                     CruiseControlStateSwitch(gc, ic, command);
                     break;
+                case MainState.Orbit:
+                    gc.Controller.DampenersOverride = true;
+                    OrbitStateSwitch(gc, ic, command);
+                    break;
+                case MainState.Glide:
+                    gc.Controller.DampenersOverride = true;
+                    GlideStateSwitch(gc, ic, command);
+                    break;
                 case MainState.CNav: // Circumnavigation
                     if (pc.Gravity > 0)
                     {
@@ -353,7 +422,7 @@ namespace IngameScript
                         CircumNavigateStateSwitch(gc, ic, command);
                     } else AbortShipContext(gc);
                     break;
-                case MainState.Gps:
+                case MainState.Gps: // Fly to GPS
                     gc.Controller.DampenersOverride = true;
                     GPSStateSwitch(gc, ic, command);
                     break;
@@ -392,8 +461,9 @@ namespace IngameScript
             scriptInfo.AppendLine("Flight systems - " + gc.GridName);
             scriptInfo.Append("    State: " + command.State);
 
-            if (!string.IsNullOrEmpty(command.Param.Text))
-                scriptInfo.Append(" - " + command.Param.Text);
+
+            if (command.Param.Step != Step.Toggle)
+                scriptInfo.Append(" - " + command.Param.Step);
             if (command.Param.Number != 0)
                 scriptInfo.Append(" - " + command.Param.Number);
             if (command.Param.AutoLandState != AutoLandState.Idle)
@@ -445,39 +515,69 @@ namespace IngameScript
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
 
-            switch (command.Param.Text.ToLowerInvariant())
+            switch (command.Param.Step)
             {
-                case "toggle":
-                case "":
-                    b.cruiseToggle = !b.cruiseToggle;
-                    if (b.cruiseToggle) command.Param.Text = "on";
-                    else command.Param.Text = "off";
+                case Step.Toggle:
+                    sb.SetActiveMode(MainState.Cruise);
+                    if (sb.CruiseToggle) command.Param.Step = Step.On;
+                    else command.Param.Step = Step.Off;
                     break;
-                case "on":
+                case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
                     break;
-                case "off":
+                case Step.Off:
                     AbortShipContext(gc);
                     break;
-                case "orbit":
+            }
+        }
+
+        void OrbitStateSwitch(GridContext gc, IniContext ic, Command command)
+        {
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
+
+            switch (command.Param.Step)
+            {
+                case Step.Toggle:
+                    sb.SetActiveMode(MainState.Orbit);
+                    if (sb.OrbitToggle) command.Param.Step = Step.On;
+                    else command.Param.Step = Step.Off;
+                    break;
+                case Step.On:
                     if (GravityAlignedOverride(gc))
                     {
-                        command.Param.Text = "preclimb";
+                        command.Param.Step = Step.Preclimb;
                         desiredUp = pc.DesiredUpVector;
                         return;
                     }
                     break;
-                case "preclimb":
+                case Step.Off:
+                    AbortShipContext(gc);
+                    break;
+                case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
-                        command.Param.Text = "climb";
+                        command.Param.Step = Step.Climb;
                     }
                     break;
-                case "climb":
+                case Step.Climb:
                     Climb(gc, ic.CruiseSpeed, desiredUp);
                     break;
-                case "glide":
+            }
+        }
+
+        void GlideStateSwitch(GridContext gc, IniContext ic, Command command)
+        {
+            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
+
+            switch (command.Param.Step)
+            {
+                case Step.Toggle:
+                    sb.SetActiveMode(MainState.Glide);
+                    if (sb.GlideToggle) command.Param.Step = Step.On;
+                    else command.Param.Step = Step.Off;
+                    break;
+                case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
                     if (pc.EffectiveAlt < ic.safeAltitude + pc.StopYDist)
                     {
@@ -485,25 +585,27 @@ namespace IngameScript
                         command.State = MainState.Land;
                     }
                     break;
+                case Step.Off:
+                    AbortShipContext(gc);
+                    break;
             }
         }
 
         void CircumNavigateStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
-            switch (command.Param.Text.ToLowerInvariant())
+            switch (command.Param.Step)
             {
-                case "toggle":
-                case "":
-                    b.circumnavToggle = !b.circumnavToggle;
-                    if (b.circumnavToggle) command.Param.Text = "on";
-                    else command.Param.Text = "off";
+                case Step.Toggle:
+                    sb.SetActiveMode(MainState.CNav);
+                    if (sb.CNavToggle) command.Param.Step = Step.On;
+                    else command.Param.Step = Step.Off;
                     break;
-                case "on":
+                case Step.On:
                     if (pc.EffectiveAlt < ic.safeAltitude)
                     {
                         SoftAbort(gc);
-                        command.Param.Text = "preclimb";
+                        command.Param.Step = Step.Preclimb;
                         desiredUp = pc.DesiredUpVector;
                     }
                     else
@@ -512,21 +614,21 @@ namespace IngameScript
                         CruiseControl(CruiseSpeed, timeSinceLastRun); 
                     }
                     break;
-                case "off":
+                case Step.Off:
                     AbortShipContext(gc);
                     break;
-                case "preclimb":
+                case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
-                        command.Param.Text = "climb";
+                        command.Param.Step = Step.Climb;
                     }
                     break;
-                case "climb":
+                case Step.Climb:
                     if (pc.EffectiveAlt > ic.safeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
-                        command.Param.Text = "on";
+                        command.Param.Step = Step.On;
                     }
                     Climb(gc, CruiseSpeed, desiredUp);
                     break;
@@ -535,22 +637,21 @@ namespace IngameScript
 
         void GPSStateSwitch(GridContext gc, IniContext ic, Command command)
         {
-            switch (command.Param.Text.ToLowerInvariant())
+            switch (command.Param.Step)
             {
-                case "toggle":
-                case "":
-                    b.gpsToggle = !b.gpsToggle;
-                    if (b.gpsToggle) command.Param.Text = "on";
-                    else command.Param.Text = "off";
+                case Step.Toggle:
+                    sb.SetActiveMode(MainState.Gps);
+                    if (sb.GpsToggle) command.Param.Step = Step.On;
+                    else command.Param.Step = Step.Off;
                     break;
 
-                case "on":
-                    if (b.gpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                case Step.On:
+                    if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
                         if (pc.Gravity > 0)
                         {
                             command.State = MainState.Land;
-                            b.gpsToggle = false;
+                            sb.GpsToggle = false;
                             previousRate = PREV_RATE;
                         }
                         else AbortShipContext(gc);
@@ -560,15 +661,12 @@ namespace IngameScript
                     if (pc.EffectiveAlt < ic.safeAltitude)
                     {
                         SoftAbort(gc);
-                        command.Param.Text = "preclimb";
+                        command.Param.Step = Step.Preclimb;
                         desiredUp = pc.DesiredUpVector;
                         return;
                     }
 
-                    double sealevel;
-                    gc.Controller.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out sealevel);
-
-                    double planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - sealevel;
+                    double planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - pc.SeaLevel;
 
                     PlanetType planet = DetectPlanet(planetRadius);
                     
@@ -583,14 +681,14 @@ namespace IngameScript
                             VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
                         {
                             desiredUp = pc.DesiredUpVector;
-                            command.Param.Text = "orbit";
+                            command.Param.Step = Step.Orbit;
                         }
                         CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
                     }
                     break;
 
-                case "orbit":
-                    if (b.gpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                case Step.Orbit:
+                    if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
                         SoftAbort(gc);
                         return;
@@ -599,29 +697,29 @@ namespace IngameScript
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
-                        command.Param.Text = "on";
+                        command.Param.Step = Step.On;
                         return;
                     }
                     Climb(gc, ic.CruiseSpeed, desiredUp);
                     break;
 
-                case "off":
+                case Step.Off:
                     AbortShipContext(gc);
                     break;
 
-                case "preclimb":
+                case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
-                        command.Param.Text = "climb";
+                        command.Param.Step = Step.Climb;
                     }
                     break;
 
-                case "climb":
+                case Step.Climb:
                     if (pc.EffectiveAlt > ic.safeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
-                        command.Param.Text = "on";
+                        command.Param.Step = Step.On;
                         return;
                     }
                     Climb(gc, ic.CruiseSpeed, desiredUp);
@@ -635,8 +733,34 @@ namespace IngameScript
             CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
+        void AutoLandStateSwitch(GridContext gc, CommandParam param)
+        {
+            sb.SetActiveMode(MainState.Land);
+            if (!sb.LandToggle) AbortShipContext(gc);
+            switch (param.AutoLandState)
+            {
+                case AutoLandState.Idle:
+                    break;
+
+                case AutoLandState.Align:
+                    SoftAbort(gc);
+                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    break;
+
+                case AutoLandState.Drop:
+                    if (AutoLand(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    break;
+
+                case AutoLandState.LockGear:
+                    if (TryLock(gc)) AbortShipContext(gc);
+                    break;
+            }
+        }
+
         void SuicideBurnStateSwitch(GridContext gc, CommandParam param)
         {
+            sb.SetActiveMode(MainState.SBurn);
+            if (!sb.SBurnToggle) AbortShipContext(gc);
             switch (param.AutoLandState)
             {
                 case AutoLandState.Idle:
@@ -658,28 +782,6 @@ namespace IngameScript
                         command.Param.AutoLandState = AutoLandState.Drop;
                     }
                     else if (TryLock(gc)) AbortShipContext(gc);
-                    break;
-            }
-        }
-
-        void AutoLandStateSwitch(GridContext gc, CommandParam param)
-        {
-            switch (param.AutoLandState)
-            {
-                case AutoLandState.Idle:
-                    break;
-
-                case AutoLandState.Align:
-                    SoftAbort(gc);
-                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
-                    break;
-
-                case AutoLandState.Drop:
-                    if (AutoLand(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
-                    break;
-
-                case AutoLandState.LockGear:
-                    if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
         }
@@ -707,7 +809,7 @@ namespace IngameScript
 
                 SoftAbort(gc);
 
-                b.lastCheckIsOnNatGrav = pc.Gravity > 0;
+                sb.LastCheckIsOnNatGrav = pc.Gravity > 0;
             }
 
                 // Dock cached blocks
@@ -841,8 +943,9 @@ namespace IngameScript
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);
 
-            if (!string.IsNullOrEmpty(command.Param.Text))
-                state.Append(" - " + command.Param.Text);
+
+            if (command.Param.Step != Step.Toggle)
+                state.Append(" - " + command.Param.Step);
             if (command.Param.Number != 0)
                 state.Append(" - " + command.Param.Number);
             if (command.Param.AutoLandState != AutoLandState.Idle)
@@ -891,22 +994,23 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.AddB($"Ground level: {pc.GroundLevel:F1} m", color);
+                    spt.AddB($"GL: {pc.GroundLevel:F1} m | SL: {pc.SeaLevel:F1} m", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
-                    spt.Add($"Ground level: {pc.GroundLevel:F1} m");
+                    spt.Add($"GL: {pc.GroundLevel:F1} m | SL: {pc.SeaLevel:F1} m");
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
                 }
             }
 
             spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
+            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity:F2} g ");
+            else spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
 
-            if (b.gpsToggle)
+            if (sb.GpsToggle)
             {
                 spt.Add($"ETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
             }
@@ -924,7 +1028,7 @@ namespace IngameScript
             DrawSprites(spt, gc.Lcds2);
         }
 
-        int selectedRow = 1;
+        int selectedRow;
         int selectedPage = 1;
 
         void EditSettingsSprite()
@@ -953,14 +1057,48 @@ namespace IngameScript
                 selectedPage++;
             }
 
-            if (selectedPage < 1) selectedPage = 2;
-            else if (selectedPage > 2) selectedPage = 1;
+            if (selectedPage < 1) selectedPage = 3;
+            else if (selectedPage > 3) selectedPage = 1;
         }
 
         private void LockInput()
         {
             settingsIsLocked = true;
             inputLock = 0;
+        }
+
+        void FlightSystemSectionEdit()
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+
+            if (pi.Space())
+            {
+                settingsToggle = false;
+                pi.ResetControllers(gc.Controllers);
+                AbortShipContext(gc);
+
+                if (selectedRow == row++) command = new Command(MainState.Cruise);
+                else if (selectedRow == row++) command = new Command(MainState.Orbit);
+                else if (selectedRow == row++) command = new Command(MainState.CNav);
+                else if (selectedRow == row++) command = new Command(MainState.Land);
+                else if (selectedRow == row++) command = new Command(MainState.Glide);
+                else if (selectedRow == row++) command = new Command(MainState.SBurn);
+                else if (selectedRow == row++) command = new Command(MainState.Gps);
+            }
+
+            row = 1;
+
+            spt.Add($"Flight Systems");
+            spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+
+            DrawSprites(spt, gc.LcdsSettings);
         }
 
         void ToggleSectionEdit()
@@ -974,7 +1112,7 @@ namespace IngameScript
                 if (selectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
                 else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
                 else if (selectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
-                else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
+                else if (selectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
                 else if (selectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
                 else if (selectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
                 else if (selectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
@@ -1015,6 +1153,33 @@ namespace IngameScript
             spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        void FlightSystemSection()
+        {
+            Sprites spt = new Sprites(ic);
+
+            if (sb.CruiseToggle) selectedRow = 1;
+            else if (sb.OrbitToggle) selectedRow = 2;
+            else if (sb.CNavToggle) selectedRow = 3;
+            else if (sb.LandToggle) selectedRow = 4;
+            else if (sb.GlideToggle) selectedRow = 5;
+            else if (sb.SBurnToggle) selectedRow = 6;
+            else if (sb.GpsToggle) selectedRow = 7;
+
+            int row = 1;
+
+            spt.Add($"Flight Systems");
+            spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Circumnavigate",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Vertical land",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Glide to surface",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Suicide burn",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+
 
             DrawSprites(spt, gc.LcdsSettings);
         }
@@ -1106,10 +1271,9 @@ namespace IngameScript
 
         void AbortShipContext(GridContext gc)
         {
-            b = new Booleans();
+            sb = new SystemBools();
 
             command = Command.Empty;
-
             previousRate = PREV_RATE;
 
             SoftAbort(gc);
@@ -1118,7 +1282,7 @@ namespace IngameScript
         void SoftAbort(GridContext gc)
         {
             gc.Controller.DampenersOverride = true;
-            b.stopCruiseWhenOutOfGrav = false;
+            sb.StopCruiseWhenOutOfGrav = false;
 
             gc.ResetGyros();
             gc.ResetThrusters(gc.Thrusters);
@@ -1324,8 +1488,7 @@ namespace IngameScript
             if (pc.NetDecel - 1 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainState.Cruise;
-                command.Param.Text = "orbit";
+                command.State = MainState.Orbit;
             }
 
             gc.Controller.DampenersOverride = false;
@@ -1338,8 +1501,7 @@ namespace IngameScript
             if (pc.NetDecel - 0.5 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainState.Cruise;
-                command.Param.Text = "orbit";
+                command.State = MainState.Orbit;
             }
 
             gc.Controller.DampenersOverride = false;
