@@ -1,6 +1,6 @@
 ﻿using IngameScript.Domain;
 using IngameScript.Physics;
-using Sandbox.ModAPI.Ingame;
+using System;
 using VRageMath;
 
 namespace IngameScript
@@ -68,6 +68,15 @@ namespace IngameScript
                 total += t.MaxEffectiveThrust;
 
             return total;
+        }
+
+        public static bool IsWithinAngle(Vector3D planetCenter, Vector3D shipPosition, Vector3D gpsPosition, double angleDegrees)
+        {
+            Vector3D shipVector = Vector3D.Normalize(shipPosition - planetCenter);
+            Vector3D gpsVector = Vector3D.Normalize(gpsPosition - planetCenter);
+            double limit = Math.Cos(MathHelper.ToRadians(angleDegrees));
+
+            return Vector3D.Dot(shipVector, gpsVector) > limit;
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using IngameScript.Domain;
+using IngameScript.Enums;
 using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
@@ -27,7 +28,6 @@ namespace IngameScript
         int tick;
         int tickCount;
         double timeSinceLastRun;
-        StringBuilder scriptInfo;
 
         //Dock Mode
         bool isDocked;
@@ -53,7 +53,6 @@ namespace IngameScript
                 
         public Program()
         {
-            scriptInfo = new StringBuilder();
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
             gc = new GridContext(GridTerminalSystem, Me);
@@ -184,7 +183,6 @@ namespace IngameScript
                 case 0:
                     task = "Physics Update";
                     pc.NewRun(timeSinceLastRun, command.Param.TargetCoordinates);
-                    scriptInfo = ScriptInfo();
                     break;
                 case 1:
                     task = "Flight Systems";
@@ -203,7 +201,6 @@ namespace IngameScript
 
             tick++;
 
-            Echo(scriptInfo.ToString());
             Echo(GetRuntimeInfo());
         }
 
@@ -347,18 +344,18 @@ namespace IngameScript
                     break;
                 case MainState.Cruise:
                     gc.Controller.DampenersOverride = true;
-                    CruiseControlStateSwitch(gc, ic, command.Param);
+                    CruiseControlStateSwitch(gc, ic, command);
                     break;
                 case MainState.CNav: // Circumnavigation
                     if (pc.Gravity > 0)
                     {
                         gc.Controller.DampenersOverride = true;
-                        CircumNavigateStateSwitch(gc, ic, command.Param);
+                        CircumNavigateStateSwitch(gc, ic, command);
                     } else AbortShipContext(gc);
                     break;
                 case MainState.Gps:
                     gc.Controller.DampenersOverride = true;
-                    GPSStateSwitch(gc, ic, command.Param);
+                    GPSStateSwitch(gc, ic, command);
                     break;
                 case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
@@ -444,11 +441,11 @@ namespace IngameScript
             return scriptInfo;
         }
 
-        void CruiseControlStateSwitch(GridContext gc, IniContext ic, CommandParam param)
+        void CruiseControlStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
 
-            switch (param.Text.ToLowerInvariant())
+            switch (command.Param.Text.ToLowerInvariant())
             {
                 case "toggle":
                 case "":
@@ -491,10 +488,10 @@ namespace IngameScript
             }
         }
 
-        void CircumNavigateStateSwitch(GridContext gc, IniContext ic, CommandParam param)
+        void CircumNavigateStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
-            switch (param.Text.ToLowerInvariant())
+            switch (command.Param.Text.ToLowerInvariant())
             {
                 case "toggle":
                 case "":
@@ -536,9 +533,9 @@ namespace IngameScript
             }
         }
 
-        void GPSStateSwitch(GridContext gc, IniContext ic, CommandParam param)
+        void GPSStateSwitch(GridContext gc, IniContext ic, Command command)
         {
-            switch (param.Text.ToLowerInvariant())
+            switch (command.Param.Text.ToLowerInvariant())
             {
                 case "toggle":
                 case "":
@@ -546,12 +543,17 @@ namespace IngameScript
                     if (b.gpsToggle) command.Param.Text = "on";
                     else command.Param.Text = "off";
                     break;
+
                 case "on":
                     if (b.gpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
-                        command.State = MainState.Land;
-                        b.gpsToggle = false;
-                        previousRate = PREV_RATE;
+                        if (pc.Gravity > 0)
+                        {
+                            command.State = MainState.Land;
+                            b.gpsToggle = false;
+                            previousRate = PREV_RATE;
+                        }
+                        else AbortShipContext(gc);
                         return;
                     }
 
@@ -563,21 +565,57 @@ namespace IngameScript
                         return;
                     }
 
-                    if (pc.Gravity > 0 && GravityAlignedOverride(gc) && GravAlignedYawOverride(gc, param.TargetCoordinates))
-                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
-                    else if (pc.Gravity == 0 && VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - param.TargetCoordinates))
-                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                    double sealevel;
+                    gc.Controller.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out sealevel);
 
+                    double planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - sealevel;
+
+                    PlanetType planet = DetectPlanet(planetRadius);
+                    
+                    if (pc.Gravity == 0)
+                    {
+                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - command.Param.TargetCoordinates))
+                            CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                    }
+                    else if (GravityAlignedOverride(gc) && GravAlignedYawOverride(gc, command.Param.TargetCoordinates))
+                    {
+                        if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
+                            VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
+                        {
+                            desiredUp = pc.DesiredUpVector;
+                            command.Param.Text = "orbit";
+                        }
+                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                    }
                     break;
+
+                case "orbit":
+                    if (b.gpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                    {
+                        SoftAbort(gc);
+                        return;
+                    }
+                    if (pc.Gravity == 0)
+                    {
+                        gc.ResetThrusters(gc.ForwardThrusters);
+                        command.State = MainState.Gps;
+                        command.Param.Text = "on";
+                        return;
+                    }
+                    Climb(gc, ic.CruiseSpeed, desiredUp);
+                    break;
+
                 case "off":
                     AbortShipContext(gc);
                     break;
+
                 case "preclimb":
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         command.Param.Text = "climb";
                     }
                     break;
+
                 case "climb":
                     if (pc.EffectiveAlt > ic.safeAltitude)
                     {
@@ -669,7 +707,7 @@ namespace IngameScript
 
                 SoftAbort(gc);
 
-                b.lastCheckIsOnNatGrav = gc.Controller.GetNaturalGravity().LengthSquared() > 0;
+                b.lastCheckIsOnNatGrav = pc.Gravity > 0;
             }
 
                 // Dock cached blocks
@@ -1111,23 +1149,26 @@ namespace IngameScript
 
             Vector3D axis = shipUp.Cross(desiredUpVector);
             double angle = axis.Length(); double maxRate; double RESPONSE;
-
-            if (angle < 0.005 && (!checkSpeed || pc.IsStopped))
-            {
-                gc.ResetGyros();
-                return true;
-            }
+            double angleThreshold;
 
             if (pc.Gravity > 0)
             {
+                angleThreshold = 0.005;
                 maxRate = 1;
                 RESPONSE = 1;
             }
             else
             {
+                angleThreshold = 1;
                 maxRate = PREV_RATE * (1.0 - Math.Exp(-angle / 40));
                 maxRate = Math.Min(maxRate, previousRate);
                 RESPONSE = 0.05;
+            }
+
+            if (angle < angleThreshold && (!checkSpeed || pc.IsStopped))
+            {
+                gc.ResetGyros();
+                return true;
             }
 
             previousRate = maxRate;
@@ -1162,6 +1203,7 @@ namespace IngameScript
 
             return false;
         }
+
         bool GravAlignedYawOverride(GridContext gc, Vector3D targetGps)
         {   
             if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
@@ -1242,6 +1284,37 @@ namespace IngameScript
             return false;
         }
 
+        PlanetType DetectPlanet(double radius)
+        {
+            if (radius < 12000)
+                return PlanetType.MoonFamily;
+
+            if (radius < 35000)
+                return PlanetType.Pertam;
+
+            if (radius < 50000)
+                return PlanetType.Triton;
+
+            return PlanetType.Earth;
+        }
+
+        double GetGravityRadius(double radius, PlanetType type)
+        {
+            switch (type)
+            {
+                case PlanetType.Triton:
+                    return radius * 1.847800623;
+
+                case PlanetType.Pertam:
+                    return radius * 1.620035921;
+
+                case PlanetType.MoonFamily:
+                    return radius * 1.319403509;
+
+                default:
+                    return radius * 1.701333333;
+            }
+        }
 
         ////////////////////////////////////////////////////////
         /// SAFE DEscENT

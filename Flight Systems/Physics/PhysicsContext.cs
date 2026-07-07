@@ -1,9 +1,7 @@
 ﻿using IngameScript.Domain;
-using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
-using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript.Physics
@@ -24,6 +22,7 @@ namespace IngameScript.Physics
         Vector3D velocity = new Vector3D();
         Vector3D accel = new Vector3D();
         Vector3D desiredUpVector = new Vector3D();
+        Vector3D planetCenter = new Vector3D();
 
         H2Totals h2Cache = new H2Totals();
         BatTotals batCache = new BatTotals();
@@ -49,6 +48,7 @@ namespace IngameScript.Physics
         double upVelocity;
         double netDecel;
         double distanceToGPS;
+        bool isGpsOnPlanet;
 
         bool isStopped;
 
@@ -83,7 +83,7 @@ namespace IngameScript.Physics
             accel = ((Velocity - prevVelocity) / timeSinceLastRun);
             desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
             gravity = NaturalGravity.Length();
-            groundLevel = GetPlanetElevation();
+            groundLevel = GetPlanetElevation(gc.Controller);
             climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
 
             forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
@@ -108,7 +108,10 @@ namespace IngameScript.Physics
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
-            distanceToGPS = gravity > 0 ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : (targetCoordinates - gc.Controller.GetPosition()).Length();
+
+            planetCenter = GetPlanetCenter(gc.Controller);
+            isGpsOnPlanet = GetIsGpsOnPlanet(gc.Controller, targetCoordinates);
+            distanceToGPS = IsGpsOnPlanet ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : Vector3D.Distance(targetCoordinates, gc.Controller.GetPosition());
             timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
             isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
             h2Cache = ComputeH2Totals();
@@ -131,6 +134,7 @@ namespace IngameScript.Physics
         Vector3D Velocity => velocity;
         public Vector3D Accel => accel;
         public Vector3D DesiredUpVector => desiredUpVector;
+        public Vector3D PlanetCenter => planetCenter;
         public double Gravity => gravity;
         public double GroundLevel => groundLevel;
         public double EffectiveAlt => effectiveAlt;
@@ -152,6 +156,7 @@ namespace IngameScript.Physics
         public double UpVelocity => upVelocity;
         public double NetDecel => netDecel;
         public double DistanceToGPS => distanceToGPS;
+        public bool IsGpsOnPlanet => isGpsOnPlanet;
         public bool IsStopped => isStopped;
         public H2Totals H2Cache => h2Cache;
         public BatTotals BatCache => batCache;
@@ -211,10 +216,10 @@ namespace IngameScript.Physics
             return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime };
         }
 
-        double GetPlanetElevation()
+        double GetPlanetElevation(IMyShipController controller)
         {
             double alt;
-            gc.Controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
+            controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
             return alt;
         }
 
@@ -245,11 +250,28 @@ namespace IngameScript.Physics
                 thrust += Math.Max(0, dot) * t.MaxEffectiveThrust;
             }
 
-            double gravityComponent = - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), direction) * NaturalGravity.Length();
+            double gravityComponent = gravity > 0 ? - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), direction) * NaturalGravity.Length() : 0;
 
             return (thrust / Mass.PhysicalMass) - gravityComponent;
         }
 
+
+        Vector3D GetPlanetCenter(IMyShipController controller)
+        {
+            Vector3D planetCenter;
+            controller.TryGetPlanetPosition(out planetCenter);
+
+            return planetCenter;
+        }
+
+
+        bool GetIsGpsOnPlanet(IMyShipController controller, Vector3D gps)
+        {
+            double sealevel;
+            controller.TryGetPlanetElevation(MyPlanetElevation.Sealevel, out sealevel);
+
+            return (planetCenter - gps).Length() > 2 * sealevel;
+        }
 
         double GetDistanceToPlanetGps(IMyShipController controller, Vector3D gps)
         {
