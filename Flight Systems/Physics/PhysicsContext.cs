@@ -28,6 +28,7 @@ namespace IngameScript.Physics
         BatTotals batCache = new BatTotals();
 
         double groundLevel;
+        double seaLevel;
         double effectiveAlt;
         double gravity;
         double climbRate;
@@ -83,7 +84,8 @@ namespace IngameScript.Physics
             accel = ((Velocity - prevVelocity) / timeSinceLastRun);
             desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
             gravity = NaturalGravity.Length();
-            groundLevel = GetPlanetElevation(gc.Controller);
+            groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
+            seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
             climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
 
             forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
@@ -137,6 +139,7 @@ namespace IngameScript.Physics
         public Vector3D PlanetCenter => planetCenter;
         public double Gravity => gravity;
         public double GroundLevel => groundLevel;
+        public double SeaLevel => seaLevel;
         public double EffectiveAlt => effectiveAlt;
         double VEffectiveYSpeed => vEffectiveYSpeed; 
         double VEffectiveZSpeed => vEffectiveZSpeed;
@@ -216,10 +219,10 @@ namespace IngameScript.Physics
             return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime };
         }
 
-        double GetPlanetElevation(IMyShipController controller)
+        double GetPlanetElevation(IMyShipController controller, MyPlanetElevation elevation)
         {
             double alt;
-            controller.TryGetPlanetElevation(MyPlanetElevation.Surface, out alt);
+            controller.TryGetPlanetElevation(elevation, out alt);
             return alt;
         }
 

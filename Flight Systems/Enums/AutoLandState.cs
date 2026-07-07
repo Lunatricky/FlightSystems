@@ -1,4 +1,4 @@
-﻿namespace IngameScript
+﻿namespace IngameScript.Enums
 {
     enum AutoLandState
     {

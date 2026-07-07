@@ -1,11 +1,11 @@
-﻿namespace IngameScript
+﻿namespace IngameScript.Enums
 {
     enum ParamType
     {
         AutoLandState,
         AutoPilotState,
         Number,
-        Text,
+        PowerState,
         Vector3D
     }
 }

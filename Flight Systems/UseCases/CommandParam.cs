@@ -1,4 +1,5 @@
-﻿using VRageMath;
+﻿using IngameScript.Enums;
+using VRageMath;
 
 namespace IngameScript.UseCases
 {
@@ -8,7 +9,7 @@ namespace IngameScript.UseCases
         public AutoLandState AutoLandState = AutoLandState.Idle;
 
         public double Number;
-        public string Text = "";
+        public Step Step = Step.Toggle;
         public Vector3D TargetCoordinates = new Vector3D();
 
         // ────────────────────────────────────────────────
@@ -23,10 +24,10 @@ namespace IngameScript.UseCases
             Number = n;
         }
 
-        public CommandParam(string t)
+        public CommandParam(Step t)
         {
-            Type = ParamType.Text;
-            Text = t ?? "";
+            Type = ParamType.PowerState;
+            Step = t;
         }
         public CommandParam(Vector3D targetCoordinates)
         {
@@ -35,6 +36,6 @@ namespace IngameScript.UseCases
         }
 
         // Empty
-        public static CommandParam Empty => new CommandParam(null);
+        public static CommandParam Empty => new CommandParam();
     }
 }

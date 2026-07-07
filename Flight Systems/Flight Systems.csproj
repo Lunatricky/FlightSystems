@@ -43,12 +43,13 @@
   <ItemGroup>
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniContext.cs" />
+    <Compile Include="Enums\Step.cs" />
     <Compile Include="Enums\PlanetType.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />
-    <Compile Include="UseCases\Class1.cs" />
+    <Compile Include="UseCases\FlightSystems.cs" />
     <Compile Include="Utils\PlayerInput.cs" />
     <Compile Include="UseCases\Command.cs" />
     <Compile Include="UseCases\CommandParam.cs" />

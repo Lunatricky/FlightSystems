@@ -73,6 +73,8 @@ namespace IngameScript.Domain
 
             foreach (IMyRemoteControl remote in remotes)
             {
+                remote.ControlThrusters = true;
+                remote.IsMainCockpit = false;
                 if (remote.CustomName.Contains(controllerTag.ToLower()))
                     Controller = remote;
                 Controllers.Add(remote);
@@ -91,6 +93,8 @@ namespace IngameScript.Domain
 
             foreach (IMyCockpit cockpit in cockpits)
             {
+                cockpit.ControlThrusters = true;
+                cockpit.IsMainCockpit = false;
                 if (cockpit.CanControlShip)
                 {
                     Controllers.Add(cockpit);

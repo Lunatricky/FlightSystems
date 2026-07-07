@@ -1,4 +1,4 @@
-﻿namespace IngameScript
+﻿namespace IngameScript.Enums
 {
     enum MainState
     {
@@ -6,9 +6,11 @@
         Reload,
         Idle,
         Cruise,
-        CNav, // Circumnavigation
-        Land, // Auto Land
-        SBurn, // Suicide Burn
+        Orbit,
+        Glide,
+        CNav,
+        Land,
+        SBurn,
         Gps
     }
 }
