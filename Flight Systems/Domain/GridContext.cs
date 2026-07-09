@@ -28,6 +28,7 @@ namespace IngameScript.Domain
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
         List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+        List<IMyLandingGear> gears = new List<IMyLandingGear>();
         List<IMyGasTank> tanks = new List<IMyGasTank>();
         List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
         List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
@@ -41,7 +42,7 @@ namespace IngameScript.Domain
         List<IMyThrust> upwardThrusters = new List<IMyThrust>();
 
         List<IMyGyro> gyros = new List<IMyGyro>();
-        List<IMyLandingGear> gears = new List<IMyLandingGear>();
+
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcdsSettings = new List<IMyTextSurface>();

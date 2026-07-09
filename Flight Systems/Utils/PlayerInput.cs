@@ -59,15 +59,15 @@ namespace IngameScript.Utils
 
         public bool W() => controller.MoveIndicator.Z < - DeadZone;
         public bool S() => controller.MoveIndicator.Z > DeadZone;
-        public bool A() => controller.MoveIndicator.X > DeadZone;
-        public bool D() => controller.MoveIndicator.X < - DeadZone;
+        public bool A() => controller.MoveIndicator.X < -DeadZone;
+        public bool D() => controller.MoveIndicator.X > DeadZone;
+        public bool E() => controller.RollIndicator > DeadZone;
+        public bool Q() => controller.RollIndicator < -DeadZone;
         public bool Space() => controller.MoveIndicator.Y > DeadZone;
         public bool C() => controller.MoveIndicator.Y < - DeadZone;
         public bool MouseL() => controller.RotationIndicator.X > DeadZone;
         public bool MouseR() => controller.RotationIndicator.X < - DeadZone;
         public bool MouseUp() => controller.RotationIndicator.Y > DeadZone;
         public bool MouseDown() => controller.RotationIndicator.Y < - DeadZone;
-        public bool E() => controller.RollIndicator > DeadZone;
-        public bool Q() => controller.RollIndicator < - DeadZone;
     }
 }
