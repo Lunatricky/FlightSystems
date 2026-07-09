@@ -1012,13 +1012,13 @@ namespace IngameScript
                 selectedRow++;
             }
 
-            if (pi.A())
+            if (pi.Q())
             {
                 LockInput();
                 selectedPage--;
             }
 
-            if (pi.D())
+            if (pi.E())
             {
                 LockInput();
                 selectedPage++;
@@ -1084,7 +1084,7 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
             int row = 1;
 
-            if (pi.Space())
+            if (pi.A() || pi.D())
             {
                 LockInput();
                 if (selectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
@@ -1180,13 +1180,13 @@ namespace IngameScript
             else if (value < 5000) increment = 500;
             else increment = 1000;
 
-            if (pi.Space())
+            if (pi.D())
             {
                 LockInput();
                 value += increment;
             }
 
-            if (pi.C())
+            if (pi.A())
             {
                 LockInput();
                 value -= increment;
