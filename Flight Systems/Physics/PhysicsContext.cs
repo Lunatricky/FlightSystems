@@ -56,10 +56,9 @@ namespace IngameScript.Physics
         Vector3D prevVelocity = new Vector3D();
         double smoothedSpeed = 0;
         double prevH2Fill = 0;
-        double prevBatFill = 0;
 
-        public struct H2Totals { public double Capacity; public double Filled; public double Percent; public string Time; }
-        public struct BatTotals { public double Capacity; public double Filled; public double Percent; public string Time; }
+        public struct H2Totals { public double Capacity; public double Filled; public double Percent; public string Time; public double Rate; }
+        public struct BatTotals { public double Capacity; public double Filled; public double Percent; public string Time; public double Rate; }
 
         const double ALPHA = 0.2;
 
@@ -125,7 +124,6 @@ namespace IngameScript.Physics
         {
             prevVelocity = Velocity;
             prevH2Fill = H2Cache.Filled;
-            prevBatFill = BatCache.Filled;
         }
 
         public double Now => accumulatedTime;
@@ -140,6 +138,8 @@ namespace IngameScript.Physics
         public double Gravity => gravity;
         public double GroundLevel => groundLevel;
         public double SeaLevel => seaLevel;
+        public string GroundLevelStr => groundLevel > 1000 ? $"{groundLevel / 1000:F1} km" : $"{groundLevel:F1} m";
+        public string SeaLevelStr => seaLevel > 1000 ? $"{seaLevel / 1000:F1} km" : $"{seaLevel:F1} m";
         public double EffectiveAlt => effectiveAlt;
         double VEffectiveYSpeed => vEffectiveYSpeed; 
         double VEffectiveZSpeed => vEffectiveZSpeed;
@@ -163,8 +163,6 @@ namespace IngameScript.Physics
         public bool IsStopped => isStopped;
         public H2Totals H2Cache => h2Cache;
         public BatTotals BatCache => batCache;
-        public double PrevH2Fill => prevH2Fill;
-        public double PrevBatFill => prevBatFill;
 
         H2Totals ComputeH2Totals()
         {
@@ -187,7 +185,7 @@ namespace IngameScript.Physics
                     time = UtilsHelpder.FormatTime(filled / -rate) + " \\/";
             }
 
-            return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Time = time };
+            return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Time = time, Rate = rate };
         }
 
         BatTotals ComputeBatTotals()
@@ -205,18 +203,18 @@ namespace IngameScript.Physics
 
             percent = 100 * filled / cap;
 
-            double netPower = batIn - batOut;
+            double rate = batIn - batOut;
             string batTime = "--";
 
-            if (Math.Abs(netPower) > 0.01)
+            if (Math.Abs(rate) > 0.01)
             {
-                if (netPower > 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / netPower) + " /\\";
-                else if (netPower < 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * filled / -netPower) + " \\/";
+                if (rate > 0)
+                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / rate) + " /\\";
+                else if (rate < 0)
+                    batTime = UtilsHelpder.FormatTime(3600 * filled / -rate) + " \\/";
             }
 
-            return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime };
+            return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime, Rate = rate };
         }
 
         double GetPlanetElevation(IMyShipController controller, MyPlanetElevation elevation)

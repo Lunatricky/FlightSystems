@@ -26,7 +26,7 @@ namespace IngameScript.UseCases
 
         public CommandParam(Step t)
         {
-            Type = ParamType.PowerState;
+            Type = ParamType.Step;
             Step = t;
         }
         public CommandParam(Vector3D targetCoordinates)

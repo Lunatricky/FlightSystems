@@ -72,7 +72,7 @@ namespace IngameScript
                 SetModeState(modeName, !currentState);
             }
 
-            private bool GetModeState(MainState modeName)
+            public bool GetModeState(MainState modeName)
             {
                 switch (modeName)
                 {
@@ -139,7 +139,7 @@ namespace IngameScript
             }
 
             inputLock++;
-            if (inputLock > 25)
+            if (inputLock > 10)
             {
                 inputLock = 0;
                 settingsIsLocked = false;
@@ -171,13 +171,12 @@ namespace IngameScript
                         if (selectedRow < 0) selectedRow = 8;
                         else if (selectedRow > 8) selectedRow = 1;
 
-                        (settingsToggle ? (Action)ToggleSectionEdit : ToggleSection)(); 
+                        ToggleSectionEdit(); 
                         break;
                     case 3:
                         if (selectedRow < 0) selectedRow = 5;
                         else if (selectedRow > 5) selectedRow = 1;
-
-                        (settingsToggle ? (Action)ParamSectionEdit : ParamSection)(); 
+                        ParamSectionEdit();
                         break;
                 }
             }
@@ -190,10 +189,6 @@ namespace IngameScript
             tickCount++;
             if (tickCount % 50 == 1)
             {
-                if (!settingsToggle)
-                {
-                    FlightSystemSection();
-                }
 
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
@@ -201,6 +196,16 @@ namespace IngameScript
                 task = "IsDocked";
                 Echo(GetRuntimeInfo());
                 return;
+            }
+
+            if (tickCount % 50 == 2 && !IsShipControlled())
+            {
+                if (!settingsToggle)
+                {
+                    FlightSystemSection();
+                }
+                if (gc.Lcds1.Count > 0) LCD1Sprite();
+                if (gc.Lcds2.Count > 0) LCD2Sprite();
             }
 
             if (ic.AllowDockMode)
@@ -319,15 +324,6 @@ namespace IngameScript
             else gc.ResetThrusters(gc.BreakingThrusters);
         }
 
-        StringBuilder ScriptInfo()
-        {
-            StringBuilder scriptInfo = new StringBuilder();
-            ScriptInfoHeader(scriptInfo);
-            scriptInfo.AppendLine("");
-            ScriptInfoBlocks(ic, scriptInfo);
-            return scriptInfo;
-        }
-
         double tickCounter = 0;
         double maxRuntimeMs = 0;
 
@@ -433,11 +429,11 @@ namespace IngameScript
                         return;
                     }
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
-                    AutoLandStateSwitch(gc, command.Param);
+                    AutoLandStateSwitch(gc, command);
                     break;
                 case MainState.SBurn: // Suicide Burn
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
-                    SuicideBurnStateSwitch(gc, command.Param);
+                    SuicideBurnStateSwitch(gc, command);
                     break;
             }
         }
@@ -456,61 +452,6 @@ namespace IngameScript
             }
         }
 
-        public StringBuilder ScriptInfoHeader(StringBuilder scriptInfo)
-        {
-            scriptInfo.AppendLine("Flight systems - " + gc.GridName);
-            scriptInfo.Append("    State: " + command.State);
-
-
-            if (command.Param.Step != Step.Toggle)
-                scriptInfo.Append(" - " + command.Param.Step);
-            if (command.Param.Number != 0)
-                scriptInfo.Append(" - " + command.Param.Number);
-            if (command.Param.AutoLandState != AutoLandState.Idle)
-                scriptInfo.Append(" - " + command.Param.AutoLandState);
-
-            return scriptInfo;
-        }
-
-        public StringBuilder ScriptInfoBlocks(IniContext ic, StringBuilder scriptInfo)
-        {
-            scriptInfo.AppendLine("Toggles");
-            scriptInfo.AppendLine("    " + IniContext.FLIGHT_SYSTEMS + ": " + ic.AllowFlightSystems);
-            scriptInfo.AppendLine("    " + IniContext.ANALOG_THROTLE + ": " + ic.AnalogThrotle);
-            scriptInfo.AppendLine("    " + IniContext.LOW_FUEL_LAND + ": " + ic.AllowLowFuelLand);
-            scriptInfo.AppendLine("    " + IniContext.DOCK_MODE + ": " + ic.AllowDockMode);
-            scriptInfo.AppendLine("    " + IniContext.CONTROL_ANTENNAS + ": " + ic.ControlAntennas);
-            scriptInfo.AppendLine("    " + IniContext.RENAME_SUBGRIDS + ": " + ic.RenameSubgrids);
-            scriptInfo.AppendLine("    " + IniContext.PAINT_SURFACES + ": " + ic.PaintSurfaces);
-            scriptInfo.AppendLine("    " + IniContext.TRANSPARENTLCD + ": " + ic.TransparentLCD);
-            scriptInfo.AppendLine("Blocks");
-            scriptInfo.AppendLine("    Controller: " + gc.Controller.CustomName);
-
-            if (ic.AllowFlightSystems)
-            {
-                scriptInfo.AppendLine("    Batteries: " + gc.Batteries.Count + " | Tanks: " + gc.Tanks.Count);
-                scriptInfo.AppendLine("    Forward thruster: " + gc.ForwardThrusters.Count);
-                scriptInfo.AppendLine("    Breaking thruster: " + gc.BreakingThrusters.Count);
-                scriptInfo.AppendLine("    Upward thruster: " + gc.UpwardThrusters.Count);
-                scriptInfo.AppendLine("    Gyros: " + gc.Gyros.Count);
-            }
-
-            if (ic.AllowDockMode || ic.AllowFlightSystems)
-                scriptInfo.AppendLine("    Gears: " + gc.Gears.Count);
-
-            if (ic.AllowDockMode)
-            {
-                scriptInfo.AppendLine("    Dock Mode blocks: " + gc.ControlledBlocks.Count);
-            }
-
-            scriptInfo.AppendLine("    LCDs1: " + gc.Lcds1.Count);
-            scriptInfo.AppendLine("    LCDs2: " + gc.Lcds2.Count);
-            scriptInfo.AppendLine("    Lcds Settings: " + gc.LcdsSettings.Count);
-            scriptInfo.AppendLine("    Surfaces: " + gc.Surfaces.Count);
-
-            return scriptInfo;
-        }
-
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
@@ -518,9 +459,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    sb.SetActiveMode(MainState.Cruise);
-                    if (sb.CruiseToggle) command.Param.Step = Step.On;
-                    else command.Param.Step = Step.Off;
+                    ToggleCommand(command);
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
@@ -538,9 +477,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    sb.SetActiveMode(MainState.Orbit);
-                    if (sb.OrbitToggle) command.Param.Step = Step.On;
-                    else command.Param.Step = Step.Off;
+                    ToggleCommand(command);
                     break;
                 case Step.On:
                     if (GravityAlignedOverride(gc))
@@ -573,13 +510,11 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    sb.SetActiveMode(MainState.Glide);
-                    if (sb.GlideToggle) command.Param.Step = Step.On;
-                    else command.Param.Step = Step.Off;
+                    ToggleCommand(command);
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.EffectiveAlt < ic.safeAltitude + pc.StopYDist)
+                    if (pc.Gravity > 0 && pc.EffectiveAlt < ic.safeAltitude + pc.StopYDist)
                     {
                         AbortShipContext(gc);
                         command.State = MainState.Land;
@@ -597,9 +532,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    sb.SetActiveMode(MainState.CNav);
-                    if (sb.CNavToggle) command.Param.Step = Step.On;
-                    else command.Param.Step = Step.Off;
+                    ToggleCommand(command);
                     break;
                 case Step.On:
                     if (pc.EffectiveAlt < ic.safeAltitude)
@@ -640,9 +573,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    sb.SetActiveMode(MainState.Gps);
-                    if (sb.GpsToggle) command.Param.Step = Step.On;
-                    else command.Param.Step = Step.Off;
+                    ToggleCommand(command);
                     break;
 
                 case Step.On:
@@ -733,11 +664,33 @@ namespace IngameScript
             CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
-        void AutoLandStateSwitch(GridContext gc, CommandParam param)
+        private void ToggleCommand(Command command)
         {
-            sb.SetActiveMode(MainState.Land);
-            if (!sb.LandToggle) AbortShipContext(gc);
-            switch (param.AutoLandState)
+            sb.SetActiveMode(command.State);
+            if (sb.GetModeState(command.State)) command.Param.Step = Step.On;
+            else command.Param.Step = Step.Off;
+        }
+
+        void AutoLandStateSwitch(GridContext gc, Command command)
+        {
+
+            switch (command.Param.Step)
+            {
+                case Step.Toggle:
+                    ToggleCommand(command);
+                    break;
+                case Step.On:
+                    AutoLandSwitch(gc, command);
+                    break;
+                case Step.Off:
+                    AbortShipContext(gc);
+                    break;
+            }
+        }
+
+        private void AutoLandSwitch(GridContext gc, Command command)
+        {
+            switch (command.Param.AutoLandState)
             {
                 case AutoLandState.Idle:
                     break;
@@ -757,11 +710,25 @@ namespace IngameScript
             }
         }
 
-        void SuicideBurnStateSwitch(GridContext gc, CommandParam param)
+        void SuicideBurnStateSwitch(GridContext gc, Command command)
         {
-            sb.SetActiveMode(MainState.SBurn);
-            if (!sb.SBurnToggle) AbortShipContext(gc);
-            switch (param.AutoLandState)
+            switch (command.Param.Step)
+            {
+                case Step.Toggle:
+                    ToggleCommand(command);
+                    break;
+                case Step.On:
+                    SBurnSwitch(gc, command);
+                    break;
+                case Step.Off:
+                    AbortShipContext(gc);
+                    break;
+            }
+        }
+
+        private void SBurnSwitch(GridContext gc, Command command)
+        {
+            switch (command.Param.AutoLandState)
             {
                 case AutoLandState.Idle:
                     break;
@@ -957,7 +924,7 @@ namespace IngameScript
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
 
             Color color;
-            color = pc.PrevH2Fill < pc.H2Cache.Filled ? Color.LightBlue
+            color = pc.H2Cache.Rate > 0 ? Color.LightBlue
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
                 : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
                 : new Color();
@@ -966,7 +933,7 @@ namespace IngameScript
                 spt.AddB($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color);
             else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
 
-            color = pc.PrevBatFill < pc.BatCache.Filled ? Color.LightBlue
+            color = pc.BatCache.Rate > 0 ? Color.LightBlue
                 : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
                 : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
                 : new Color();
@@ -994,13 +961,13 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.AddB($"GL: {pc.GroundLevel:F1} m | SL: {pc.SeaLevel:F1} m", color);
+                    spt.AddB($"GL: {pc.GroundLevelStr} | SL: {pc.SeaLevelStr}", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
-                    spt.Add($"GL: {pc.GroundLevel:F1} m | SL: {pc.SeaLevel:F1} m");
+                    spt.Add($"GL: {pc.GroundLevelStr} | SL: {pc.SeaLevelStr}");
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
                 }
@@ -1076,15 +1043,26 @@ namespace IngameScript
             {
                 settingsToggle = false;
                 pi.ResetControllers(gc.Controllers);
-                AbortShipContext(gc);
+                MainState ms = MainState.Idle;
 
-                if (selectedRow == row++) command = new Command(MainState.Cruise);
-                else if (selectedRow == row++) command = new Command(MainState.Orbit);
-                else if (selectedRow == row++) command = new Command(MainState.CNav);
-                else if (selectedRow == row++) command = new Command(MainState.Land);
-                else if (selectedRow == row++) command = new Command(MainState.Glide);
-                else if (selectedRow == row++) command = new Command(MainState.SBurn);
-                else if (selectedRow == row++) command = new Command(MainState.Gps);
+                if (selectedRow == row++) ms = MainState.Cruise;
+                else if (selectedRow == row++) ms = MainState.Orbit;
+                else if (selectedRow == row++) ms = MainState.CNav;
+                else if (selectedRow == row++) ms = MainState.Land;
+                else if (selectedRow == row++) ms = MainState.Glide;
+                else if (selectedRow == row++) ms = MainState.SBurn;
+                else if (selectedRow == row++) ms = MainState.Gps;
+
+                if (ms != MainState.Idle)
+                {
+                    if (sb.GetModeState(ms))
+                    {
+                        AbortShipContext(gc);
+                        FlightSystemSection();
+                        return;
+                    }
+                    else command = new Command(ms);
+                }
             }
 
             row = 1;
@@ -1160,7 +1138,6 @@ namespace IngameScript
         void FlightSystemSection()
         {
             Sprites spt = new Sprites(ic);
-
             if (sb.CruiseToggle) selectedRow = 1;
             else if (sb.OrbitToggle) selectedRow = 2;
             else if (sb.CNavToggle) selectedRow = 3;
@@ -1168,6 +1145,7 @@ namespace IngameScript
             else if (sb.GlideToggle) selectedRow = 5;
             else if (sb.SBurnToggle) selectedRow = 6;
             else if (sb.GpsToggle) selectedRow = 7;
+            else selectedRow = 0;
 
             int row = 1;
 
@@ -1179,38 +1157,6 @@ namespace IngameScript
             spt.Add($"Glide to surface",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Suicide burn",  RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        void ToggleSection()
-        {
-            Sprites spt = new Sprites(ic);
-
-            spt.Add($"{IniContext.ToggleSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(ic.AllowFlightSystems), Color.Black);
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(ic.AnalogThrotle), Color.Black);
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(ic.AllowLowFuelLand), Color.Black);
-            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(ic.AllowDockMode), Color.Black);
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(ic.ControlAntennas), Color.Black);
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(ic.RenameSubgrids), Color.Black);
-            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(ic.PaintSurfaces), Color.Black);
-            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(ic.TransparentLCD), Color.Black);
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        void ParamSection()
-        {
-            Sprites spt = new Sprites(ic);
-
-            spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}");
-            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}");
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}");
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}");
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}");
 
 
             DrawSprites(spt, gc.LcdsSettings);
@@ -1254,11 +1200,6 @@ namespace IngameScript
             return (isSelected ? 
                 toggle ? Color.Green : Color.Red : 
                 toggle ? Color.LightGreen : Color.OrangeRed);
-        }
-
-        Color BoolSpriteColor(bool toggle)
-        {
-            return (toggle ? Color.LightGreen : Color.OrangeRed);
         }
                 
         void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces, int col = 1)

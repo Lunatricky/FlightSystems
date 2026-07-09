@@ -5,7 +5,7 @@
         AutoLandState,
         AutoPilotState,
         Number,
-        PowerState,
+        Step,
         Vector3D
     }
 }
