@@ -6,7 +6,9 @@ namespace IngameScript
 {
     class RenameSubgrids
     {
-        public static void GetSubgridsAndRename(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid mainGrid)
+        static List<long> blockIds = new List<long>();
+
+        static public void GetSubgridsAndRename(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid mainGrid)
         {
             string baseName = mainGrid.CustomName;
             if (string.IsNullOrWhiteSpace(baseName))
@@ -14,7 +16,12 @@ namespace IngameScript
 
             // Collect all connected grids (recursive)
             HashSet<IMyCubeGrid> connectedGrids = new HashSet<IMyCubeGrid>();
-            CollectConnectedGrids(gridTerminalSystem, mainGrid, connectedGrids);
+
+            var allBlocks = new List<IMyMechanicalConnectionBlock>();
+
+            gridTerminalSystem.GetBlocksOfType(allBlocks);
+
+            CollectConnectedGrids(gridTerminalSystem, mainGrid, connectedGrids, allBlocks);
 
             // Remove the main grid itself
             connectedGrids.Remove(mainGrid);
@@ -34,51 +41,25 @@ namespace IngameScript
             }
         }
 
-
-        // Recursive helper to find all connected grids via mechanical connections
-        static void CollectConnectedGrids(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid current, HashSet<IMyCubeGrid> visited)
+        static void CollectConnectedGrids(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid current, HashSet<IMyCubeGrid> visited, List<IMyMechanicalConnectionBlock> allBlocks)
         {
             if (visited.Contains(current))
                 return;
 
             visited.Add(current);
 
-            // Get all terminal blocks on this grid
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            gridTerminalSystem.GetBlocksOfType<IMyTerminalBlock>(blocks);
-
-
-            // Filter to current grid only                                                                                                                                                                                                                                                              
-            List<IMyTerminalBlock> currentBlocks = new List<IMyTerminalBlock>();
-            foreach (IMyTerminalBlock block in blocks)
+            // Filter to current grid only
+            foreach (IMyMechanicalConnectionBlock block in allBlocks)
             {
-                if (block.CubeGrid == current)
-                    currentBlocks.Add(block);
-            }
+                if (block.CubeGrid != current)
+                    continue;
 
-            foreach (IMyTerminalBlock currentBlock in currentBlocks)
-            {
-                // Rotor
-                if (currentBlock is IMyMotorStator)
-                {
-                    IMyMotorStator rotor = (IMyMotorStator)currentBlock;
-                    if (rotor.TopGrid != null)
-                        CollectConnectedGrids(gridTerminalSystem, rotor.TopGrid, visited);
-                }
-                // Piston
-                else if (currentBlock is IMyPistonBase)
-                {
-                    IMyPistonBase piston = (IMyPistonBase)currentBlock;
-                    if (piston.TopGrid != null)
-                        CollectConnectedGrids(gridTerminalSystem, piston.TopGrid, visited);
-                }
-                // Hinge / Mechanical Connection
-                else if (currentBlock is IMyMechanicalConnectionBlock)
-                {
-                    IMyMechanicalConnectionBlock mech = (IMyMechanicalConnectionBlock)currentBlock;
-                    if (mech.TopGrid != null)
-                        CollectConnectedGrids(gridTerminalSystem, mech.TopGrid, visited);
-                }
+                if (blockIds.Contains(block.EntityId))
+                    continue;
+
+                blockIds.Add(block.EntityId);
+
+                CollectConnectedGrids(gridTerminalSystem, block.TopGrid, visited, allBlocks);
             }
         }
     }

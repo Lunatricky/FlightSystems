@@ -117,7 +117,7 @@ namespace IngameScript
             if (gc.LcdsSettings.Count > 0) FlightSystemSection();
         }
 
-        string task;
+        Task task;
         string maxTask;
 
         public void Main(string argument)
@@ -152,7 +152,7 @@ namespace IngameScript
                 {
                     settingsToggle = false; 
                     pi.ResetControllers(gc.Controllers);
-                    task = "Reset Controllers";
+                    task = Task.ResetControllers;
                     Echo(GetRuntimeInfo());
                     return;
                 }
@@ -193,7 +193,7 @@ namespace IngameScript
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
                 isDocked = anyConnected || isGearlocked;
-                task = "IsDocked";
+                task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
             }
@@ -239,7 +239,7 @@ namespace IngameScript
             {
                 if (CheckIni())
                 {
-                    task = "CheckIni";
+                    task = Task.CheckIni;
                     Echo(GetRuntimeInfo());
                     return;
                 }
@@ -248,15 +248,15 @@ namespace IngameScript
             switch (tick % tickSplit)
             {
                 case 0:
-                    task = "Physics Update";
+                    task = Task.PhysicsUpdate;
                     pc.NewRun(timeSinceLastRun, command.Param.TargetCoordinates);
                     break;
                 case 1:
-                    task = "Flight Systems";
+                    task = Task.FlightSystems;
                     FlightSystems(gc, ic, pc);
                     break;
                 case 2:
-                    task = "LCDs";
+                    task = Task.LCDs;
                     if (IsShipControlled())
                     {
                         if (gc.Lcds1.Count > 0) LCD1Sprite();
@@ -294,6 +294,11 @@ namespace IngameScript
 
             if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
             {
+                if (!ic.AllowDockMode)
+                {
+                    AbortShipContext(gc);
+                    DockToggle(gc, false);
+                }
                 ReloadGridContext(gc, ic);
                 tick = 0;
                 return true;
@@ -342,7 +347,7 @@ namespace IngameScript
             double newRuntimeMs = Math.Round(Runtime.LastRunTimeMs, 5);
             if (newRuntimeMs > maxRuntimeMs)
             {
-                maxTask = task;
+                maxTask = task.ToString();
             }
             maxRuntimeMs = Math.Max(newRuntimeMs, maxRuntimeMs);
 
@@ -762,7 +767,7 @@ namespace IngameScript
                     .ReloadBatteries(ic.BackupBatteryTag);
 
             // Flight cached blocks
-            if (ic.AllowFlightSystems)
+            if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
             {
                 gc.ReloadControllers(ic.ControllerTag);
 
