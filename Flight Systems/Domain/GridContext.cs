@@ -69,8 +69,8 @@ namespace IngameScript.Domain
             List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
             List<IMyCockpit> cockpits = new List<IMyCockpit>();
 
-            GetOwnGridBlocks(remotes, IgnoreTag);
-            GetOwnGridBlocks(cockpits, IgnoreTag);
+            GetSameConstructBlocks(remotes, IgnoreTag);
+            GetSameConstructBlocks(cockpits, IgnoreTag);
 
             foreach (IMyRemoteControl remote in remotes)
             {
@@ -128,7 +128,7 @@ namespace IngameScript.Domain
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
 
-            GetOwnGridBlocks(Thrusters, IgnoreTag);
+            GetSameConstructBlocks(Thrusters, IgnoreTag);
 
             foreach (var thruster in Thrusters)
             {
@@ -149,19 +149,19 @@ namespace IngameScript.Domain
 
         public GridContext ReloadGyros()
         {
-            GetOwnGridBlocks(Gyros, IgnoreTag);
+            GetSameConstructBlocks(Gyros, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadGears()
         {
-            GetOwnGridBlocks(Gears, IgnoreTag);
+            GetSameConstructBlocks(Gears, IgnoreTag);
             return this;
         }
 
         public GridContext ReloadAntennas(bool controlAntennas)
         {
-            GetOwnGridBlocks(Antennas, IgnoreTag);
+            GetSameConstructBlocks(Antennas, IgnoreTag);
             if (controlAntennas)
             {
                 foreach (IMyRadioAntenna antenna in Antennas)
@@ -264,7 +264,7 @@ namespace IngameScript.Domain
         public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GetOwnGridBlocks(Connectors, IgnoreTag);
+            GetSameConstructBlocks(Connectors, IgnoreTag);
             SetConnectors();
 
             return this;
@@ -272,14 +272,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadTanks()
         {
-            GetOwnGridBlocks(Tanks, IgnoreTag);
+            GetSameConstructBlocks(Tanks, IgnoreTag);
 
             return this;
         }
 
         public GridContext ReloadH2Tanks()
         {
-            GetOwnGridBlocks(Tanks, IgnoreTag);
+            GetSameConstructBlocks(Tanks, IgnoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -293,7 +293,7 @@ namespace IngameScript.Domain
 
         public GridContext ReloadBatteries(string backupTag)
         {
-            GetOwnGridBlocks(Batteries, IgnoreTag);
+            GetSameConstructBlocks(Batteries, IgnoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -310,9 +310,16 @@ namespace IngameScript.Domain
             }
 
             if ((BackupBattery == null || BackupBattery.Closed) && Batteries.Count > 1)
-            {
-                BackupBattery = Batteries.First();
-                BackupBattery.CustomName = BackupBattery.CustomName + " " + backupTag;
+            { 
+                foreach (var battery in Batteries)
+                {
+                    if (Me.CubeGrid == battery.CubeGrid)
+                    {
+                        BackupBattery = battery;
+                        BackupBattery.CustomName = BackupBattery.CustomName + " " + backupTag;
+                        return this;
+                    }
+                }
             }
 
             return this;
@@ -512,12 +519,23 @@ namespace IngameScript.Domain
         public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;
 
-        public void GetOwnGridBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        public void GetSameConstructBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
             list.Clear();
             bool hasIgnore = !string.IsNullOrEmpty(__ignoreTag);
             GridTS.GetBlocksOfType(list, block =>
                 block.IsSameConstructAs(Me)
+                && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
+                && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
+            );
+        }
+
+        public void GetOwnGridBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock
+        {
+            list.Clear();
+            bool hasIgnore = !string.IsNullOrEmpty(__ignoreTag);
+            GridTS.GetBlocksOfType(list, block =>
+                block.CubeGrid == Me.CubeGrid
                 && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
                 && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
             );

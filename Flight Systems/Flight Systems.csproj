@@ -43,6 +43,7 @@
   <ItemGroup>
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniContext.cs" />
+    <Compile Include="Enums\Task.cs" />
     <Compile Include="Enums\Step.cs" />
     <Compile Include="Enums\PlanetType.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
