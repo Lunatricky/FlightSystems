@@ -438,7 +438,7 @@ namespace IngameScript
                     break;
                 case MainState.SBurn: // Suicide Burn
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
-                    SuicideBurnStateSwitch(gc, command);
+                    SBurnStateSwitch(gc, command);
                     break;
             }
         }
@@ -697,9 +697,6 @@ namespace IngameScript
         {
             switch (command.Param.AutoLandState)
             {
-                case AutoLandState.Idle:
-                    break;
-
                 case AutoLandState.Align:
                     SoftAbort(gc);
                     if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
@@ -715,7 +712,7 @@ namespace IngameScript
             }
         }
 
-        void SuicideBurnStateSwitch(GridContext gc, Command command)
+        void SBurnStateSwitch(GridContext gc, Command command)
         {
             switch (command.Param.Step)
             {
@@ -735,9 +732,6 @@ namespace IngameScript
         {
             switch (command.Param.AutoLandState)
             {
-                case AutoLandState.Idle:
-                    break;
-
                 case AutoLandState.Align:
                     SoftAbort(gc);
                     if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
@@ -784,26 +778,18 @@ namespace IngameScript
                 sb.LastCheckIsOnNatGrav = pc.Gravity > 0;
             }
 
-                // Dock cached blocks
-                if (ic.AllowDockMode)
-                    gc.ReloadConnectors()
-                    .ReloadGears()
-                    .ReloadTanks()
-                    .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
+            // Dock cached blocks
+            if (ic.AllowDockMode)
+                gc.ReloadConnectors()
+                .ReloadGears()
+                .ReloadTanks()
+                .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
 
-                if (ic.ControlAntennas)
-                    gc.ReloadAntennas(ic.ControlAntennas);
+            if (ic.ControlAntennas) gc.ReloadAntennas(ic.ControlAntennas);
 
-                if (ic.RenameSubgrids)
-                {
-                    IMyCubeGrid mainGrid = gc.Me.CubeGrid;
-                    if (mainGrid != null)
-                    {
-                        RenameSubgrids.GetSubgridsAndRename(gc.GridTS, mainGrid);
-                    }
-                }
+            if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
-                if (ic.PaintSurfaces)
+            if (ic.PaintSurfaces)
                 {
                     gc.ReloadSurfaces();
 
@@ -916,12 +902,12 @@ namespace IngameScript
             state.Append("State: " + command.State);
 
 
-            if (command.Param.Step != Step.Toggle)
+            if (command.Param.AutoLandState != AutoLandState.Idle)
+                state.Append(" - " + command.Param.AutoLandState);
+            else if (command.Param.Step != Step.Toggle)
                 state.Append(" - " + command.Param.Step);
             if (command.Param.Number != 0)
                 state.Append(" - " + command.Param.Number);
-            if (command.Param.AutoLandState != AutoLandState.Idle)
-                state.Append(" - " + command.Param.AutoLandState);
 
             spt.Add(state.ToString());
 
@@ -966,13 +952,13 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.AddB($"GL: {pc.GroundLevelStr} | SL: {pc.SeaLevelStr}", color);
+                    spt.AddB($"GL: {pc.GroundLevelStr}", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
-                    spt.Add($"GL: {pc.GroundLevelStr} | SL: {pc.SeaLevelStr}");
+                    spt.Add($"GL: {pc.GroundLevelStr}");
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
                 }
@@ -1227,7 +1213,8 @@ namespace IngameScript
 
         void SoftAbort(GridContext gc)
         {
-            gc.Controller.DampenersOverride = true;
+            if (gc.Controller != null)
+                gc.Controller.DampenersOverride = true;
             sb.StopCruiseWhenOutOfGrav = false;
 
             gc.ResetGyros();
@@ -1434,7 +1421,8 @@ namespace IngameScript
             if (pc.NetDecel - 1 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainState.Orbit;
+                this.command.State = MainState.Orbit;
+                return false;
             }
 
             gc.Controller.DampenersOverride = false;
@@ -1447,7 +1435,8 @@ namespace IngameScript
             if (pc.NetDecel - 0.5 < 0)
             {
                 AbortShipContext(gc);
-                command.State = MainState.Orbit;
+                this.command.State = MainState.Orbit;
+                return false;
             }
 
             gc.Controller.DampenersOverride = false;
