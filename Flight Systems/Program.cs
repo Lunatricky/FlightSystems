@@ -742,12 +742,13 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopZDist)
+                    /*
+                     * if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopYDist)
                     {
                         command.State = MainState.Land;
                         command.Param.AutoLandState = AutoLandState.Drop;
                     }
-                    else if (TryLock(gc)) AbortShipContext(gc);
+                    else*/ if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
         }
@@ -965,7 +966,7 @@ namespace IngameScript
             }
 
             spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity:F2} g ");
+            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity / 9.81:F2} g ");
             else spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
 
             if (sb.GpsToggle)

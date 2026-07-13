@@ -251,7 +251,7 @@ namespace IngameScript.Physics
                 thrust += Math.Max(0, dot) * t.MaxEffectiveThrust;
             }
 
-            double gravityComponent = gravity > 0 ? - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), direction) * NaturalGravity.Length() : 0;
+            double gravityComponent = gravity > 0 ? - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), Vector3D.Normalize(direction)) * NaturalGravity.Length() : 0;
 
             return (thrust / Mass.PhysicalMass) - gravityComponent;
         }
