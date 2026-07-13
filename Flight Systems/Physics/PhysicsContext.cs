@@ -2,6 +2,7 @@
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
+using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript.Physics
@@ -11,7 +12,6 @@ namespace IngameScript.Physics
         GridContext gc;
         SpeedTimeTracker stt;
 
-        double accumulatedTime = 0;
         double timeSinceLastRun = 0.00001;
         double threshold = 0.1;
 
@@ -29,11 +29,8 @@ namespace IngameScript.Physics
 
         double groundLevel;
         double seaLevel;
-        double effectiveAlt;
         double gravity;
         double climbRate;
-        double vEffectiveYSpeed;
-        double vEffectiveZSpeed;
         double stopYDist;
         double stopZDist;
         double maxYDecel;
@@ -74,7 +71,6 @@ namespace IngameScript.Physics
         public void NewRun(double timeSinceLastRun, Vector3D targetCoordinates)
         {
             if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
-            accumulatedTime += timeSinceLastRun;
 
             worldMatrix = gc.Controller.WorldMatrix;
             mass = gc.Controller.CalculateShipMass();
@@ -91,21 +87,16 @@ namespace IngameScript.Physics
             rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
             upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
 
-            maxYDecel = GetMaxDecel(gc.Controller.WorldMatrix.Down);
-            maxZDecel = GetMaxDecel(gc.Controller.WorldMatrix.Backward);
+            maxYDecel = GetMaxDecel(gc.Thrusters);
+            maxZDecel = GetMaxDecel(gc.Thrusters);
 
-            vEffectiveYSpeed = UpVelocity == 0 ? 0 : ClimbRate + MaxYDecel * timeSinceLastRun;
-            vEffectiveZSpeed = ForwardVelocity == 0 ? 0 : ForwardVelocity + MaxZDecel * timeSinceLastRun;
-
-            effectiveAlt = (GroundLevel - gc.GridHeight - vEffectiveYSpeed * timeSinceLastRun);
-
-            stopYDistTemp = Math.Abs(VEffectiveYSpeed * VEffectiveYSpeed / (2 * MaxYDecel));
-            stopZDistTemp = Math.Abs(VEffectiveZSpeed * VEffectiveZSpeed / (2 * MaxZDecel));
+            stopYDistTemp = Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel));
+            stopZDistTemp = Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel));
 
             stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
             stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
 
-            timeToImpact = Math.Abs(VEffectiveYSpeed) < 0.1 ? 0 : GroundLevel / Math.Abs(VEffectiveYSpeed);
+            timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
             timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
@@ -126,8 +117,7 @@ namespace IngameScript.Physics
             prevH2Fill = H2Cache.Filled;
         }
 
-        public double Now => accumulatedTime;
-
+        public Vector3D PrevVelocity => prevVelocity;
         MatrixD WorldMatrix => worldMatrix;
         public MyShipMass Mass => mass;
         public Vector3D NaturalGravity => naturalGravity;
@@ -140,16 +130,13 @@ namespace IngameScript.Physics
         public double SeaLevel => seaLevel;
         public string GroundLevelStr => groundLevel > 1000 ? $"{groundLevel / 1000:F1} km" : $"{groundLevel:F1} m";
         public string SeaLevelStr => seaLevel > 1000 ? $"{seaLevel / 1000:F1} km" : $"{seaLevel:F1} m";
-        public double EffectiveAlt => effectiveAlt;
-        double VEffectiveYSpeed => vEffectiveYSpeed; 
-        double VEffectiveZSpeed => vEffectiveZSpeed;
         double StopYDistTemp => stopYDistTemp;
         double StopZDistTemp => stopZDistTemp;
         public double StopYDist => stopYDist;
         public double StopZDist => stopZDist;
         public double ClimbRate => climbRate;
-        double MaxYDecel => maxYDecel;
-        public double MaxZDecel => maxZDecel;
+        public double MaxYDecel => maxYDecel;
+        double MaxZDecel => maxZDecel;
         public double TimeToImpact => timeToImpact;
         public double TimeToStopY => timeToStopY;
         public double TimeToStopZ => timeToStopZ;
@@ -240,20 +227,21 @@ namespace IngameScript.Physics
             return distance / smoothedSpeed;
         }
 
-        double GetMaxDecel(Vector3D direction)
+        double GetMaxDecel(List<IMyThrust> thrusters)
         {
             double thrust = 0;
 
-            foreach (var t in gc.Thrusters)
-            {
-                double dot = Vector3D.Dot(t.WorldMatrix.Backward, Vector3D.Normalize(direction));
+            Vector3D up = -Vector3D.Normalize(NaturalGravity);
 
-                thrust += Math.Max(0, dot) * t.MaxEffectiveThrust;
+            foreach (var t in thrusters)
+            {
+                double dot = t.WorldMatrix.Backward.Dot(up);
+
+                if (dot > 0.7)
+                    thrust += t.MaxEffectiveThrust * dot;
             }
 
-            double gravityComponent = gravity > 0 ? - Vector3D.Dot(Vector3D.Normalize(NaturalGravity), direction) * NaturalGravity.Length() : 0;
-
-            return (thrust / Mass.PhysicalMass) - gravityComponent;
+            return (thrust / Mass.PhysicalMass) - Gravity;
         }
 
 

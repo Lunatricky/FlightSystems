@@ -519,7 +519,7 @@ namespace IngameScript
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.Gravity > 0 && pc.EffectiveAlt < ic.safeAltitude + pc.StopYDist)
+                    if (pc.Gravity > 0 && pc.GroundLevel < ic.safeAltitude + pc.StopYDist)
                     {
                         AbortShipContext(gc);
                         command.State = MainState.Land;
@@ -540,7 +540,7 @@ namespace IngameScript
                     ToggleCommand(command);
                     break;
                 case Step.On:
-                    if (pc.EffectiveAlt < ic.safeAltitude)
+                    if (pc.GroundLevel < ic.safeAltitude)
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
@@ -562,7 +562,7 @@ namespace IngameScript
                     }
                     break;
                 case Step.Climb:
-                    if (pc.EffectiveAlt > ic.safeAltitude)
+                    if (pc.GroundLevel > ic.safeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
@@ -594,7 +594,7 @@ namespace IngameScript
                         return;
                     }
 
-                    if (pc.EffectiveAlt < ic.safeAltitude)
+                    if (pc.GroundLevel < ic.safeAltitude)
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
@@ -651,7 +651,7 @@ namespace IngameScript
                     break;
 
                 case Step.Climb:
-                    if (pc.EffectiveAlt > ic.safeAltitude)
+                    if (pc.GroundLevel > ic.safeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
@@ -741,8 +741,8 @@ namespace IngameScript
                     if (SuicideBurn(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
-                case AutoLandState.LockGear:
-                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.EffectiveAlt > 1 + pc.StopZDist)
+                case AutoLandState.LockGear:                    
+                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.GroundLevel > 1 + pc.StopYDist)
                     {
                         command.State = MainState.Land;
                         command.Param.AutoLandState = AutoLandState.Drop;
@@ -952,20 +952,20 @@ namespace IngameScript
 
                 if (!color.Equals(new Color()))
                 {
-                    spt.AddB($"GL: {pc.GroundLevelStr}", color);
+                    spt.AddB($"Ground: {pc.GroundLevelStr}", color);
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
                 }
                 else
                 {
-                    spt.Add($"GL: {pc.GroundLevelStr}");
+                    spt.Add($"Ground: {pc.GroundLevelStr}");
                     spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
                     spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
                 }
             }
 
             spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity:F2} g ");
+            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity / 9.81:F2} g ");
             else spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
 
             if (sb.GpsToggle)
@@ -1427,7 +1427,7 @@ namespace IngameScript
 
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
-            return pc.EffectiveAlt < 1.3 * pc.StopYDist + gc.GridHeight;
+            return pc.GroundLevel < 1.1 * pc.StopYDist + 2 * gc.GridHeight;
         }
 
         bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
@@ -1447,7 +1447,7 @@ namespace IngameScript
             double speedMin = -Math.Min(speedFromAlt, speedFromAccel);
 
             if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
-            return pc.EffectiveAlt < 10 + 2 * gc.GridHeight;
+            return pc.GroundLevel < 10 + 2 * gc.GridHeight;
         }
 
         bool TryLock(GridContext gc)
