@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame;
 
@@ -21,33 +22,32 @@ namespace IngameScript
 
             gridTerminalSystem.GetBlocksOfType(allBlocks);
 
-            CollectConnectedGrids(gridTerminalSystem, mainGrid, connectedGrids, allBlocks);
+            CollectConnectedGrids(mainGrid, connectedGrids, allBlocks);
 
-            // Remove the main grid itself
-            connectedGrids.Remove(mainGrid);
-
-            if (connectedGrids.Count == 0)
+            if (connectedGrids == null || connectedGrids.Count == 0)
             {
                 return;
             }
 
+            // Remove the main grid itself
+            connectedGrids.Remove(mainGrid);
+
             // Rename each subgrid
             int counter = 1;
             foreach (IMyCubeGrid subGrid in connectedGrids)
-            {
+            {                
                 string newName = baseName + " - Sub " + counter;
                 subGrid.CustomName = newName;
                 counter++;
             }
         }
 
-        static void CollectConnectedGrids(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid current, HashSet<IMyCubeGrid> visited, List<IMyMechanicalConnectionBlock> allBlocks)
+        static void CollectConnectedGrids(IMyCubeGrid current, HashSet<IMyCubeGrid> visited, List<IMyMechanicalConnectionBlock> allBlocks)
         {
             if (visited.Contains(current))
                 return;
 
             visited.Add(current);
-
             // Filter to current grid only
             foreach (IMyMechanicalConnectionBlock block in allBlocks)
             {
@@ -59,7 +59,7 @@ namespace IngameScript
 
                 blockIds.Add(block.EntityId);
 
-                CollectConnectedGrids(gridTerminalSystem, block.TopGrid, visited, allBlocks);
+                CollectConnectedGrids(block.TopGrid, visited, allBlocks);
             }
         }
     }
