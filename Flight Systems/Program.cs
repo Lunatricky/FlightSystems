@@ -21,7 +21,7 @@ namespace IngameScript
         SpeedTimeTracker stt;
         PlayerInput pi;
 
-        Command command = Command.Empty;
+        Command command;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -111,6 +111,7 @@ namespace IngameScript
             sb = new SystemBools();
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
+            command = new Command();
 
             CheckIni();
 
@@ -177,6 +178,9 @@ namespace IngameScript
                         if (selectedRow < 0) selectedRow = 5;
                         else if (selectedRow > 5) selectedRow = 1;
                         ParamSectionEdit();
+                        break;
+                    case 4:
+                        GpsSection();
                         break;
                 }
             }
@@ -369,9 +373,9 @@ namespace IngameScript
                 }
             }
 
-            MainState[] arr = {MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps};
-            List<MainState> MainStateList = new List<MainState>(arr);
-            if (!ic.AllowFlightSystems && MainStateList.Contains(command.State))
+            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
+
+            if (!ic.AllowFlightSystems && allowedStates.Contains(command.State))
             {
                 return;
             }
@@ -464,7 +468,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
@@ -482,7 +486,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     if (GravityAlignedOverride(gc))
@@ -515,7 +519,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
@@ -537,7 +541,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     if (pc.GroundLevel < ic.safeAltitude)
@@ -578,7 +582,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
 
                 case Step.On:
@@ -669,8 +673,9 @@ namespace IngameScript
             CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
-        private void ToggleCommand(Command command)
+        private void ToggleCommand(GridContext gc, Command command)
         {
+            SoftAbort(gc);
             sb.SetActiveMode(command.State);
             if (sb.GetModeState(command.State)) command.Param.Step = Step.On;
             else command.Param.Step = Step.Off;
@@ -682,7 +687,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     AutoLandSwitch(gc, command);
@@ -717,7 +722,7 @@ namespace IngameScript
             switch (command.Param.Step)
             {
                 case Step.Toggle:
-                    ToggleCommand(command);
+                    ToggleCommand(gc, command);
                     break;
                 case Step.On:
                     SBurnSwitch(gc, command);
@@ -1052,7 +1057,11 @@ namespace IngameScript
                         FlightSystemSection();
                         return;
                     }
-                    else command = new Command(ms);
+                    else
+                    {
+                        SoftAbort(gc);
+                        command.Empty(ms);
+                    }
                 }
             }
 
@@ -1104,6 +1113,29 @@ namespace IngameScript
         }
 
         void ParamSectionEdit()
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+
+            if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
+            else if (selectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed);
+            else if (selectedRow == row++) ic.safeAltitude = IncrementedValue(ic.safeAltitude);
+            else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
+            else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
+
+            row = 1;
+
+            spt.Add($"{IniContext.ParamsSection}");
+            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+
+            DrawSprites(spt, gc.LcdsSettings);
+        }
+
+        void GpsSection()
         {
             Sprites spt = new Sprites(ic);
             int row = 1;
@@ -1205,7 +1237,7 @@ namespace IngameScript
         {
             sb = new SystemBools();
 
-            command = Command.Empty;
+            command.Empty();
             previousRate = PREV_RATE;
 
             SoftAbort(gc);

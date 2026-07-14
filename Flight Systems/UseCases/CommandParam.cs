@@ -16,7 +16,13 @@ namespace IngameScript.UseCases
         // Constructors — one per type
         // ────────────────────────────────────────────────
 
-        public CommandParam(){}
+        public CommandParam()
+        {
+            AutoLandState = AutoLandState.Idle;
+            Number = 0;
+            Step = Step.Toggle;
+            TargetCoordinates = new Vector3D();
+        }
 
         public CommandParam(double n)
         {
@@ -36,6 +42,12 @@ namespace IngameScript.UseCases
         }
 
         // Empty
-        public static CommandParam Empty => new CommandParam();
+        public void Empty()
+        {
+            AutoLandState = AutoLandState.Idle;
+            Number = 0;
+            Step = Step.Toggle;
+            TargetCoordinates = new Vector3D();
+    }
     }
 }

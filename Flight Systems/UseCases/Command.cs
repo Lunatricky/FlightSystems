@@ -1,4 +1,5 @@
 ﻿using IngameScript.Enums;
+using IngameScript.Utils;
 using System;
 using VRageMath;
 
@@ -9,20 +10,17 @@ namespace IngameScript.UseCases
         public MainState State { get; set; }
         public CommandParam Param { get; set; }
 
-        public Command(MainState cmd, CommandParam p)
+        public void Empty(MainState ms = MainState.Idle)
         {
-            if (Enum.IsDefined(typeof(MainState), cmd)) State = cmd;
-            Param = p;
+            State = ms;
+            Param.Empty();
+            Param.Step = Step.Toggle;
         }
 
-        public static Command Empty => new Command(MainState.Idle, CommandParam.Empty);
-
-
-        public Command(MainState state)
+        public Command()
         {
-            State = state;
+            State = MainState.Idle;
             Param = new CommandParam();
-            Param.Step = Step.Toggle;
         }
 
         public Command(string argument)
@@ -48,17 +46,22 @@ namespace IngameScript.UseCases
 
             double num;
 
-            if (TryParseGPS(end))
+            Vector3D v = new Vector3D();
+            if (UtilsHelpder.TryParseGPS(end, out v))
+            {
+                Param.TargetCoordinates = v;
                 return;
-            
+            }
+
             if (double.TryParse(second, out num))
                 Param = new CommandParam(num);
             else
                 Param = new CommandParam(TryParseStep(second));
         }
 
-        MainState TryParseArgument(string input)
+        static MainState TryParseArgument(string input)
         {
+            MainState State;
             try
             {
                 State = (MainState)Enum.Parse(typeof(MainState), input, true);
@@ -82,25 +85,6 @@ namespace IngameScript.UseCases
                 mainStateEnum = Step.Off;
             }
             return mainStateEnum;
-        }
-
-        // GPS parser for "GPS:name:X:Y:Z:color:" format
-        bool TryParseGPS(string gps)
-        {
-            Param.TargetCoordinates = new Vector3D();
-            if (string.IsNullOrWhiteSpace(gps)) return false;
-            if (!gps.StartsWith("GPS:")) return false;
-
-            var parts = gps.Split(':');
-            if (parts.Length < 6) return false;
-
-            double x, y, z;
-            if (!double.TryParse(parts[2], out x)) return false;
-            if (!double.TryParse(parts[3], out y)) return false;
-            if (!double.TryParse(parts[4], out z)) return false;
-
-            Param.TargetCoordinates = new Vector3D(x, y, z);
-            return true;
         }
     }
 }
