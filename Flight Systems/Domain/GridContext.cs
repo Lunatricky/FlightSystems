@@ -2,9 +2,7 @@
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -25,6 +23,7 @@ namespace IngameScript.Domain
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
 
+        List<IMyTerminalBlock> unfilteredBlocks = new List<IMyTerminalBlock>();
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
         List<IMyShipConnector> connectors = new List<IMyShipConnector>();
@@ -60,52 +59,105 @@ namespace IngameScript.Domain
                 GridName = tempGridName;
         }
 
-        public GridContext ReloadControllers(string controllerTag)
+        public void Setup(IniContext ic)
         {
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+
             Controllers.Clear();
             Cockpits.Clear();
             Controller = null;
 
-            List<IMyRemoteControl> remotes = new List<IMyRemoteControl>();
-            List<IMyCockpit> cockpits = new List<IMyCockpit>();
+            Thrusters.Clear();
+            Gyros.Clear();
+            Gears.Clear();
 
-            GetSameConstructBlocks(remotes, IgnoreTag);
-            GetSameConstructBlocks(cockpits, IgnoreTag);
+            Antennas.Clear();
 
-            foreach (IMyRemoteControl remote in remotes)
+            GetSameConstructBlocks(blocks, IgnoreTag);
+
+            foreach (IMyTerminalBlock block in blocks)
             {
-                remote.ControlThrusters = true;
-                remote.IsMainCockpit = false;
-                if (remote.CustomName.Contains(controllerTag.ToLower()))
-                    Controller = remote;
-                Controllers.Add(remote);
+                if (IsBlockType<IMyRemoteControl>(block) != null)
+                {
+                    IMyRemoteControl remote = (IMyRemoteControl)block;
+                    remote.ControlThrusters = true;
+                    remote.IsMainCockpit = false;
+                    if (Controller == null && remote.CustomName.Contains(ic.ControllerTag.ToLower()))
+                        Controller = remote;
+                    Controllers.Add(remote);
+                }
+                else if (IsBlockType<IMyCockpit>(block) != null)
+                {
+                    IMyCockpit cockpit = (IMyCockpit)block;
+                    if (cockpit.CanControlShip)
+                    {
+                        cockpit.ControlThrusters = true;
+                        cockpit.IsMainCockpit = false;
+                        Cockpits.Add(cockpit);
+                        Controllers.Add(cockpit);
+                    }
+                }
+                else if (IsBlockType<IMyThrust>(block) != null)
+                {
+                    Add(Thrusters, block);
+                }
+                else if (IsBlockType<IMyGyro>(block) != null)
+                {
+                    Add(Gyros, block);
+                }
+                else if (IsBlockType<IMyLandingGear>(block) != null)
+                {
+                    Add(Gears, block);
+                }
+                else if (ic.ControlAntennas && IsBlockType<IMyRadioAntenna>(block) != null)
+                {
+                    IMyRadioAntenna antenna = (IMyRadioAntenna)block;
+                    Antennas.Add(antenna);
+                    if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = GridName;
+                }
+                else
+                {
+                    unfilteredBlocks.Add(block);
+                }
             }
 
-            if (Controller == null && remotes.Count > 0)
-                Controller = remotes.First();
-            else
+            if (Controller == null)
+            {
+                foreach (IMyTerminalBlock c in Controllers)
+                {
+                    if (IsBlockType<IMyRemoteControl>(c) != null)
+                    {
+                        Controller = (IMyRemoteControl)c;
+                        break;
+                    }
+                }
+            }
+
+            if (Controller == null)
             {
                 ErrorMessage.AppendLine("===============================");
                 ErrorMessage.AppendLine("No Remote Control block found!");
                 ErrorMessage.AppendLine("Place a RC on the grid facing forward.");
                 ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, in case you need RCs in different directions.");
                 ErrorMessage.AppendLine("===============================");
+                return;
             }
 
-            foreach (IMyCockpit cockpit in cockpits)
-            {
-                cockpit.ControlThrusters = true;
-                cockpit.IsMainCockpit = false;
-                if (cockpit.CanControlShip)
-                {
-                    Controllers.Add(cockpit);
-                    Cockpits.Add(cockpit);
-                }
-            }
-            return this;
+            ReloadGridHeight();
+            if (Thrusters.Count > 0) ReloadThrusters();
         }
 
-        public GridContext ReloadGridHeight()
+        private T IsBlockType<T>(IMyTerminalBlock block) where T : class
+        {
+            return block is T ? (T) block: null;
+        }
+
+        private void Add<T>(List<T>blocks, IMyTerminalBlock block)
+        {
+            blocks.Add((T)block);
+        }
+
+        void ReloadGridHeight()
         {
             Vector3D gravityDir = Vector3D.Normalize(Controller.GetNaturalGravity());
 
@@ -118,17 +170,13 @@ namespace IngameScript.Domain
 
             // height difference along gravity
             GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
-            return this;
         }
 
-        public GridContext ReloadThrusters()
+        void ReloadThrusters()
         {
-            Thrusters.Clear();
             ForwardThrusters.Clear();
             BreakingThrusters.Clear();
             UpwardThrusters.Clear();
-
-            GetSameConstructBlocks(Thrusters, IgnoreTag);
 
             foreach (var thruster in Thrusters)
             {
@@ -144,32 +192,6 @@ namespace IngameScript.Domain
                 else if (thruster.Orientation.Forward == Base6Directions.GetOppositeDirection(Controller.Orientation.Up))
                     UpwardThrusters.Add(thruster);
             }
-            return this;
-        }
-
-        public GridContext ReloadGyros()
-        {
-            GetSameConstructBlocks(Gyros, IgnoreTag);
-            return this;
-        }
-
-        public GridContext ReloadGears()
-        {
-            GetSameConstructBlocks(Gears, IgnoreTag);
-            return this;
-        }
-
-        public GridContext ReloadAntennas(bool controlAntennas)
-        {
-            GetSameConstructBlocks(Antennas, IgnoreTag);
-            if (controlAntennas)
-            {
-                foreach (IMyRadioAntenna antenna in Antennas)
-                {
-                    if (string.IsNullOrEmpty(antenna.HudText)) antenna.HudText = GridName;
-                }
-            }
-            return this;
         }
 
         public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag, string lcdSettingsTag)
