@@ -1,4 +1,6 @@
 ﻿using IngameScript.Domain;
+using IngameScript.Enums;
+using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
@@ -68,43 +70,60 @@ namespace IngameScript.Physics
         }
 
         // Call at start of each Program.Run with Runtime.TimeSinceLastRun.TotalSeconds
-        public void NewRun(double timeSinceLastRun, Vector3D targetCoordinates)
+        public void NewRun(double timeSinceLastRun, Vector3D targetCoordinates, Command command)
         {
             if (timeSinceLastRun > 0) this.timeSinceLastRun = timeSinceLastRun;
 
+            naturalGravity = gc.Controller.GetNaturalGravity();
+            gravity = NaturalGravity.Length();
+
+            if (Gravity > 0)
+            {
+                desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
+                groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
+                seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
+                climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
+
+                maxYDecel = GetMaxDecel(gc.UpwardThrusters);
+                stopYDistTemp = Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel));
+                stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
+
+                if (command.State == MainState.Land || command.State == MainState.SBurn)
+                    timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
+
+                timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
+
+                if (command.State == MainState.Gps)
+                {
+                    isGpsOnPlanet = GetIsGpsOnPlanet(gc.Controller, targetCoordinates);
+                    planetCenter = GetPlanetCenter(gc.Controller);
+                }
+            }
+
             worldMatrix = gc.Controller.WorldMatrix;
             mass = gc.Controller.CalculateShipMass();
-            naturalGravity = gc.Controller.GetNaturalGravity();
             velocity = gc.Controller.GetShipVelocities().LinearVelocity;
             accel = ((Velocity - prevVelocity) / timeSinceLastRun);
-            desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
-            gravity = NaturalGravity.Length();
-            groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
-            seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
-            climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
 
             forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
             rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
             upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
 
-            maxYDecel = GetMaxDecel(gc.Thrusters);
-            maxZDecel = GetMaxDecel(gc.Thrusters);
+            maxZDecel = GetMaxDecel(gc.BreakingThrusters);
 
-            stopYDistTemp = Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel));
             stopZDistTemp = Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel));
 
-            stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
             stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
 
-            timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
-            timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
             timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
 
-            planetCenter = GetPlanetCenter(gc.Controller);
-            isGpsOnPlanet = GetIsGpsOnPlanet(gc.Controller, targetCoordinates);
-            distanceToGPS = IsGpsOnPlanet ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : Vector3D.Distance(targetCoordinates, gc.Controller.GetPosition());
-            timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
+            if (command.State == MainState.Gps)
+            {
+                distanceToGPS = IsGpsOnPlanet ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : Vector3D.Distance(targetCoordinates, gc.Controller.GetPosition());
+                timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
+            }
+                
             isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
             h2Cache = ComputeH2Totals();
             batCache = ComputeBatTotals();
@@ -230,15 +249,9 @@ namespace IngameScript.Physics
         double GetMaxDecel(List<IMyThrust> thrusters)
         {
             double thrust = 0;
-
-            Vector3D up = -Vector3D.Normalize(NaturalGravity);
-
             foreach (var t in thrusters)
             {
-                double dot = t.WorldMatrix.Backward.Dot(up);
-
-                if (dot > 0.7)
-                    thrust += t.MaxEffectiveThrust * dot;
+                thrust += t.MaxEffectiveThrust;
             }
 
             return (thrust / Mass.PhysicalMass) - Gravity;

@@ -20,6 +20,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sprites", "Sprites\Sprites.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ODD", "ODD\ODD.csproj", "{09B81B49-4360-48CA-8A56-11A4B7B5F894}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skid Steering", "Skid Steering\Skid Steering.csproj", "{B3B9080A-EB49-4F74-9FAD-A69A91714962}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skid Steering Suspensions", "Skid Steering 2\Skid Steering Suspensions.csproj", "{C2B6C830-D537-4888-B833-33647131289F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -37,6 +41,10 @@ Global
 		{CC9382B2-2E26-4515-A16D-95228809AE19}.Debug|x64.Build.0 = Debug|x64
 		{09B81B49-4360-48CA-8A56-11A4B7B5F894}.Debug|x64.ActiveCfg = Debug|x64
 		{09B81B49-4360-48CA-8A56-11A4B7B5F894}.Debug|x64.Build.0 = Debug|x64
+		{B3B9080A-EB49-4F74-9FAD-A69A91714962}.Debug|x64.ActiveCfg = Debug|x64
+		{B3B9080A-EB49-4F74-9FAD-A69A91714962}.Debug|x64.Build.0 = Debug|x64
+		{C2B6C830-D537-4888-B833-33647131289F}.Debug|x64.ActiveCfg = Debug|x64
+		{C2B6C830-D537-4888-B833-33647131289F}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

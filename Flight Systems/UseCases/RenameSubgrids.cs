@@ -12,8 +12,6 @@ namespace IngameScript
         static public void GetSubgridsAndRename(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid mainGrid)
         {
             string baseName = mainGrid.CustomName;
-            if (string.IsNullOrWhiteSpace(baseName))
-                baseName = "Subgrid";
 
             // Collect all connected grids (recursive)
             HashSet<IMyCubeGrid> connectedGrids = new HashSet<IMyCubeGrid>();
@@ -44,6 +42,7 @@ namespace IngameScript
 
         static void CollectConnectedGrids(IMyCubeGrid current, HashSet<IMyCubeGrid> visited, List<IMyMechanicalConnectionBlock> allBlocks)
         {
+            List<IMyMechanicalConnectionBlock> allBlocks2 = new List<IMyMechanicalConnectionBlock>(allBlocks);
             if (visited.Contains(current))
                 return;
 
@@ -58,8 +57,9 @@ namespace IngameScript
                     continue;
 
                 blockIds.Add(block.EntityId);
+                allBlocks2.Remove(block);
 
-                CollectConnectedGrids(block.TopGrid, visited, allBlocks);
+                if (allBlocks2.Count > 0) CollectConnectedGrids(block.TopGrid, visited, allBlocks2);
             }
         }
     }
