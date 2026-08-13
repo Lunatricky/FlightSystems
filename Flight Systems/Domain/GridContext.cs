@@ -3,6 +3,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -53,7 +54,7 @@ namespace IngameScript.Domain
             errorMessage = new StringBuilder();
             GridTS = grid;
             Me = me;
-            //IsLG = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
+            IsLG = Me.CubeGrid.GridSizeEnum == MyCubeSize.Large;
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
@@ -170,6 +171,8 @@ namespace IngameScript.Domain
 
             // height difference along gravity
             GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
+
+            GridHeight = IsLG ? GridHeight * 2.5 : GridHeight * 0.5;
         }
 
         void ReloadThrusters()
@@ -466,6 +469,8 @@ namespace IngameScript.Domain
                 me = value;
             }
         }
+
+        public bool IsLG { get; }
 
         public string GridName
         {

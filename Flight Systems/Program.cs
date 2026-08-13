@@ -761,13 +761,16 @@ namespace IngameScript
                     if (SuicideBurn(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
-                case AutoLandState.LockGear:                    
+                case AutoLandState.LockGear:
+                    /*
                     if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.GroundLevel > 1 + pc.StopYDist)
                     {
                         command.State = MainState.Land;
                         command.Param.AutoLandState = AutoLandState.Drop;
                     }
-                    else if (TryLock(gc)) AbortShipContext(gc);
+                    else 
+                    */
+                    if (TryLock(gc)) AbortShipContext(gc);
                     break;
             }
         }
@@ -1493,13 +1496,15 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
         {
+            //TODO validate if there are H2 thrusters and if the ship has enough thrust to actually fly up
+            /*
             if (pc.NetDecel - 1 < 0)
             {
                 AbortShipContext(gc);
                 this.command.State = MainState.Orbit;
                 return false;
             }
-
+            /**/
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
             return pc.GroundLevel < 1.1 * pc.StopYDist + 2 * gc.GridHeight;
@@ -1507,21 +1512,23 @@ namespace IngameScript
 
         bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
         {
+            //TODO validate if there are H2 thrusters and if the ship has enough thrust to actually fly up
+            /*
             if (pc.NetDecel - 0.5 < 0)
             {
                 AbortShipContext(gc);
                 this.command.State = MainState.Orbit;
                 return false;
             }
-
+            /**/
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
 
-            double speedFromAlt = (100 + pc.GroundLevel) * 0.08;
+            double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
             double speedFromAccel = 20 * pc.NetDecel;
             double speedMin = -Math.Min(speedFromAlt, speedFromAccel);
 
-            if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
+            VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
             return pc.GroundLevel < 10 + 2 * gc.GridHeight;
         }
 

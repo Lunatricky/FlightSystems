@@ -45,7 +45,6 @@ namespace IngameScript
             double current = GetGravityAlignedVerticalVelocity(gc, pc);
             double error = target - current;
 
-            double minThrustOverride = (pc.ClimbRate < 10 ? 0.001 : 0);
             double output = MathHelper.Clamp(hover + error * 0.5, 0.01, 1);
 
             foreach (var t in gc.UpwardThrusters)
