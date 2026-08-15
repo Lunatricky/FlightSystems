@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
 namespace IngameScript
@@ -293,7 +292,6 @@ namespace IngameScript
             tickCount = 0;
 
             bool hasIniChanged = ic.ParseIni();
-            gc.IgnoreTag = ic.IgnoreTag;
 
             if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
             {
@@ -761,7 +759,7 @@ namespace IngameScript
                     if (SuicideBurn(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
-                case AutoLandState.LockGear:                    
+                case AutoLandState.LockGear:
                     if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.GroundLevel > 1 + pc.StopYDist)
                     {
                         command.State = MainState.Land;
@@ -778,9 +776,9 @@ namespace IngameScript
 
             gc.Setup(ic);
 
-            gc.ReloadLCDs(ic.Lcd1Tag, ic.Lcd2Tag, ic.LcdSettingsTag)
-                    .ReloadH2Tanks()
-                    .ReloadBatteries(ic.BackupBatteryTag);
+            gc.ReloadLCDs()
+                .ReloadH2Tanks()
+                .ReloadBatteries();
 
             if (gc.ErrorMessage.Length > 0)
                 return;
@@ -796,8 +794,8 @@ namespace IngameScript
             // Dock cached blocks
             if (ic.AllowDockMode)
                 gc.ReloadConnectors()
-                .ReloadTanks()
-                .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
+                    .ReloadTanks()
+                    .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
 
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
@@ -909,6 +907,7 @@ namespace IngameScript
         {
             Sprites spt = new Sprites(ic);
             spt.Add(gc.GridName);
+            spt.Add("Type: " + gc.ShipType.ToString());
 
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);
@@ -1044,20 +1043,22 @@ namespace IngameScript
             if (IsDefaultScreen) return;
 
             Sprites spt = new Sprites(ic);
-            if (sb.CruiseToggle) selectedRow = 1;
-            else if (sb.OrbitToggle) selectedRow = 2;
-            else if (sb.CNavToggle) selectedRow = 3;
-            else if (sb.LandToggle) selectedRow = 4;
-            else if (sb.GlideToggle) selectedRow = 5;
-            else if (sb.SBurnToggle) selectedRow = 6;
-            else if (sb.GpsMenuToggle) selectedRow = 7;
+            int row = 1;
+
+            if (sb.CruiseToggle) selectedRow = row++;
+            else if (gc.ShipType != ShipType.Atmo && sb.OrbitToggle) selectedRow = row++;
+            else if (sb.CNavToggle) selectedRow = row++;
+            else if (sb.LandToggle) selectedRow = row++;
+            else if (sb.GlideToggle) selectedRow = row++;
+            else if (sb.SBurnToggle) selectedRow = row++;
+            else if (sb.GpsMenuToggle) selectedRow = row++;
             else selectedRow = 0;
 
-            int row = 1;
+            row = 1;
 
             spt.Add($"Flight Systems");
             spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            if (gc.ShipType != ShipType.Atmo) spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
@@ -1081,7 +1082,7 @@ namespace IngameScript
                 MainState ms = MainState.Idle;
 
                 if (selectedRow == row++) ms = MainState.Cruise;
-                else if (selectedRow == row++) ms = MainState.Orbit;
+                else if (gc.ShipType != ShipType.Atmo && selectedRow == row++) ms = MainState.Orbit;
                 else if (selectedRow == row++) ms = MainState.CNav;
                 else if (selectedRow == row++) ms = MainState.Land;
                 else if (selectedRow == row++) ms = MainState.Glide;
@@ -1108,7 +1109,7 @@ namespace IngameScript
 
             spt.Add($"Flight Systems");
             spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            if (gc.ShipType != ShipType.Atmo) spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
@@ -1493,13 +1494,13 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
         {
-            if (pc.NetDecel - 1 < 0)
-            {
-                AbortShipContext(gc);
-                this.command.State = MainState.Orbit;
-                return false;
-            }
-
+            if (gc.ShipType != ShipType.Atmo)
+                if (pc.NetDecel - 1 < 0)
+                {
+                    AbortShipContext(gc);
+                    this.command.State = MainState.Orbit;
+                    return false;
+                }
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
             return pc.GroundLevel < 1.1 * pc.StopYDist + 2 * gc.GridHeight;
@@ -1507,21 +1508,19 @@ namespace IngameScript
 
         bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
         {
-            if (pc.NetDecel - 0.5 < 0)
-            {
-                AbortShipContext(gc);
-                this.command.State = MainState.Orbit;
-                return false;
-            }
-
+            if (gc.ShipType != ShipType.Atmo)
+                if (pc.NetDecel - 0.5 < 0)
+                {
+                    AbortShipContext(gc);
+                    this.command.State = MainState.Orbit;
+                    return false;
+                }
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
 
-            double speedFromAlt = (100 + pc.GroundLevel) * 0.08;
-            double speedFromAccel = 20 * pc.NetDecel;
-            double speedMin = -Math.Min(speedFromAlt, speedFromAccel);
+            double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
-            if (speedMin > -104) VectorHelper.MatchVerticalSpeed(gc, pc, speedMin);
+            VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt);
             return pc.GroundLevel < 10 + 2 * gc.GridHeight;
         }
 

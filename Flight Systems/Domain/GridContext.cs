@@ -1,8 +1,10 @@
-﻿using Sandbox.ModAPI.Ingame;
+﻿using IngameScript.Enums;
+using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -12,8 +14,14 @@ namespace IngameScript.Domain
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
+
         string gridName;
         string ignoreTag;
+        string lcd1Tag;
+        string lcd2Tag;
+        string lcdSettingsTag;
+        string backupTag;
+
         readonly StringBuilder errorMessage;
 
         double centerGridHeight;
@@ -22,6 +30,8 @@ namespace IngameScript.Domain
 
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
+
+        ShipType shipType;
 
         List<IMyTerminalBlock> unfilteredBlocks = new List<IMyTerminalBlock>();
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
@@ -38,7 +48,10 @@ namespace IngameScript.Domain
         List<IMyThrust> thrusters = new List<IMyThrust>();
         List<IMyThrust> breakingThrusters = new List<IMyThrust>();
         List<IMyThrust> forwardThrusters = new List<IMyThrust>();
-        List<IMyThrust> upwardThrusters = new List<IMyThrust>();
+        List<IMyThrust> upwardThrusters = new List<IMyThrust>(); 
+        List<IMyThrust> ionThrusters = new List<IMyThrust>();
+        List<IMyThrust> atmoThrusters = new List<IMyThrust>();
+        List<IMyThrust> hydroThrusters = new List<IMyThrust>();
 
         List<IMyGyro> gyros = new List<IMyGyro>();
 
@@ -53,7 +66,7 @@ namespace IngameScript.Domain
             errorMessage = new StringBuilder();
             GridTS = grid;
             Me = me;
-            //IsLG = Me.CubeGrid.GridSizeEnum.Equals(MyCubeSize.Large);
+            IsLG = Me.CubeGrid.GridSizeEnum == MyCubeSize.Large;
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
@@ -73,7 +86,13 @@ namespace IngameScript.Domain
 
             Antennas.Clear();
 
-            GetSameConstructBlocks(blocks, IgnoreTag);
+            ignoreTag = ic.IgnoreTag;
+            lcd1Tag = ic.Lcd1Tag;
+            lcd2Tag = ic.Lcd2Tag;
+            lcdSettingsTag = ic.LcdSettingsTag;
+            backupTag = ic.BackupBatteryTag;
+
+            GetSameConstructBlocks(blocks, ignoreTag);
 
             foreach (IMyTerminalBlock block in blocks)
             {
@@ -99,7 +118,13 @@ namespace IngameScript.Domain
                 }
                 else if (IsBlockType<IMyThrust>(block) != null)
                 {
-                    Add(Thrusters, block);
+                    Add(Thrusters, block); 
+                    
+                    string subtypeName = block.BlockDefinition.SubtypeName.ToLower();
+
+                    if (subtypeName.Contains("ion")) Add(ionThrusters, block);
+                    else if (subtypeName.Contains("atmo")) Add(atmoThrusters, block);
+                    else if (subtypeName.Contains("hydro")) Add(hydroThrusters, block);
                 }
                 else if (IsBlockType<IMyGyro>(block) != null)
                 {
@@ -135,16 +160,39 @@ namespace IngameScript.Domain
 
             if (Controller == null)
             {
-                ErrorMessage.AppendLine("===============================");
-                ErrorMessage.AppendLine("No Remote Control block found!");
-                ErrorMessage.AppendLine("Place a RC on the grid facing forward.");
-                ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, in case you need RCs in different directions.");
-                ErrorMessage.AppendLine("===============================");
+                ControllerErrorMessage();
                 return;
             }
 
+            if (AtmoThrusters.Count + HydroThrusters.Count + IonThrusters.Count == 0)
+            {
+                ThrusterErrorMessage();
+                return;
+            }
+            else if (HydroThrusters.Count + IonThrusters.Count == 0) ShipType = ShipType.Atmo;
+            else if (AtmoThrusters.Count + HydroThrusters.Count == 0) ShipType = ShipType.Space;
+            else ShipType = ShipType.Interplanetary;
+
+
             ReloadGridHeight();
             if (Thrusters.Count > 0) ReloadThrusters();
+        }
+
+        private void ControllerErrorMessage()
+        {
+            ErrorMessage.AppendLine("===============================");
+            ErrorMessage.AppendLine("No Remote Control block found!");
+            ErrorMessage.AppendLine("Place a RC on the grid facing forward.");
+            ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, in case you need RCs in different directions.");
+            ErrorMessage.AppendLine("===============================");
+        }
+
+        private void ThrusterErrorMessage()
+        {
+            ErrorMessage.AppendLine("===============================");
+            ErrorMessage.AppendLine("No Thruster blocks found!");
+            ErrorMessage.AppendLine("Place Thrusters on the grid.");
+            ErrorMessage.AppendLine("===============================");
         }
 
         private T IsBlockType<T>(IMyTerminalBlock block) where T : class
@@ -170,6 +218,8 @@ namespace IngameScript.Domain
 
             // height difference along gravity
             GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
+
+            GridHeight = IsLG ? GridHeight * 2.5 : GridHeight * 0.5;
         }
 
         void ReloadThrusters()
@@ -194,7 +244,7 @@ namespace IngameScript.Domain
             }
         }
 
-        public GridContext ReloadLCDs(string lcd1Tag, string lcd2Tag, string lcdSettingsTag)
+        public GridContext ReloadLCDs()
         {
             Lcds1.Clear();
             Lcds2.Clear();
@@ -286,7 +336,7 @@ namespace IngameScript.Domain
         public GridContext ReloadConnectors()
         {
             // Connectors, Tanks & Batteries (own construct only)
-            GetSameConstructBlocks(Connectors, IgnoreTag);
+            GetSameConstructBlocks(Connectors, ignoreTag);
             SetConnectors();
 
             return this;
@@ -294,14 +344,14 @@ namespace IngameScript.Domain
 
         public GridContext ReloadTanks()
         {
-            GetSameConstructBlocks(Tanks, IgnoreTag);
+            GetSameConstructBlocks(Tanks, ignoreTag);
 
             return this;
         }
 
         public GridContext ReloadH2Tanks()
         {
-            GetSameConstructBlocks(Tanks, IgnoreTag);
+            GetSameConstructBlocks(Tanks, ignoreTag);
 
             foreach (IMyGasTank tank in Tanks)
             {
@@ -313,9 +363,9 @@ namespace IngameScript.Domain
             return this;
         }
 
-        public GridContext ReloadBatteries(string backupTag)
+        public GridContext ReloadBatteries()
         {
-            GetSameConstructBlocks(Batteries, IgnoreTag);
+            GetSameConstructBlocks(Batteries, ignoreTag);
 
             // Backup Battery
             if (BackupBattery == null || BackupBattery.Closed)
@@ -414,8 +464,9 @@ namespace IngameScript.Domain
 
             GridTS.GetBlocksOfType(tempList, tempBlock =>
                 tempBlock.IsSameConstructAs(Me) &&
-                !tempBlock.CustomName.Contains(IgnoreTag) &&
-                !tempBlock.CustomData.Contains(IgnoreTag)
+                !tempBlock.CustomName.Contains(ignoreTag) &&
+                !tempBlock.CustomData.Contains(ignoreTag) &&
+                !tempBlock.CustomName.Contains(lcdSettingsTag)
             );
 
             foreach (var block in tempList)
@@ -428,16 +479,16 @@ namespace IngameScript.Domain
                 .IndexOf("Hydrogen", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        public string IgnoreTag
+        public ShipType ShipType
         {
             get
             {
-                return ignoreTag;
+                return shipType;
             }
 
             set
             {
-                ignoreTag = value;
+                shipType = value;
             }
         }
 
@@ -466,6 +517,8 @@ namespace IngameScript.Domain
                 me = value;
             }
         }
+
+        public bool IsLG { get; }
 
         public string GridName
         {
@@ -532,6 +585,9 @@ namespace IngameScript.Domain
         public List<IMyThrust> BreakingThrusters => breakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
         public List<IMyThrust> UpwardThrusters => upwardThrusters;
+        public List<IMyThrust> IonThrusters => ionThrusters;
+        public List<IMyThrust> AtmoThrusters => atmoThrusters;
+        public List<IMyThrust> HydroThrusters => hydroThrusters;
         public List<IMyGyro> Gyros => gyros;
         public List<IMyLandingGear> Gears => gears;
         public List<IMyTextSurface> Lcds1 => lcds1;
