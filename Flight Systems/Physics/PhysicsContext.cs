@@ -92,6 +92,9 @@ namespace IngameScript.Physics
                 groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
                 seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
                 climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
+                maxYDecel = GetMaxDecel(gc.UpwardThrusters);
+                stopYDistTemp = Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel));
+                stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
 
                 if (command.State == MainState.Land || command.State == MainState.SBurn)
                     timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
