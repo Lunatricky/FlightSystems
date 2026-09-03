@@ -24,19 +24,24 @@ namespace IngameScript
             if (sc.Controller == null || naturalGravity.LengthSquared() < 1e-12)
                 return Vector3D.Up;
 
-            Vector3D uGrav = -Vector3D.Normalize(naturalGravity);
+            Vector3D gDown = Vector3D.Normalize(naturalGravity);
+            Vector3D uSky = -gDown;
             Vector3D forward = sc.Controller.WorldMatrix.Forward;
-            Vector3D fHoriz = forward - uGrav * Vector3D.Dot(forward, uGrav);
+            Vector3D fHoriz = forward - uSky * Vector3D.Dot(forward, uSky);
 
             if (fHoriz.LengthSquared() < 1e-12)
-                fHoriz = Vector3D.Cross(sc.Controller.WorldMatrix.Right, uGrav);
+                fHoriz = Vector3D.Cross(sc.Controller.WorldMatrix.Right, uSky);
 
             if (fHoriz.LengthSquared() < 1e-12)
-                return uGrav;
+                return gDown;
 
             fHoriz.Normalize();
             double theta = MathHelper.ToRadians(MathHelper.Clamp(angleDeg, 0, 35));
-            return Vector3D.Normalize(Math.Cos(theta) * uGrav + Math.Sin(theta) * fHoriz);
+
+            // Passed into VectorAlignedOverride, which settles on the antipode:
+            // θ=0 → +g (same as GravityAlignedOverride) → ship Up = -g
+            // θ>0 → +g tilted toward horizon → ship Up = -g tilted aft (nose up)
+            return Vector3D.Normalize(Math.Cos(theta) * gDown + Math.Sin(theta) * fHoriz);
         }
 
         public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)
