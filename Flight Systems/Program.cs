@@ -37,71 +37,10 @@ namespace IngameScript
         bool settingsToggle;
         bool settingsIsLocked;
 
-        Vector3D desiredUp;
-
         SystemBools sb;
 
-        struct SystemBools
-        {
-            public bool CruiseToggle;
-            public bool OrbitToggle;
-            public bool GlideToggle;
-            public bool CNavToggle;
-            public bool LandToggle;
-            public bool SBurnToggle;
-            public bool GpsToggle;
-            public bool GpsMenuToggle;
-            public bool LastCheckIsOnNatGrav;
-            public bool StopCruiseWhenOutOfGrav;
+        Task task;
 
-            public void SetActiveMode(MainState modeName)
-            {
-                // Get current state of the target mode
-                bool currentState = GetModeState(modeName);
-
-                // Clear all modes
-                CruiseToggle = false;
-                OrbitToggle = false;
-                GlideToggle = false;
-                CNavToggle = false;
-                LandToggle = false;
-                SBurnToggle = false;
-                GpsToggle = false;
-
-                // Toggle the target mode (if it was true, now false; if false, now true)
-                SetModeState(modeName, !currentState);
-            }
-
-            public bool GetModeState(MainState modeName)
-            {
-                switch (modeName)
-                {
-                    case MainState.Cruise: return CruiseToggle;
-                    case MainState.Orbit: return OrbitToggle;
-                    case MainState.Glide: return GlideToggle;
-                    case MainState.CNav: return CNavToggle;
-                    case MainState.Land: return LandToggle;
-                    case MainState.SBurn: return SBurnToggle;
-                    case MainState.Gps: return GpsToggle;
-                    default: return false;
-                }
-            }
-
-            private void SetModeState(MainState modeName, bool value)
-            {
-                switch (modeName)
-                {
-                    case MainState.Cruise: CruiseToggle = value; break;
-                    case MainState.Orbit: OrbitToggle = value; break;
-                    case MainState.Glide: GlideToggle = value; break;
-                    case MainState.CNav: CNavToggle = value; break;
-                    case MainState.Land: LandToggle = value; break;
-                    case MainState.SBurn: SBurnToggle = value; break;
-                    case MainState.Gps: GpsToggle = value; break;
-                }
-            }
-        }
-                
         public Program()
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
@@ -118,10 +57,8 @@ namespace IngameScript
             if (gc.LcdsSettings.Count > 0) FlightSystemSection();
         }
 
-        Task task;
-
         public void Main(string argument)
-        {
+        {            
             if (!string.IsNullOrEmpty(argument))
             {
                 if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
@@ -505,7 +442,6 @@ namespace IngameScript
                     if (GravityAlignedOverride(gc))
                     {
                         command.Param.Step = Step.Preclimb;
-                        desiredUp = pc.DesiredUpVector;
                         return;
                     }
                     break;
@@ -520,7 +456,7 @@ namespace IngameScript
                     }
                     break;
                 case Step.Climb:
-                    Climb(gc, ic.CruiseSpeed, desiredUp);
+                    Climb(gc, ic.CruiseSpeed);
                     break;
             }
         }
@@ -561,7 +497,6 @@ namespace IngameScript
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
-                        desiredUp = pc.DesiredUpVector;
                     }
                     else
                     {
@@ -585,7 +520,7 @@ namespace IngameScript
                         command.State = MainState.CNav;
                         command.Param.Step = Step.On;
                     }
-                    Climb(gc, CruiseSpeed, desiredUp);
+                    Climb(gc, CruiseSpeed);
                     break;
             }
         }
@@ -615,7 +550,6 @@ namespace IngameScript
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
-                        desiredUp = pc.DesiredUpVector;
                         return;
                     }
 
@@ -633,7 +567,6 @@ namespace IngameScript
                         if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
                             VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
                         {
-                            desiredUp = pc.DesiredUpVector;
                             command.Param.Step = Step.Orbit;
                         }
                         CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
@@ -653,7 +586,7 @@ namespace IngameScript
                         command.Param.Step = Step.On;
                         return;
                     }
-                    Climb(gc, ic.CruiseSpeed, desiredUp);
+                    Climb(gc, ic.CruiseSpeed);
                     break;
 
                 case Step.Off:
@@ -675,14 +608,15 @@ namespace IngameScript
                         command.Param.Step = Step.On;
                         return;
                     }
-                    Climb(gc, ic.CruiseSpeed, desiredUp);
+                    Climb(gc, ic.CruiseSpeed);
+                    Climb(gc, ic.CruiseSpeed);
                     break;
             }
         }
 
-        private void Climb(GridContext gc, double CruiseSpeed, Vector3D desiredUp)
+        private void Climb(GridContext gc, double CruiseSpeed)
         {
-            VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, desiredUp);
+            VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, pc.DesiredUpVector);
             CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
@@ -1295,6 +1229,8 @@ namespace IngameScript
 
             gc.ResetGyros();
             gc.ResetThrusters(gc.Thrusters);
+            if (pc != null)
+                pc.UnlockClimbPitch();
         }
 
         ////////////////////////////////////////////////////////

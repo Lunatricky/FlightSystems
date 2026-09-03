@@ -24,6 +24,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skid Steering", "Skid Steer
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skid Steering Suspensions", "Skid Steering 2\Skid Steering Suspensions.csproj", "{C2B6C830-D537-4888-B833-33647131289F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RotorSkid", "RotorSkid\RotorSkid.csproj", "{89CCB552-0D44-49C6-9205-233181A9F837}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -45,6 +47,8 @@ Global
 		{B3B9080A-EB49-4F74-9FAD-A69A91714962}.Debug|x64.Build.0 = Debug|x64
 		{C2B6C830-D537-4888-B833-33647131289F}.Debug|x64.ActiveCfg = Debug|x64
 		{C2B6C830-D537-4888-B833-33647131289F}.Debug|x64.Build.0 = Debug|x64
+		{89CCB552-0D44-49C6-9205-233181A9F837}.Debug|x64.ActiveCfg = Debug|x64
+		{89CCB552-0D44-49C6-9205-233181A9F837}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

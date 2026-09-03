@@ -48,8 +48,10 @@ namespace IngameScript.Physics
         double upVelocity;
         double netDecel;
         double distanceToGPS;
-        bool isGpsOnPlanet;
 
+        double lockedPitchDeg = double.NaN;
+
+        bool isGpsOnPlanet;
         bool isStopped;
 
         Vector3D prevVelocity = new Vector3D();
@@ -76,10 +78,17 @@ namespace IngameScript.Physics
 
             naturalGravity = gc.Controller.GetNaturalGravity();
             gravity = NaturalGravity.Length();
+            mass = gc.Controller.CalculateShipMass();
 
             if (Gravity > 0)
             {
-                desiredUpVector = VectorHelper.PitchUp(gc, 0.9 * GetMaxPitchAngle(gc));
+                double safePitch = 0.9 * GetMaxPitchAngle(gc);
+                if (double.IsNaN(lockedPitchDeg))
+                    lockedPitchDeg = safePitch;
+                else if (safePitch < lockedPitchDeg)
+                    lockedPitchDeg = safePitch;
+
+                desiredUpVector = VectorHelper.PitchUp(gc, NaturalGravity, lockedPitchDeg);
                 groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
                 seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
                 climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
@@ -99,24 +108,10 @@ namespace IngameScript.Physics
                     planetCenter = GetPlanetCenter(gc.Controller);
                 }
             }
-
-            worldMatrix = gc.Controller.WorldMatrix;
-            mass = gc.Controller.CalculateShipMass();
-            velocity = gc.Controller.GetShipVelocities().LinearVelocity;
-            accel = ((Velocity - prevVelocity) / timeSinceLastRun);
-
-            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
-            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
-            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
-
-            maxZDecel = GetMaxDecel(gc.BreakingThrusters);
-
-            stopZDistTemp = Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel));
-
-            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
-
-            timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
-            netDecel = ComputeNetDecel(gc);
+            else
+            {
+                lockedPitchDeg = double.NaN;
+            }
 
             if (command.State == MainState.Gps)
             {
@@ -312,13 +307,21 @@ namespace IngameScript.Physics
 
         double GetMaxPitchAngle(GridContext gc)
         {
-            double fwdThrust = 0, upThrust = 0;
-            foreach (var t in gc.ForwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
+            double upThrust = 0;
             foreach (var t in gc.UpwardThrusters)
                 if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
 
-            return MathHelper.ToDegrees(Math.Atan2(fwdThrust, upThrust));
+            double weight = gc.Controller.CalculateShipMass().PhysicalMass * Gravity;
+            if (upThrust <= 1e-6 || weight <= 0)
+                return 0;
+
+            double ratio = MathHelper.Clamp(weight / upThrust, 0, 1);
+            return Math.Min(35.0, MathHelper.ToDegrees(Math.Acos(ratio)));
+        }
+
+        public void UnlockClimbPitch()
+        {
+            lockedPitchDeg = double.NaN;
         }
     }
 }

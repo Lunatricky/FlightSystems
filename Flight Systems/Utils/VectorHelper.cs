@@ -19,23 +19,24 @@ namespace IngameScript
             return lowestPoint;
         }
 
-        /// <summary>
-        /// Rotates the ship's Up vector toward the ship's Forward vector (nose-UP pitch).
-        /// Positive angleDeg = nose UP.
-        /// </summary>
-        public static Vector3D PitchUp(GridContext sc, double angleDeg)
+        public static Vector3D PitchUp(GridContext sc, Vector3D naturalGravity, double angleDeg)
         {
-            if (sc.Controller == null)
+            if (sc.Controller == null || naturalGravity.LengthSquared() < 1e-12)
                 return Vector3D.Up;
 
-            Vector3D currentForward = sc.Controller.WorldMatrix.Forward;
-            Vector3D rightAxis = sc.Controller.WorldMatrix.Right;  // pitch axis
+            Vector3D uGrav = -Vector3D.Normalize(naturalGravity);
+            Vector3D forward = sc.Controller.WorldMatrix.Forward;
+            Vector3D fHoriz = forward - uGrav * Vector3D.Dot(forward, uGrav);
 
-            double angleRad = MathHelper.ToRadians(angleDeg);
-            MatrixD rotation = MatrixD.CreateFromAxisAngle(rightAxis, -angleRad);  // NEGATIVE = nose UP!
+            if (fHoriz.LengthSquared() < 1e-12)
+                fHoriz = Vector3D.Cross(sc.Controller.WorldMatrix.Right, uGrav);
 
-            Vector3D rotatedForward = Vector3D.TransformNormal(currentForward, rotation);
-            return Vector3D.Normalize(rotatedForward);
+            if (fHoriz.LengthSquared() < 1e-12)
+                return uGrav;
+
+            fHoriz.Normalize();
+            double theta = MathHelper.ToRadians(MathHelper.Clamp(angleDeg, 0, 35));
+            return Vector3D.Normalize(Math.Cos(theta) * uGrav + Math.Sin(theta) * fHoriz);
         }
 
         public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)
