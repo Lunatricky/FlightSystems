@@ -49,7 +49,7 @@ namespace IngameScript.Physics
         double netDecel;
         double distanceToGPS;
 
-        double lockedPitchDeg = double.NaN;
+        double peakGravity = double.NaN;
 
         bool isGpsOnPlanet;
         bool isStopped;
@@ -82,13 +82,10 @@ namespace IngameScript.Physics
 
             if (Gravity > 0)
             {
-                double safePitch = 0.9 * GetMaxPitchAngle(gc);
-                if (double.IsNaN(lockedPitchDeg))
-                    lockedPitchDeg = safePitch;
-                else if (safePitch < lockedPitchDeg)
-                    lockedPitchDeg = safePitch;
+                if (double.IsNaN(peakGravity) || Gravity > peakGravity)
+                    peakGravity = Gravity;
 
-                desiredUpVector = VectorHelper.PitchUp(gc, NaturalGravity, lockedPitchDeg);
+                desiredUpVector = VectorHelper.PitchUp(gc, NaturalGravity, GetMaxPitchAngle(gc));
                 groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
                 seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
                 climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
@@ -109,7 +106,7 @@ namespace IngameScript.Physics
             }
             else
             {
-                lockedPitchDeg = double.NaN;
+                peakGravity = double.NaN;
             }
 
             worldMatrix = gc.Controller.WorldMatrix;
@@ -322,20 +319,39 @@ namespace IngameScript.Physics
         double GetMaxPitchAngle(GridContext gc)
         {
             double upThrust = 0;
+            double fwdThrust = 0;
             foreach (var t in gc.UpwardThrusters)
                 if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
+            foreach (var t in gc.ForwardThrusters)
+                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
 
-            double weight = gc.Controller.CalculateShipMass().PhysicalMass * Gravity;
+            double massKg = gc.Controller.CalculateShipMass().PhysicalMass;
+            double g = double.IsNaN(peakGravity) ? Gravity : peakGravity;
+            double weight = massKg * g;
+
             if (upThrust <= 1e-6 || weight <= 0)
                 return 0;
 
-            double ratio = MathHelper.Clamp(weight / upThrust, 0, 1);
-            return Math.Min(35.0, MathHelper.ToDegrees(Math.Acos(ratio)));
+            // spare lift for dampeners + effective-thrust lag (atmo)
+            const double UpReserve = 0.90;   // use at most 70% of up T for hover
+            const double FwdReserve = 0.50;  // keep half of forward for speed
+
+            double maxFromLift = 0;
+            double liftBudget = upThrust * UpReserve;
+            if (liftBudget > weight)
+                maxFromLift = MathHelper.ToDegrees(Math.Acos(MathHelper.Clamp(weight / liftBudget, 0, 1)));
+
+            double maxFromAft = 0;
+            double aftBudget = fwdThrust * FwdReserve;
+            if (aftBudget > 0)
+                maxFromAft = MathHelper.ToDegrees(Math.Atan(aftBudget / weight));
+
+            return Math.Min(maxFromLift, maxFromAft);
         }
 
         public void UnlockClimbPitch()
         {
-            lockedPitchDeg = double.NaN;
+            peakGravity = double.NaN;
         }
     }
 }
