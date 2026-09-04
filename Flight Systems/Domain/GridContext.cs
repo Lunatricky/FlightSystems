@@ -683,10 +683,6 @@ namespace IngameScript.Domain
                 BackupBattery.ChargeMode = ChargeMode.Auto;
                 foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
-            else if (IsAnyConnectorConnected())
-            {
-                foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Recharge;
-            }
         }
 
         public void AutoBatteries()
