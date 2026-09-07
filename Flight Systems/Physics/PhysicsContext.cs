@@ -79,6 +79,20 @@ namespace IngameScript.Physics
             naturalGravity = gc.Controller.GetNaturalGravity();
             gravity = NaturalGravity.Length();
             mass = gc.Controller.CalculateShipMass();
+            worldMatrix = gc.Controller.WorldMatrix;
+            velocity = gc.Controller.GetShipVelocities().LinearVelocity;
+            accel = ((Velocity - prevVelocity) / timeSinceLastRun);
+
+            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
+            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
+            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
+
+            maxZDecel = GetMaxDecel(gc.BreakingThrusters, WorldMatrix.Backward);
+            stopZDistTemp = MaxZDecel > 1e-6
+                ? Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel))
+                : double.PositiveInfinity;
+            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
+            timeToStopZ = MaxZDecel > 1e-6 ? Math.Abs(ForwardVelocity / MaxZDecel) : double.PositiveInfinity;
 
             if (Gravity > 0)
             {
@@ -89,14 +103,17 @@ namespace IngameScript.Physics
                 groundLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Surface);
                 seaLevel = GetPlanetElevation(gc.Controller, MyPlanetElevation.Sealevel);
                 climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
-                maxYDecel = GetMaxDecel(gc.UpwardThrusters);
-                stopYDistTemp = Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel));
+
+                maxYDecel = GetMaxDecel(gc.UpwardThrusters, WorldMatrix.Up);
+                stopYDistTemp = MaxYDecel > 1e-6
+                    ? Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel))
+                    : double.PositiveInfinity;
                 stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
 
                 if (command.State == MainState.Land || command.State == MainState.SBurn)
                     timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
 
-                timeToStopY = Math.Abs(ClimbRate / MaxYDecel);
+                timeToStopY = MaxYDecel > 1e-6 ? Math.Abs(ClimbRate / MaxYDecel) : double.PositiveInfinity;
 
                 if (command.State == MainState.Gps)
                 {
@@ -109,32 +126,23 @@ namespace IngameScript.Physics
                 peakGravity = double.NaN;
             }
 
-            worldMatrix = gc.Controller.WorldMatrix;
-            velocity = gc.Controller.GetShipVelocities().LinearVelocity;
-            accel = ((Velocity - prevVelocity) / timeSinceLastRun);
-
-            forwardVelocity = Vector3D.Dot(Velocity, WorldMatrix.Forward);
-            rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
-            upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
-
-            maxZDecel = GetMaxDecel(gc.BreakingThrusters);
-            stopZDistTemp = Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel));
-            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
-
-            timeToStopZ = Math.Abs(ForwardVelocity / MaxZDecel);
             netDecel = ComputeNetDecel(gc);
 
             if (command.State == MainState.Gps)
             {
-                distanceToGPS = IsGpsOnPlanet ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates) : Vector3D.Distance(targetCoordinates, gc.Controller.GetPosition());
+                distanceToGPS = IsGpsOnPlanet
+                    ? GetDistanceToPlanetGps(gc.Controller, targetCoordinates)
+                    : Vector3D.Distance(targetCoordinates, gc.Controller.GetPosition());
                 timeToDistanceSmoothed = GetTimeToDistanceSmoothed(DistanceToGPS, timeSinceLastRun);
             }
-                
-            isStopped = threshold > UpVelocity && threshold >= Math.Abs(ForwardVelocity) && threshold >= Math.Abs(RightVelocity);
+
+            isStopped = threshold > UpVelocity
+                && threshold >= Math.Abs(ForwardVelocity)
+                && threshold >= Math.Abs(RightVelocity);
             h2Cache = ComputeH2Totals();
             batCache = ComputeBatTotals();
         }
-        
+
 
         public void CacheValues()
         {
@@ -252,15 +260,26 @@ namespace IngameScript.Physics
             return distance / smoothedSpeed;
         }
 
-        double GetMaxDecel(List<IMyThrust> thrusters)
+        double GetMaxDecel(List<IMyThrust> thrusters, Vector3D decelDir)
         {
+            if (Mass.PhysicalMass <= 1e-6)
+                return 0;
+
             double thrust = 0;
             foreach (var t in thrusters)
-            {
                 thrust += t.MaxEffectiveThrust;
-            }
 
-            return (thrust / Mass.PhysicalMass) - Gravity;
+            double thrustAccel = thrust / Mass.PhysicalMass;
+
+            if (Gravity <= 0 || decelDir.LengthSquared() < 1e-12)
+                return thrustAccel;
+
+            Vector3D dir = Vector3D.Normalize(decelDir);
+            Vector3D gDir = Vector3D.Normalize(NaturalGravity);
+            // +dot: gravity helps stop along this axis; -dot: gravity fights (up axis)
+            double gravityAlongDecel = Vector3D.Dot(gDir, dir) * Gravity;
+
+            return thrustAccel + gravityAlongDecel;
         }
 
 
