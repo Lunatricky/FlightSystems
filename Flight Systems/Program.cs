@@ -53,7 +53,7 @@ namespace IngameScript
             command = new Command();
 
             CheckIni();
-
+            
             if (gc.LcdsSettings.Count > 0) FlightSystemSection();
         }
 
@@ -61,6 +61,46 @@ namespace IngameScript
         {            
             if (!string.IsNullOrEmpty(argument))
             {
+                foreach (string param in ic.IniParamList)
+                {
+                    if (argument.Contains(param))
+                    {
+                        var parts = argument.Trim().Split(
+                            new[] {':'},
+                            StringSplitOptions.RemoveEmptyEntries
+                        );
+
+                        double value;
+                        try
+                        {
+                            value = double.Parse(parts[1]);
+                        }
+                        catch (Exception)
+                        {
+                            return;
+                        }
+                        switch (parts[0])
+                        {
+                            case IniContext.MAX_SPEED:
+                                ic.MaxSpeed = value;
+                                break;
+                            case IniContext.CRUISE_SPEED:
+                                ic.CruiseSpeed = value;
+                                break;
+                            case IniContext.CNAV_ALTITUDE:
+                                ic.SafeAltitude = value;
+                                break;
+                            case IniContext.DISTANCE_TO_GPS:
+                                ic.DistanceToGPS = value;
+                                break;
+                            case IniContext.MINIMUM_ACCEPTED_FUEL:
+                                ic.MinimumAcceptedFuel = value;
+                                break;
+                        }
+                        return;
+                    }
+                }
+                
                 if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     settingsToggle = !settingsToggle;
@@ -472,7 +512,7 @@ namespace IngameScript
                     break;
                 case Step.On:
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.Gravity > 0 && pc.GroundLevel < ic.safeAltitude + pc.StopYDist)
+                    if (pc.Gravity > 0 && pc.GroundLevel < ic.SafeAltitude + pc.StopYDist)
                     {
                         AbortShipContext(gc);
                         command.State = MainState.Land;
@@ -493,7 +533,7 @@ namespace IngameScript
                     ToggleCommand(gc, command);
                     break;
                 case Step.On:
-                    if (pc.GroundLevel < ic.safeAltitude)
+                    if (pc.GroundLevel < ic.SafeAltitude)
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
@@ -514,7 +554,7 @@ namespace IngameScript
                     }
                     break;
                 case Step.Climb:
-                    if (pc.GroundLevel > ic.safeAltitude)
+                    if (pc.GroundLevel > ic.SafeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
@@ -546,7 +586,7 @@ namespace IngameScript
                         return;
                     }
 
-                    if (pc.GroundLevel < ic.safeAltitude)
+                    if (pc.GroundLevel < ic.SafeAltitude)
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
@@ -601,7 +641,7 @@ namespace IngameScript
                     break;
 
                 case Step.Climb:
-                    if (pc.GroundLevel > ic.safeAltitude)
+                    if (pc.GroundLevel > ic.SafeAltitude)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
@@ -1095,7 +1135,7 @@ namespace IngameScript
 
             if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
             else if (selectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed);
-            else if (selectedRow == row++) ic.safeAltitude = IncrementedValue(ic.safeAltitude);
+            else if (selectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude);
             else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
             else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
 
@@ -1104,7 +1144,7 @@ namespace IngameScript
             spt.Add($"{IniContext.ParamsSection}");
             spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.safeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 

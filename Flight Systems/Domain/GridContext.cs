@@ -274,6 +274,12 @@ namespace IngameScript.Domain
             List<IMyTextSurface> lcds = new List<IMyTextSurface>();
             
             var blocks = new List<IMyTerminalBlock>();
+
+            foreach (IMyFunctionalBlock b in blocks)
+            {
+                b.Enabled = true;
+            }
+
             if (isIgnoreTag)
             {
                 GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
