@@ -595,11 +595,11 @@ namespace IngameScript
                     }
                     else if (GravityAlignedOverride(gc))
                     {
-                        command.Param.Step = Step.Align;
+                        command.Param.Step = Step.AimToGPS;
                     }
                     break;
 
-                case Step.Align:
+                case Step.AimToGPS:
 
                     if (GravAlignedYawOverride(gc, command.Param.TargetCoordinates))
                     {

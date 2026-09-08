@@ -4,7 +4,7 @@
         Toggle,
         On,
         Off,
-        Align,
+        AimToGPS,
         Cruise,
         Preclimb,
         Climb,
