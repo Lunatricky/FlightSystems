@@ -109,35 +109,36 @@ namespace IngameScript
             {
                 //Centers
                 var centerRec = new Vector2(
-                    1.5f * margin / col, 
+                    margin / col, 
                     (textureSize.Y - surfaceSize.Y) / 2 + (surfaceSize.Y / rows) / 2 + i * surfaceSize.Y / rows
-                    );
+                );
 
                 var centerText = new Vector2(
-                    3 * margin + (textureSize.X - surfaceSize.X) / 2 / col,
-                    (textureSize.Y - surfaceSize.Y) / 2 + i * (surfaceSize.Y) / rows
-                    );
+                    3 * margin + (textureSize.X - surfaceSize.X) / 2f / col,
+                    centerRec.Y - 3 * margin
+                );
 
                 //Sizes
                 var sizeRec = new Vector2(textureSize.X / col - 3 * margin, (surfaceSize.Y - margin) / rows - margin);
-                var sizeText = new Vector2(surfaceSize.X / col - 3 * margin, (surfaceSize.Y) / rows);
+                var sizeText = new Vector2(surfaceSize.X / col - 3 * margin, (surfaceSize.Y) / rows + 3 * margin);
 
                 float scale;
                 if (surfaceSize.X < 512) scale = 0.9f;
                 else if (surfaceSize.Y != textureSize.Y) scale = 1.4f;
                 else scale = 1.6f;
 
-                if (6 / rows < 1) scale = scale * 6 / rows;
+                if (rows > 6)
+                    scale *= 6f / rows;
 
                 if (ic.TransparentLCD && panel.Name.ToLower().Contains("transparent"))
                 {
-                    sprites.Add(MakeRectSprite(centerRec, sizeRec, Color.Black));
-                    sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i], scale));
+                    sprites.Add(MakeRectSprite(centerRec, sizeRec, BackgroundColors[i]));
+                    sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i] ?? "", scale));
                 }
                 else
                 {
-                    sprites.Add(MakeRectSprite(centerRec, sizeRec, BackgroundColors[i]));
-                    sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i], scale));
+                sprites.Add(MakeRectSprite(centerRec, sizeRec, BackgroundColors[i]));
+                sprites.Add(MakeTextSprite(centerText, sizeText, FontColors[i], texts[i] ?? "", scale));
                 }
             }
 

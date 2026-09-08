@@ -249,7 +249,7 @@ namespace IngameScript.Domain
             Lcds1.Clear();
             Lcds2.Clear();
             lcdsSettings.Clear();
-
+                        
             Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
             Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
             lcdsSettings.AddList(AddLCDsToList(lcdSettingsTag, false, true));
@@ -296,11 +296,18 @@ namespace IngameScript.Domain
                 );
             }
 
-            foreach (IMyTextSurfaceProvider surfaceProvider in blocks)
+            foreach (IMyTerminalBlock block in blocks)
             {
-                for (int i = 0; i < surfaceProvider.SurfaceCount; i++)
+                IMyTextSurfaceProvider surfaceProvider = (IMyTextSurfaceProvider)block;
+                if (surfaceProvider.SurfaceCount > 1)
                 {
-                    IMyTextSurface surface = surfaceProvider.GetSurface(i);
+                    lcdsSettings.Add(surfaceProvider.GetSurface(0));
+                    Lcds1.Add(surfaceProvider.GetSurface(1));
+                    Lcds2.Add(surfaceProvider.GetSurface(2));
+                } 
+                else
+                {
+                    IMyTextSurface surface = surfaceProvider.GetSurface(0);
                     if (setupSurface) SetupSurface(surface);
                     lcds.Add(surface);
                 }

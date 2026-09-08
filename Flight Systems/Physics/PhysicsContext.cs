@@ -37,8 +37,6 @@ namespace IngameScript.Physics
         double stopZDist;
         double maxYDecel;
         double maxZDecel;
-        double stopYDistTemp;
-        double stopZDistTemp;
         double timeToImpact;
         double timeToStopY;
         double timeToStopZ;
@@ -88,10 +86,10 @@ namespace IngameScript.Physics
             upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
 
             maxZDecel = GetMaxDecel(gc.BreakingThrusters, WorldMatrix.Backward);
-            stopZDistTemp = MaxZDecel > 1e-6
+            stopZDist = MaxZDecel > 1e-6
                 ? Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel))
                 : double.PositiveInfinity;
-            stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
+            //stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
             timeToStopZ = MaxZDecel > 1e-6 ? Math.Abs(ForwardVelocity / MaxZDecel) : double.PositiveInfinity;
 
             if (Gravity > 0)
@@ -105,10 +103,10 @@ namespace IngameScript.Physics
                 climbRate = VectorHelper.GetGravityAlignedVerticalVelocity(gc, this);
 
                 maxYDecel = GetMaxDecel(gc.UpwardThrusters, WorldMatrix.Up);
-                stopYDistTemp = MaxYDecel > 1e-6
+                stopYDist = MaxYDecel > 1e-6
                     ? Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel))
                     : double.PositiveInfinity;
-                stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
+                //stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
 
                 if (command.State == MainState.Land || command.State == MainState.SBurn)
                     timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
@@ -163,8 +161,6 @@ namespace IngameScript.Physics
         public double SeaLevel => seaLevel;
         public string GroundLevelStr => groundLevel > 1000 ? $"{groundLevel / 1000:F1} km" : $"{groundLevel:F1} m";
         public string SeaLevelStr => seaLevel > 1000 ? $"{seaLevel / 1000:F1} km" : $"{seaLevel:F1} m";
-        double StopYDistTemp => stopYDistTemp;
-        double StopZDistTemp => stopZDistTemp;
         public double StopYDist => stopYDist;
         public double StopZDist => stopZDist;
         public double ClimbRate => climbRate;
@@ -353,7 +349,7 @@ namespace IngameScript.Physics
 
             // spare lift for dampeners + effective-thrust lag (atmo)
             const double UpReserve = 0.90;   // use at most 70% of up T for hover
-            const double FwdReserve = 0.50;  // keep half of forward for speed
+            const double FwdReserve = 0.80;  // keep half of forward for speed
 
             double maxFromLift = 0;
             double liftBudget = upThrust * UpReserve;

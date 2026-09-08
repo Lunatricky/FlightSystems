@@ -37,6 +37,9 @@ namespace IngameScript
         bool settingsToggle;
         bool settingsIsLocked;
 
+        double planetRadius = 0;
+        PlanetType planet = PlanetType.Unknown;
+
         SystemBools sb;
 
         Task task;
@@ -58,7 +61,7 @@ namespace IngameScript
         }
 
         public void Main(string argument)
-        {            
+        {
             if (!string.IsNullOrEmpty(argument))
             {
                 foreach (string param in ic.IniParamList)
@@ -226,6 +229,17 @@ namespace IngameScript
                     task = Task.CheckIni;
                     Echo(GetRuntimeInfo());
                     return;
+                }
+
+                if (pc.Gravity > 0 && (planetRadius == 0 || planet == PlanetType.Unknown))
+                {
+                    planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - pc.SeaLevel;
+                    planet = DetectPlanet(planetRadius);
+                }
+                else if (pc.Gravity == 0)
+                {
+                    planetRadius = 0;
+                    planet = PlanetType.Unknown;
                 }
             }
 
@@ -573,7 +587,33 @@ namespace IngameScript
                     ToggleCommand(gc, command);
                     break;
 
-                case Step.On:
+                case Step.On:                    
+                    if (pc.Gravity == 0)
+                    {
+                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - command.Param.TargetCoordinates))
+                            command.Param.Step = Step.Cruise;
+                    }
+                    else if (GravityAlignedOverride(gc))
+                    {
+                        command.Param.Step = Step.Align;
+                    }
+                    break;
+
+                case Step.Align:
+
+                    if (GravAlignedYawOverride(gc, command.Param.TargetCoordinates))
+                    {
+                        if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
+                            VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
+                        {
+                            command.Param.Step = Step.Orbit;
+                            return;
+                        }
+                        command.Param.Step = Step.Cruise;
+                    }
+                    break;
+
+                case Step.Cruise:
                     if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
                         if (pc.Gravity > 0)
@@ -592,25 +632,7 @@ namespace IngameScript
                         command.Param.Step = Step.Preclimb;
                         return;
                     }
-
-                    double planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - pc.SeaLevel;
-
-                    PlanetType planet = DetectPlanet(planetRadius);
-                    
-                    if (pc.Gravity == 0)
-                    {
-                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - command.Param.TargetCoordinates))
-                            CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
-                    }
-                    else if (GravityAlignedOverride(gc) && GravAlignedYawOverride(gc, command.Param.TargetCoordinates))
-                    {
-                        if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
-                            VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
-                        {
-                            command.Param.Step = Step.Orbit;
-                        }
-                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
-                    }
+                    CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
                     break;
 
                 case Step.Orbit:
@@ -880,8 +902,9 @@ namespace IngameScript
         private void LCD1Sprite()
         {
             Sprites spt = new Sprites(ic);
-            spt.Add(gc.GridName);
-            spt.Add("Type: " + gc.ShipType.ToString());
+            spt.Add(gc.GridName ?? "");
+            spt.Add("Type: " + gc.ShipType);
+            spt.Add("Planet: " + planet + " | " + planetRadius + "m");
 
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);

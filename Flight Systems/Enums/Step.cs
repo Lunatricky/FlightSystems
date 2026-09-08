@@ -4,6 +4,8 @@
         Toggle,
         On,
         Off,
+        Align,
+        Cruise,
         Preclimb,
         Climb,
         Orbit
