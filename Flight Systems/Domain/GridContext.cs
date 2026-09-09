@@ -301,23 +301,56 @@ namespace IngameScript.Domain
             return this;
         }
 
-        public GridContext ReloadSurfaces()
+        public GridContext PaintAllScreens(IniContext ic)
         {
-            if (lcdProviders.Count == 0)
-                FetchLcdProviders();
+            var providers = new List<IMyTextSurfaceProvider>();
+            GridTS.GetBlocksOfType(providers, p =>
+                ((IMyTerminalBlock)p).IsSameConstructAs(Me));
 
-            surfaces.Clear();
-            foreach (IMyTerminalBlock block in lcdProviders)
+            foreach (IMyTextSurfaceProvider provider in providers)
             {
+                IMyTerminalBlock block = (IMyTerminalBlock)provider;
                 string name = block.CustomName ?? "";
                 string data = block.CustomData ?? "";
                 if (!string.IsNullOrEmpty(ignoreTag) &&
                     (name.Contains(ignoreTag) || data.Contains(ignoreTag)))
                     continue;
 
-                AddAllSurfaces((IMyTextSurfaceProvider)block, surfaces, false);
+                IMyTextPanel panel = block as IMyTextPanel;
+                if (panel != null)
+                    panel.Enabled = true;
+
+                for (int i = 0; i < provider.SurfaceCount; i++)
+                {
+                    IMyTextSurface s = provider.GetSurface(i);
+                    if (s == null) continue;
+                    PaintCockpitOrLcd(s, ic);
+                }
             }
             return this;
+        }
+
+        static void PaintCockpitOrLcd(IMyTextSurface s, IniContext ic)
+        {
+            string n = s.Name ?? "";
+            Color bg = (ic.TransparentLCD && n.ToLower().Contains("transparent"))
+                ? Color.Black
+                : ColorMap.GetColorFromString(ic.LcdBackgroundColor);
+            Color fg = ColorMap.GetColorFromString(ic.LcdFontColor);
+
+            ContentType prev = s.ContentType;
+
+            // panel / text mode
+            s.ContentType = ContentType.TEXT_AND_IMAGE;
+            s.BackgroundColor = bg;
+            s.FontColor = fg;
+
+            // cockpit + sprite / script mode (this is what cockpits actually show)
+            s.ContentType = ContentType.SCRIPT;
+            s.ScriptBackgroundColor = bg;
+            s.ScriptForegroundColor = fg;
+
+            s.ContentType = prev;
         }
 
         void AddAllSurfaces(IMyTextSurfaceProvider provider, List<IMyTextSurface> dest, bool setupSurface)
@@ -342,33 +375,6 @@ namespace IngameScript.Domain
             surface.FontSize = fontSize;
             surface.Alignment = TextAlignment.LEFT;
             return surface;
-        }
-
-        public static void PaintSurfaces(IniContext ic, List<IMyTextSurface> surfaces)
-        {
-            if (surfaces == null) return;
-
-            foreach (IMyTextSurface surface in surfaces)
-            {
-                if (surface == null) continue;
-
-                Color backgroundColor;
-                string name = surface.Name ?? "";
-                if (ic.TransparentLCD && name.ToLower().Contains("transparent"))
-                    backgroundColor = Color.Black;
-                else
-                    backgroundColor = ColorMap.GetColorFromString(ic.LcdBackgroundColor);
-
-                PaintSurface(surface, backgroundColor, ColorMap.GetColorFromString(ic.LcdFontColor));
-            }
-        }
-
-        static void PaintSurface(IMyTextSurface surface, Color BackgroundColor, Color FontColor)
-        {
-            surface.BackgroundColor = BackgroundColor;
-            surface.FontColor = FontColor;
-            surface.ScriptBackgroundColor = BackgroundColor;
-            surface.ScriptForegroundColor = FontColor;
         }
 
         public GridContext ReloadConnectors()

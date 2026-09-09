@@ -627,13 +627,13 @@ namespace IngameScript
                 case Step.Cruise:
                     if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
+                        AbortShipContext(gc);
                         if (pc.Gravity > 0)
                         {
                             command.State = MainState.Land;
                             sb.GpsToggle = false;
                             previousRate = PREV_RATE;
                         }
-                        else AbortShipContext(gc);
                         return;
                     }
 
@@ -808,11 +808,7 @@ namespace IngameScript
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
             if (ic.PaintSurfaces)
-                {
-                    gc.ReloadSurfaces();
-
-                    GridContext.PaintSurfaces(ic, gc.Surfaces);
-                }
+                gc.PaintAllScreens(ic);
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command
@@ -1446,86 +1442,6 @@ namespace IngameScript
                 g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -2, 2);
                 g.Roll = (float)MathHelper.Clamp(local.Z / 2, -2, 2);
             }
-            return false;
-        }
-
-        bool GravAlignedYawOverride(GridContext gc, Vector3D targetGps)
-        {   
-            if (gc.Controller == null || gc.Gyros == null || gc.Gyros.Count == 0) return false;
-            if (pc.NaturalGravity.LengthSquared() < 0.01) return false;
-
-            Vector3D up = Vector3D.Normalize(pc.NaturalGravity);
-            Vector3D shipPos = gc.Controller.GetPosition();
-            Vector3D shipForward = gc.Controller.WorldMatrix.Forward;
-
-            Vector3D toTarget = targetGps - shipPos;
-
-            // **NEW: Check if we're on the wrong side of the planet**
-            // If the ship is moving away from the target (dot product is negative),
-            // it means the target is behind/opposite relative to ship's current position
-            // on the gravity plane. Reject in this case.
-            Vector3D targetProj = toTarget - up * Vector3D.Dot(toTarget, up);
-
-            if (targetProj.LengthSquared() < 1e-6)
-            {
-                // Target is nearly vertical (pole case)
-                // Check: is the target in the same hemisphere as the ship?
-                // Compare altitude-adjusted positions
-                double shipAltitude = Vector3D.Dot(shipPos, up);
-                double targetAltitude = Vector3D.Dot(targetGps, up);
-
-                if (Math.Sign(shipAltitude) != Math.Sign(targetAltitude))
-                {
-                    // Target is on opposite pole — don't fly there
-                    return true;
-                }
-
-                // Target is directly above/below on same side — no yaw needed
-                return true;
-            }
-
-            targetProj = Vector3D.Normalize(targetProj);
-
-            Vector3D forwardProj = shipForward - up * Vector3D.Dot(shipForward, up);
-            if (forwardProj.LengthSquared() < 1e-9)
-            {
-                forwardProj = Vector3D.Cross(up, Math.Abs(up.X) < 0.9 ? Vector3D.UnitX : Vector3D.UnitY);
-            }
-            forwardProj = Vector3D.Normalize(forwardProj);
-
-            // Signed yaw angle
-            double cosA = Vector3D.Dot(forwardProj, targetProj);
-            cosA = Math.Max(-1.0, Math.Min(1.0, cosA));
-            double angleMag = Math.Acos(cosA);
-            double sign = Math.Sign(Vector3D.Dot(forwardProj.Cross(targetProj), up));
-            double yawAngle = sign * angleMag;
-
-            const double ANGLE_EPS = 0.01;
-            if (Math.Abs(yawAngle) < ANGLE_EPS)
-            {
-                gc.ResetGyros();
-                return true;
-            }
-
-            const double MAX_ROT_RATE = 6.0;
-            const double RESPONSE = 2.0;
-            double desiredRateScalar = Math.Min(Math.Abs(yawAngle) * RESPONSE, MAX_ROT_RATE);
-            Vector3D desiredRate = up * (Math.Sign(yawAngle) * desiredRateScalar);
-
-            Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
-            Vector3D correction = desiredRate - angVel;
-
-            foreach (var g in gc.Gyros)
-            {
-                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D local = Vector3D.TransformNormal(correction, inv);
-
-                g.GyroOverride = true;
-                g.Pitch = 0f;
-                g.Yaw = (float)MathHelper.Clamp(-local.Y / 2, -6, 6);
-                g.Roll = 0f;
-            }
-
             return false;
         }
 
