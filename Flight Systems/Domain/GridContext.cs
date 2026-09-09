@@ -244,76 +244,95 @@ namespace IngameScript.Domain
             }
         }
 
+        List<IMyTerminalBlock> lcdProviders = new List<IMyTerminalBlock>();
+
+        void FetchLcdProviders()
+        {
+            lcdProviders.Clear();
+            GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(lcdProviders, b => b.IsSameConstructAs(Me));
+
+            foreach (IMyTerminalBlock block in lcdProviders)
+            {
+                IMyTextPanel panel = block as IMyTextPanel;
+                if (panel != null)
+                    panel.Enabled = true;
+            }
+        }
+
         public GridContext ReloadLCDs()
         {
             Lcds1.Clear();
             Lcds2.Clear();
             lcdsSettings.Clear();
-                        
-            Lcds1.AddList(AddLCDsToList(lcd1Tag, false, true));
-            Lcds2.AddList(AddLCDsToList(lcd2Tag, false, true));
-            lcdsSettings.AddList(AddLCDsToList(lcdSettingsTag, false, true));
+
+            FetchLcdProviders();
+
+            foreach (IMyTerminalBlock block in lcdProviders)
+            {
+                IMyTextSurfaceProvider provider = (IMyTextSurfaceProvider)block;
+                string name = block.CustomName ?? "";
+
+                bool tagged1 = !string.IsNullOrEmpty(lcd1Tag) && name.Contains(lcd1Tag);
+                bool tagged2 = !string.IsNullOrEmpty(lcd2Tag) && name.Contains(lcd2Tag);
+                bool taggedS = !string.IsNullOrEmpty(lcdSettingsTag) && name.Contains(lcdSettingsTag);
+
+                if (tagged1 || tagged2 || taggedS)
+                {
+                    if (tagged1) AddAllSurfaces(provider, Lcds1, true);
+                    if (tagged2) AddAllSurfaces(provider, Lcds2, true);
+                    if (taggedS) AddAllSurfaces(provider, lcdsSettings, true);
+                    continue;
+                }
+
+                // Untagged cockpit / multi-screen: map 0 / 1 / 2 if those slots exist
+                if (provider.SurfaceCount > 1)
+                {
+                    AddSurface(provider, 0, Lcds1, true);
+                    AddSurface(provider, 1, Lcds2, true);
+                    AddSurface(provider, 2, lcdsSettings, true);
+                }
+            }
+
             lcdsSettings.Add(Me.GetSurface(0));
 
             CleanSurfaces(Lcds1);
             CleanSurfaces(Lcds2);
             CleanSurfaces(lcdsSettings);
-
             return this;
         }
 
         public GridContext ReloadSurfaces()
         {
+            if (lcdProviders.Count == 0)
+                FetchLcdProviders();
+
             surfaces.Clear();
-            surfaces.AddList(AddLCDsToList(ignoreTag, true));
+            foreach (IMyTerminalBlock block in lcdProviders)
+            {
+                string name = block.CustomName ?? "";
+                string data = block.CustomData ?? "";
+                if (!string.IsNullOrEmpty(ignoreTag) &&
+                    (name.Contains(ignoreTag) || data.Contains(ignoreTag)))
+                    continue;
+
+                AddAllSurfaces((IMyTextSurfaceProvider)block, surfaces, false);
+            }
             return this;
         }
 
-        List<IMyTextSurface> AddLCDsToList(string tag, bool isIgnoreTag, bool setupSurface = false)
+        void AddAllSurfaces(IMyTextSurfaceProvider provider, List<IMyTextSurface> dest, bool setupSurface)
         {
-            List<IMyTextSurface> lcds = new List<IMyTextSurface>();
-            
-            var blocks = new List<IMyTerminalBlock>();
+            for (int i = 0; i < provider.SurfaceCount; i++)
+                AddSurface(provider, i, dest, setupSurface);
+        }
 
-            foreach (IMyFunctionalBlock b in blocks)
-            {
-                b.Enabled = true;
-            }
+        void AddSurface(IMyTextSurfaceProvider provider, int index, List<IMyTextSurface> dest, bool setupSurface)
+        {
+            IMyTextSurface surface = provider.GetSurface(index);
+            if (surface == null) return;
 
-            if (isIgnoreTag)
-            {
-                GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
-                    block.IsSameConstructAs(Me) &&
-                    !block.CustomName.Contains(tag) &&
-                    !block.CustomData.Contains(tag)
-                );
-            }
-            else
-            {
-                GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(blocks, block =>
-                    block.IsSameConstructAs(Me) &&
-                    block.CustomName.Contains(tag)
-                );
-            }
-
-            foreach (IMyTerminalBlock block in blocks)
-            {
-                IMyTextSurfaceProvider surfaceProvider = (IMyTextSurfaceProvider)block;
-                if (surfaceProvider.SurfaceCount > 1)
-                {
-                    lcdsSettings.Add(surfaceProvider.GetSurface(0));
-                    Lcds1.Add(surfaceProvider.GetSurface(1));
-                    Lcds2.Add(surfaceProvider.GetSurface(2));
-                } 
-                else
-                {
-                    IMyTextSurface surface = surfaceProvider.GetSurface(0);
-                    if (setupSurface) SetupSurface(surface);
-                    lcds.Add(surface);
-                }
-            }
-
-            return lcds;
+            if (setupSurface) SetupSurface(surface);
+            dest.Add(surface);
         }
 
         public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
@@ -327,14 +346,20 @@ namespace IngameScript.Domain
 
         public static void PaintSurfaces(IniContext ic, List<IMyTextSurface> surfaces)
         {
+            if (surfaces == null) return;
+
             foreach (IMyTextSurface surface in surfaces)
             {
-                Color backgroundColor;
-                if (ic.TransparentLCD && surface.Name.ToLower().Contains("transparent")) backgroundColor = Color.Black;
-                else backgroundColor = ColorMap.GetColorFromString(ic.LcdBackgroundColor);
-                Color fontColor = ColorMap.GetColorFromString(ic.LcdFontColor);
+                if (surface == null) continue;
 
-                PaintSurface(surface, backgroundColor, fontColor);
+                Color backgroundColor;
+                string name = surface.Name ?? "";
+                if (ic.TransparentLCD && name.ToLower().Contains("transparent"))
+                    backgroundColor = Color.Black;
+                else
+                    backgroundColor = ColorMap.GetColorFromString(ic.LcdBackgroundColor);
+
+                PaintSurface(surface, backgroundColor, ColorMap.GetColorFromString(ic.LcdFontColor));
             }
         }
 

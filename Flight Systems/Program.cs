@@ -62,6 +62,12 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            List<IMyTextSurface> Lcds = new List<IMyTextSurface>();
+            GridTerminalSystem.GetBlocksOfType(Lcds);
+            Echo("surfaces: " + Lcds.Count);
+            Echo("surfaces: " + gc.Surfaces.Count);
+
+
             if (!string.IsNullOrEmpty(argument))
             {
                 foreach (string param in ic.IniParamList)
@@ -910,7 +916,7 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
             spt.Add(gc.GridName ?? "");
             spt.Add("Type: " + gc.ShipType);
-            spt.Add("Planet: " + planet + " | " + planetRadius + "m");
+            spt.Add($"Planet: {planet} | {planetRadius/1000:F0}km");
 
             StringBuilder state = new StringBuilder();
             state.Append("State: " + command.State);
@@ -1381,61 +1387,64 @@ namespace IngameScript
 
             return false;
         }
+
         bool AimHorizonToGps(GridContext gc, Vector3D targetGps)
         {
             Vector3D gDown = Vector3D.Normalize(pc.NaturalGravity);
-            Vector3D sky = -gDown;
             Vector3D shipUp = gc.Controller.WorldMatrix.Up;
             Vector3D shipFwd = gc.Controller.WorldMatrix.Forward;
 
-            // --- hold sky-up (same convention as GravityAlignedOverride: align to +g antipode) ---
             Vector3D levelAxis = shipUp.Cross(gDown);
             double levelErr = levelAxis.Length();
 
-            // --- yaw in the horizon plane ---
-            Vector3D toTarget = targetGps - gc.Controller.GetPosition();
+            Vector3D toTarget = targetGps - gc.Controller.GetPosition(); // toward GPS
             Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
             Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
 
             double yawErr = 0;
-            Vector3D yawAxis = gDown;
+            double yawSign = 0;
             if (targetHoriz.LengthSquared() > 1e-6 && fwdHoriz.LengthSquared() > 1e-6)
             {
                 targetHoriz.Normalize();
                 fwdHoriz.Normalize();
                 double cosA = MathHelper.Clamp(fwdHoriz.Dot(targetHoriz), -1.0, 1.0);
                 yawErr = Math.Acos(cosA);
-                double sign = Math.Sign(fwdHoriz.Cross(targetHoriz).Dot(gDown));
-                yawAxis = gDown * sign;
+                yawSign = -Math.Sign(fwdHoriz.Cross(targetHoriz).Dot(gDown));
             }
 
-            const double LEVEL_EPS = 0.03; // ~1.7°
-            const double YAW_EPS = 0.05;   // ~3°
+            const double LEVEL_EPS = 0.04; // ~2°
+            const double YAW_EPS = 0.08; // ~4.5° — do not use 0.01
             if (levelErr < LEVEL_EPS && yawErr < YAW_EPS)
             {
                 gc.ResetGyros();
                 return true;
             }
 
+            Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
             Vector3D desiredRate = Vector3D.Zero;
+
             if (levelErr > LEVEL_EPS)
             {
                 levelAxis /= levelErr;
-                desiredRate += levelAxis * Math.Min(levelErr * 1.0, 1.0);
+                desiredRate += levelAxis * Math.Min(levelErr * 0.8, 0.6);
             }
-            if (yawErr > YAW_EPS)
-                desiredRate += yawAxis * Math.Min(yawErr * 1.2, 1.5);
 
-            Vector3D correction = desiredRate - gc.Controller.GetShipVelocities().AngularVelocity;
+            if (yawErr > YAW_EPS)
+            {
+                // cap ~20°/s, and bleed off existing yaw rate so it doesn't flip
+                double yawRate = Math.Min(yawErr * 0.5, 0.35);
+                desiredRate += gDown * (yawSign * yawRate);
+            }
+
+            Vector3D correction = desiredRate - 1.8 * angVel; // heavier damp than before
 
             foreach (var g in gc.Gyros)
             {
-                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D local = Vector3D.TransformNormal(correction, inv);
+                Vector3D local = Vector3D.TransformNormal(correction, MatrixD.Transpose(g.WorldMatrix));
                 g.GyroOverride = true;
-                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -3, 3);
-                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -3, 3);
-                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
+                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -2, 2);
+                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -2, 2);
+                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -2, 2);
             }
             return false;
         }
@@ -1531,7 +1540,7 @@ namespace IngameScript
             if (radius < 50000)
                 return PlanetType.Triton;
 
-            return PlanetType.Earth;
+            return PlanetType.EarthFamily;
         }
 
         double GetGravityRadius(double radius, PlanetType type)
