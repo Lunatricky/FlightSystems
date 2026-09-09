@@ -203,7 +203,7 @@ namespace IngameScript
                 if (lastDockMode != isDockMode)
                 {
                     AbortShipContext(gc);
-                    DockToggle(gc, isDockMode);
+                    DockToggle(gc, isDockMode, anyConnected);
                     lastDockMode = isDockMode;
                 }
             }
@@ -451,11 +451,11 @@ namespace IngameScript
             }
         }
 
-        private void DockToggle(GridContext gc, bool isDocked)
+        private void DockToggle(GridContext gc, bool isDocked, bool anyConnected = false)
         {
             gc.SetBlocks(!isDocked, out isDockMode);
             gc.StockpileTanks(isDocked);
-            if (isDocked)
+            if (anyConnected)
             {
                 gc.ChargeBatteries();
             }
@@ -600,8 +600,13 @@ namespace IngameScript
                     break;
 
                 case Step.AimToGPS:
+                    if (pc.Gravity == 0)
+                    {
+                        command.Param.Step = Step.On;
+                        return;
+                    }
 
-                    if (GravAlignedYawOverride(gc, command.Param.TargetCoordinates))
+                    if (AimHorizonToGps(gc, command.Param.TargetCoordinates))
                     {
                         if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
                             VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
@@ -632,6 +637,7 @@ namespace IngameScript
                         command.Param.Step = Step.Preclimb;
                         return;
                     }
+                    AimHorizonToGps(gc, command.Param.TargetCoordinates);
                     CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
                     break;
 
@@ -1373,6 +1379,64 @@ namespace IngameScript
                 g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
             }
 
+            return false;
+        }
+        bool AimHorizonToGps(GridContext gc, Vector3D targetGps)
+        {
+            Vector3D gDown = Vector3D.Normalize(pc.NaturalGravity);
+            Vector3D sky = -gDown;
+            Vector3D shipUp = gc.Controller.WorldMatrix.Up;
+            Vector3D shipFwd = gc.Controller.WorldMatrix.Forward;
+
+            // --- hold sky-up (same convention as GravityAlignedOverride: align to +g antipode) ---
+            Vector3D levelAxis = shipUp.Cross(gDown);
+            double levelErr = levelAxis.Length();
+
+            // --- yaw in the horizon plane ---
+            Vector3D toTarget = targetGps - gc.Controller.GetPosition();
+            Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
+            Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
+
+            double yawErr = 0;
+            Vector3D yawAxis = gDown;
+            if (targetHoriz.LengthSquared() > 1e-6 && fwdHoriz.LengthSquared() > 1e-6)
+            {
+                targetHoriz.Normalize();
+                fwdHoriz.Normalize();
+                double cosA = MathHelper.Clamp(fwdHoriz.Dot(targetHoriz), -1.0, 1.0);
+                yawErr = Math.Acos(cosA);
+                double sign = Math.Sign(fwdHoriz.Cross(targetHoriz).Dot(gDown));
+                yawAxis = gDown * sign;
+            }
+
+            const double LEVEL_EPS = 0.03; // ~1.7°
+            const double YAW_EPS = 0.05;   // ~3°
+            if (levelErr < LEVEL_EPS && yawErr < YAW_EPS)
+            {
+                gc.ResetGyros();
+                return true;
+            }
+
+            Vector3D desiredRate = Vector3D.Zero;
+            if (levelErr > LEVEL_EPS)
+            {
+                levelAxis /= levelErr;
+                desiredRate += levelAxis * Math.Min(levelErr * 1.0, 1.0);
+            }
+            if (yawErr > YAW_EPS)
+                desiredRate += yawAxis * Math.Min(yawErr * 1.2, 1.5);
+
+            Vector3D correction = desiredRate - gc.Controller.GetShipVelocities().AngularVelocity;
+
+            foreach (var g in gc.Gyros)
+            {
+                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
+                Vector3D local = Vector3D.TransformNormal(correction, inv);
+                g.GyroOverride = true;
+                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -3, 3);
+                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -3, 3);
+                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
+            }
             return false;
         }
 
