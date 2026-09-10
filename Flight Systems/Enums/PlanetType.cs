@@ -2,7 +2,7 @@
 {
     enum PlanetType
     {
-        Earth,
+        EarthFamily,
         Mars,
         Alien,
         Triton,

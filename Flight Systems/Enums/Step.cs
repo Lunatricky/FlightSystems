@@ -4,6 +4,8 @@
         Toggle,
         On,
         Off,
+        AimToGPS,
+        Cruise,
         Preclimb,
         Climb,
         Orbit

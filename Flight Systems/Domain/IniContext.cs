@@ -8,9 +8,8 @@ namespace IngameScript.Domain
     {
         readonly MyIni ini = new MyIni();
         readonly GridContext gc;
+        readonly IniSnapshot snapshot = new IniSnapshot();
 
-        //Ini
-        public Dictionary<string, string> IniSnapshot;
         bool iniChanged;
 
         //ToggleSection
@@ -45,6 +44,7 @@ namespace IngameScript.Domain
         const string INI_LCD1_TAG = "LCD 1";
         const string INI_LCD2_TAG = "LCD 2";
         const string INI_LCD_SETTINGS_TAG = "LCD Settings";
+        const string INI_COCKPIT_TAG = "Cockpit";
         const string BACKUP_BATTERY_TAG = "Backup battery";
 
         string dockGroupTag = "Flight Systems";
@@ -54,6 +54,7 @@ namespace IngameScript.Domain
         string lcd1Tag = "[FS_LCD1]";
         string lcd2Tag = "[FS_LCD2]";
         string lcdSettingsTag = "[FS_LCD_SETTINGS]";
+        string cockpitTag = "[FS_COCKPIT]";
         string backupBatteryTag = "[FS_backup]";
 
         //ParamsSection
@@ -64,6 +65,8 @@ namespace IngameScript.Domain
         public const string CNAV_ALTITUDE = "Cnav Altitude";
         public const string DISTANCE_TO_GPS = "Distance to GPS";
         public const string MINIMUM_ACCEPTED_FUEL = "Minimum Fuel";
+
+        public string[] IniParamList = new string[5] { MAX_SPEED, CRUISE_SPEED, CNAV_ALTITUDE, DISTANCE_TO_GPS, MINIMUM_ACCEPTED_FUEL };
 
         double maxSpeed = double.PositiveInfinity; // m/s
         double cruiseSpeed = 100; // m/s
@@ -95,7 +98,6 @@ namespace IngameScript.Domain
 
         public IniContext(GridContext gc)
         {
-            IniSnapshot = new Dictionary<string, string>();
             this.gc = gc;
         }
 
@@ -107,6 +109,7 @@ namespace IngameScript.Domain
         public string Lcd1Tag => lcd1Tag;
         public string Lcd2Tag => lcd2Tag;
         public string LcdSettingsTag => lcdSettingsTag;
+        public string CockpitTag => cockpitTag;
         public string BackupBatteryTag => backupBatteryTag;
         public double MaxSpeed
         {
@@ -126,7 +129,7 @@ namespace IngameScript.Domain
                 UpdateIni(ParamsSection, CRUISE_SPEED, cruiseSpeed);
             }
         }
-        public double safeAltitude
+        public double SafeAltitude
         {
             get { return cnavAltitude; }
             set 
@@ -286,6 +289,7 @@ namespace IngameScript.Domain
             lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1Tag);
             lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2Tag);
             lcdSettingsTag = ini.Get(NamesTagsSection, INI_LCD_SETTINGS_TAG).ToString(LcdSettingsTag);
+            cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(CockpitTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
 
             //ParamsSection
@@ -296,7 +300,7 @@ namespace IngameScript.Domain
                 : double.Parse(s);
 
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
-            cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(safeAltitude);
+            cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(SafeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
@@ -337,12 +341,13 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, Lcd1Tag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, Lcd2Tag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD_SETTINGS_TAG, LcdSettingsTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_COCKPIT_TAG, CockpitTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
 
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, CRUISE_SPEED, CruiseSpeed);
-            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, safeAltitude);
+            iniChanged |= ReadAndDetectChange(ini, ParamsSection, CNAV_ALTITUDE, SafeAltitude);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, DISTANCE_TO_GPS, DistanceToGPS);
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
 
@@ -369,17 +374,7 @@ namespace IngameScript.Domain
 
         bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)
         {
-            ini.Set(section, key, newVal.ToString());
-
-            string old;
-            string newValString = newVal.ToString();
-            IniSnapshot.TryGetValue(key, out old);
-            if (old != newValString)
-            {
-                IniSnapshot[key] = newValString;
-                return true;
-            }
-            return false;
+            return snapshot.ReadAndDetectChange(ini, section, key, newVal);
         }
     }
 }
