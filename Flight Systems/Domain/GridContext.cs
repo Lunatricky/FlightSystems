@@ -20,7 +20,11 @@ namespace IngameScript.Domain
         string lcd1Tag;
         string lcd2Tag;
         string lcdSettingsTag;
+        string cockpitTag;
         string backupTag;
+
+        readonly Dictionary<long, CockpitSpriteIni> cockpitSpriteInis = new Dictionary<long, CockpitSpriteIni>();
+        bool cockpitIniChanged;
 
         readonly StringBuilder errorMessage;
 
@@ -90,6 +94,7 @@ namespace IngameScript.Domain
             lcd1Tag = ic.Lcd1Tag;
             lcd2Tag = ic.Lcd2Tag;
             lcdSettingsTag = ic.LcdSettingsTag;
+            cockpitTag = ic.CockpitTag;
             backupTag = ic.BackupBatteryTag;
 
             GetSameConstructBlocks(blocks, ignoreTag);
@@ -259,18 +264,58 @@ namespace IngameScript.Domain
             }
         }
 
+        public bool CockpitIniChanged => cockpitIniChanged;
+
+        public bool SyncTaggedCockpitIni()
+        {
+            cockpitIniChanged = false;
+            FetchLcdProviders();
+
+            List<long> seenCockpits = new List<long>();
+            foreach (IMyTerminalBlock block in lcdProviders)
+            {
+                IMyCockpit cockpit = block as IMyCockpit;
+                if (cockpit == null)
+                    continue;
+
+                string name = block.CustomName ?? "";
+                if (string.IsNullOrEmpty(cockpitTag) || !name.Contains(cockpitTag))
+                    continue;
+
+                seenCockpits.Add(cockpit.EntityId);
+                cockpitIniChanged |= GetCockpitSpriteIni(cockpit).Sync(cockpit);
+            }
+
+            PruneCockpitSpriteInis(seenCockpits);
+            return cockpitIniChanged;
+        }
+
         public GridContext ReloadLCDs()
         {
             Lcds1.Clear();
             Lcds2.Clear();
             lcdsSettings.Clear();
+            cockpitIniChanged = false;
 
             FetchLcdProviders();
+
+            List<long> seenCockpits = new List<long>();
 
             foreach (IMyTerminalBlock block in lcdProviders)
             {
                 IMyTextSurfaceProvider provider = (IMyTextSurfaceProvider)block;
                 string name = block.CustomName ?? "";
+
+                IMyCockpit cockpit = block as IMyCockpit;
+                if (cockpit != null)
+                {
+                    if (!string.IsNullOrEmpty(cockpitTag) && name.Contains(cockpitTag))
+                    {
+                        seenCockpits.Add(cockpit.EntityId);
+                        BindTaggedCockpit(cockpit);
+                    }
+                    continue;
+                }
 
                 bool tagged1 = !string.IsNullOrEmpty(lcd1Tag) && name.Contains(lcd1Tag);
                 bool tagged2 = !string.IsNullOrEmpty(lcd2Tag) && name.Contains(lcd2Tag);
@@ -281,17 +326,10 @@ namespace IngameScript.Domain
                     if (tagged1) AddAllSurfaces(provider, Lcds1, true);
                     if (tagged2) AddAllSurfaces(provider, Lcds2, true);
                     if (taggedS) AddAllSurfaces(provider, lcdsSettings, true);
-                    continue;
-                }
-
-                // Untagged cockpit / multi-screen: map 0 / 1 / 2 if those slots exist
-                if (provider.SurfaceCount > 1)
-                {
-                    AddSurface(provider, 0, Lcds1, true);
-                    AddSurface(provider, 1, Lcds2, true);
-                    AddSurface(provider, 2, lcdsSettings, true);
                 }
             }
+
+            PruneCockpitSpriteInis(seenCockpits);
 
             lcdsSettings.Add(Me.GetSurface(0));
 
@@ -299,6 +337,48 @@ namespace IngameScript.Domain
             CleanSurfaces(Lcds2);
             CleanSurfaces(lcdsSettings);
             return this;
+        }
+
+        CockpitSpriteIni GetCockpitSpriteIni(IMyCockpit cockpit)
+        {
+            CockpitSpriteIni cfg;
+            if (!cockpitSpriteInis.TryGetValue(cockpit.EntityId, out cfg) || cfg == null)
+            {
+                cfg = new CockpitSpriteIni();
+                cockpitSpriteInis[cockpit.EntityId] = cfg;
+            }
+            return cfg;
+        }
+
+        void BindTaggedCockpit(IMyCockpit cockpit)
+        {
+            CockpitSpriteIni cfg = GetCockpitSpriteIni(cockpit);
+            cockpitIniChanged |= cfg.Sync(cockpit);
+
+            int surfaceCount = cockpit.SurfaceCount;
+            int index;
+            if (CockpitSpriteIni.TryParseSlot(cfg.Lcd1, surfaceCount, out index))
+                AddSurface(cockpit, index, Lcds1, true);
+            if (CockpitSpriteIni.TryParseSlot(cfg.Lcd2, surfaceCount, out index))
+                AddSurface(cockpit, index, Lcds2, true);
+            if (CockpitSpriteIni.TryParseSlot(cfg.LcdSettings, surfaceCount, out index))
+                AddSurface(cockpit, index, lcdsSettings, true);
+        }
+
+        void PruneCockpitSpriteInis(List<long> seen)
+        {
+            if (cockpitSpriteInis.Count == seen.Count)
+                return;
+
+            List<long> remove = new List<long>();
+            foreach (KeyValuePair<long, CockpitSpriteIni> kv in cockpitSpriteInis)
+            {
+                if (!seen.Contains(kv.Key))
+                    remove.Add(kv.Key);
+            }
+
+            for (int i = 0; i < remove.Count; i++)
+                cockpitSpriteInis.Remove(remove[i]);
         }
 
         public GridContext PaintAllScreens(IniContext ic)

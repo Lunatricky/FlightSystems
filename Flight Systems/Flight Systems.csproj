@@ -43,6 +43,8 @@
   <ItemGroup>
     <Compile Include="Domain\SystemBools.cs" />
     <Compile Include="Domain\GridManager.cs" />
+    <Compile Include="Domain\IniSnapshot.cs" />
+    <Compile Include="Domain\CockpitSpriteIni.cs" />
     <Compile Include="Domain\IniContext.cs" />
     <Compile Include="Enums\ShipType.cs" />
     <Compile Include="Enums\GpsTypes.cs" />
@@ -50,6 +52,9 @@
     <Compile Include="Enums\Step.cs" />
     <Compile Include="Enums\PlanetType.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
+    <Compile Include="LCDInfo\Lcd1Display.cs" />
+    <Compile Include="LCDInfo\Lcd2Display.cs" />
+    <Compile Include="LCDInfo\SettingsScreens.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />

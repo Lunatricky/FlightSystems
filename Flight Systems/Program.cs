@@ -21,6 +21,7 @@ namespace IngameScript
         PlayerInput pi;
 
         Command command;
+        SettingsScreens settingsHud;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -54,10 +55,11 @@ namespace IngameScript
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
             command = new Command();
+            settingsHud = new SettingsScreens();
 
             CheckIni();
             
-            if (gc.LcdsSettings.Count > 0) FlightSystemSection();
+            if (gc.LcdsSettings.Count > 0) settingsHud.FlightSystemIdle(ic, gc, sb);
         }
 
         public void Main(string argument)
@@ -133,45 +135,25 @@ namespace IngameScript
 
             if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
-
-                if (selectedRow == 0 && pi.Space())
+                if (settingsHud.ShouldClose(pi))
                 {
-                    settingsToggle = false; 
+                    settingsToggle = false;
                     pi.ResetControllers(gc.Controllers);
                     task = Task.ResetControllers;
                     Echo(GetRuntimeInfo());
                     return;
                 }
 
-                EditSettingsSprite();
-
-
-                if(sb.GpsMenuToggle)
-                {
-                    GpsSection();
-                }
-                else
-                {
-                    switch (selectedPage)
+                settingsHud.Handle(
+                    pi, gc, ic, sb, command, settingsToggle,
+                    () => AbortShipContext(gc),
+                    () => SoftAbort(gc),
+                    () =>
                     {
-                        case 1:
-                            if (selectedRow < 0) selectedRow = 7;
-                            else if (selectedRow > 7) selectedRow = 1;
-
-                            (settingsToggle ? (Action)FlightSystemSectionEdit : FlightSystemSection)();
-                            break;
-                        case 2:
-                            if (selectedRow < 0) selectedRow = 8;
-                            else if (selectedRow > 8) selectedRow = 1;
-                            ToggleSectionEdit();
-                            break;
-                        case 3:
-                            if (selectedRow < 0) selectedRow = 5;
-                            else if (selectedRow > 5) selectedRow = 1;
-                            ParamSectionEdit();
-                            break;
-                    }
-                }
+                        settingsToggle = false;
+                        pi.ResetControllers(gc.Controllers);
+                    },
+                    LockInput);
             }
 
             if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
@@ -194,11 +176,10 @@ namespace IngameScript
             if (tickCount % 50 == 2 && !IsShipControlled())
             {
                 if (!settingsToggle)
-                {
-                    FlightSystemSection();
-                }
-                if (gc.Lcds1.Count > 0) LCD1Sprite();
-                if (gc.Lcds2.Count > 0) LCD2Sprite();
+                    settingsHud.FlightSystemIdle(ic, gc, sb);
+
+                Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
+                Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
             }
 
             if (ic.AllowDockMode)
@@ -263,8 +244,8 @@ namespace IngameScript
                     task = Task.LCDs;
                     if (IsShipControlled())
                     {
-                        if (gc.Lcds1.Count > 0) LCD1Sprite();
-                        if (gc.Lcds2.Count > 0) LCD2Sprite();
+                        Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
+                        Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
                     }
                     pc.CacheValues();
                     break;
@@ -306,6 +287,13 @@ namespace IngameScript
                 tick = 0;
                 return true;
             }
+
+            if (gc.SyncTaggedCockpitIni())
+            {
+                gc.ReloadLCDs();
+                return true;
+            }
+
             return false;
         }
 
@@ -907,379 +895,11 @@ namespace IngameScript
             lastError = error;
         }
 
-        private void LCD1Sprite()
-        {
-            Sprites spt = new Sprites(ic);
-            spt.Add(gc.GridName ?? "");
-            spt.Add("Type: " + gc.ShipType);
-            spt.Add($"Planet: {planet} | {planetRadius/1000:F0}km");
-
-            StringBuilder state = new StringBuilder();
-            state.Append("State: " + command.State);
-
-
-            if (command.Param.AutoLandState != AutoLandState.Idle)
-                state.Append(" - " + command.Param.AutoLandState);
-            else if (command.Param.Step != Step.Toggle)
-                state.Append(" - " + command.Param.Step);
-            if (command.Param.Number != 0)
-                state.Append(" - " + command.Param.Number);
-
-            spt.Add(state.ToString());
-
-            spt.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
-            spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
-
-            Color color;
-            color = pc.H2Cache.Rate > 0 ? Color.LightBlue
-                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
-                : pc.H2Cache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
-                : new Color();
-
-            if (!color.Equals(new Color()))
-                spt.AddB($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}", color);
-            else spt.Add($"H2: {pc.H2Cache.Percent:0}% - {pc.H2Cache.Time}");
-
-            color = pc.BatCache.Rate > 0 ? Color.LightBlue
-                : pc.BatCache.Percent < ic.MinimumAcceptedFuel / 2 ? Color.DarkRed
-                : pc.BatCache.Percent < ic.MinimumAcceptedFuel ? Color.DarkOrange
-                : new Color();
-
-            if (!color.Equals(new Color()))
-                spt.AddB($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}", color);
-            else spt.Add($"Bat:  {pc.BatCache.Percent:0}% - {pc.BatCache.Time}");
-
-            DrawSprites(spt, gc.Lcds1);
-        }
-
-        void LCD2Sprite()
-        {
-            Sprites spt = new Sprites(ic);
-
-            if (pc.Gravity > 0)
-            {
-                Color color = new Color();
-                if (pc.ClimbRate < 0)
-                {
-                    color = pc.GroundLevel < 2 * pc.StopYDist
-                        ? Color.DarkRed : pc.GroundLevel < 4 * pc.StopYDist
-                        ? Color.DarkOrange : new Color();
-                }
-
-                if (!color.Equals(new Color()))
-                {
-                    spt.AddB($"Ground: {pc.GroundLevelStr}", color);
-                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
-                }
-                else
-                {
-                    spt.Add($"Ground: {pc.GroundLevelStr}");
-                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
-                }
-            }
-
-            spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            if (pc.Gravity > 0) spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity / 9.81:F2} g ");
-            else spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
-
-            if (sb.GpsToggle)
-            {
-                spt.Add($"ETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
-            }
-            else if (command.State == MainState.Land || command.State == MainState.SBurn)
-            {
-                spt.Add("TTI: " + (pc.TimeToImpact == 0 ? "--" : $"{pc.TimeToImpact:F0}") + " s");
-            }
-            else
-            {
-                spt.Add($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
-                spt.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
-                spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
-            }
-
-            DrawSprites(spt, gc.Lcds2);
-        }
-
-        int selectedRow;
-        int selectedPage = 1;
-
-        void EditSettingsSprite()
-        {
-            if (pi.W())
-            {
-                LockInput();
-                selectedRow--;
-            }
-
-            if (pi.S())
-            {
-                LockInput();
-                selectedRow++;
-            }
-
-            if (pi.Q())
-            {
-                LockInput();
-                selectedPage--;
-            }
-
-            if (pi.E())
-            {
-                LockInput();
-                selectedPage++;
-            }
-
-            if (selectedPage < 1) selectedPage = 3;
-            else if (selectedPage > 3) selectedPage = 1;
-        }
 
         private void LockInput()
         {
             settingsIsLocked = true;
             inputLock = 0;
-        }
-
-        bool IsDefaultScreen;
-
-        void FlightSystemSection()
-        {
-            if (IsDefaultScreen) return;
-
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (sb.CruiseToggle) selectedRow = row++;
-            else if (gc.ShipType != ShipType.Atmo && sb.OrbitToggle) selectedRow = row++;
-            else if (sb.CNavToggle) selectedRow = row++;
-            else if (sb.LandToggle) selectedRow = row++;
-            else if (sb.GlideToggle) selectedRow = row++;
-            else if (sb.SBurnToggle) selectedRow = row++;
-            else if (sb.GpsMenuToggle) selectedRow = row++;
-            else selectedRow = 0;
-
-            row = 1;
-
-            spt.Add($"Flight Systems");
-            spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            if (gc.ShipType != ShipType.Atmo) spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-
-            DrawSprites(spt, gc.LcdsSettings);
-            IsDefaultScreen = true;
-        }
-
-        void FlightSystemSectionEdit()
-        {
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (pi.Space())
-            {
-                settingsToggle = false;
-                pi.ResetControllers(gc.Controllers);
-                MainState ms = MainState.Idle;
-
-                if (selectedRow == row++) ms = MainState.Cruise;
-                else if (gc.ShipType != ShipType.Atmo && selectedRow == row++) ms = MainState.Orbit;
-                else if (selectedRow == row++) ms = MainState.CNav;
-                else if (selectedRow == row++) ms = MainState.Land;
-                else if (selectedRow == row++) ms = MainState.Glide;
-                else if (selectedRow == row++) ms = MainState.SBurn;
-                else if (selectedRow == row++) ms = MainState.Gps;
-
-                if (ms != MainState.Idle)
-                {
-                    if (sb.GetModeState(ms))
-                    {
-                        AbortShipContext(gc);
-                        FlightSystemSection();
-                        return;
-                    }
-                    else
-                    {
-                        SoftAbort(gc);
-                        command.Empty(ms);
-                    }
-                }
-            }
-
-            row = 1;
-
-            spt.Add($"Flight Systems");
-            spt.Add($"Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            if (gc.ShipType != ShipType.Atmo) spt.Add($"Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        void ToggleSectionEdit()
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (pi.A() || pi.D())
-            {
-                LockInput();
-                if (selectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
-                else if (selectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
-                else if (selectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
-                else if (selectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
-                else if (selectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
-                else if (selectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
-                else if (selectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
-                else if (selectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
-            }
-
-            row = 1;
-
-            spt.Add($"{IniContext.ToggleSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(selectedRow == row++, ic.AllowFlightSystems), Color.Black);
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(selectedRow == row++, ic.AnalogThrotle), Color.Black);
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(selectedRow == row++, ic.AllowLowFuelLand), Color.Black);
-            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(selectedRow == row++, ic.AllowDockMode), Color.Black);
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(selectedRow == row++, ic.ControlAntennas), Color.Black);
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(selectedRow == row++, ic.RenameSubgrids), Color.Black);
-            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(selectedRow == row++, ic.PaintSurfaces), Color.Black);
-            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(selectedRow == row++, ic.TransparentLCD), Color.Black);
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        void ParamSectionEdit()
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (selectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed);
-            else if (selectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed);
-            else if (selectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude);
-            else if (selectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS);
-            else if (selectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel);
-
-            row = 1;
-
-            spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        Dictionary<string, Vector3D> GpsList = new Dictionary<string, Vector3D>();
-
-        void GpsSection()
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (pi.Space())
-            {
-                GpsSectionEdit();
-            }
-
-            row = 1;
-            spt.Add($"GPS");
-
-            //TODO add check to do populate GPS List and show only when option is select
-
-            foreach (KeyValuePair<string, Vector3D> kvp in GpsList)
-            {
-                spt.Add($"Select", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            }
-            spt.Add($"Add", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Edit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Delete", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        void GpsSectionEdit()
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-            int row = 1;
-
-            if (pi.Space())
-            {
-                settingsToggle = false;
-                pi.ResetControllers(gc.Controllers);
-            }
-
-            row = 1;
-
-            spt.Add($"GPS");
-            spt.Add($"Select", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Add", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Edit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"Delete", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            DrawSprites(spt, gc.LcdsSettings);
-        }
-
-        Color RowColor(int row, Color color)
-        {
-            double DarkenFactor = 0.2;
-            return selectedRow == row ? ColorMap.SelectedColor(color, DarkenFactor) : color;
-        }
-
-        double IncrementedValue(double value)
-        {
-            double increment;
-            if (value < 1) increment = 0.1;
-            else if(value < 10) increment = 1;
-            else if (value < 50) increment = 5;
-            else if (value < 100) increment = 10;
-            else if (value < 500) increment = 50;
-            else if (value < 1000) increment = 100;
-            else if (value < 5000) increment = 500;
-            else increment = 1000;
-
-            if (pi.D())
-            {
-                LockInput();
-                value += increment;
-            }
-
-            if (pi.A())
-            {
-                LockInput();
-                value -= increment;
-            }
-
-            return value < 0 ? 0 : value;
-        }
-
-        Color BoolSpriteColor(bool isSelected, bool toggle)
-        {
-            return (isSelected ? 
-                toggle ? Color.Green : Color.Red : 
-                toggle ? Color.LightGreen : Color.OrangeRed);
-        }
-                
-        void DrawSprites(Sprites spt, List<IMyTextSurface> surfaces, int col = 1)
-        {
-            foreach (IMyTextSurface surface in surfaces)
-            {
-                spt.DrawInfoPanel(surface, col);
-            }
         }
 
         void AbortShipContext(GridContext gc)
