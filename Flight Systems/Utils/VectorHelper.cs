@@ -27,7 +27,7 @@ namespace IngameScript
             Vector3D gDown = Vector3D.Normalize(naturalGravity);
             Vector3D uSky = -gDown;
             Vector3D forward = sc.Controller.WorldMatrix.Forward;
-            Vector3D fHoriz = forward - uSky * Vector3D.Dot(forward, uSky);
+            Vector3D fHoriz = Reject(forward, uSky);
 
             if (fHoriz.LengthSquared() < 1e-12)
                 fHoriz = Vector3D.Cross(sc.Controller.WorldMatrix.Right, uSky);
@@ -46,7 +46,7 @@ namespace IngameScript
 
         public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)
         {
-            double hover = (pc.Mass.PhysicalMass * pc.Gravity) / SumThrust(gc);
+            double hover = (pc.Mass.PhysicalMass * pc.Gravity) / GridContext.SumEffectiveThrust(gc.UpwardThrusters);
 
             double current = GetGravityAlignedVerticalVelocity(gc, pc);
             double error = target - current;
@@ -65,14 +65,9 @@ namespace IngameScript
                 .LinearVelocity.Dot(gNorm);
         }
 
-        static double SumThrust(GridContext gc)
+        public static Vector3D Reject(Vector3D v, Vector3D axis)
         {
-            double total = 0;
-
-            foreach (var t in gc.UpwardThrusters)
-                total += t.MaxEffectiveThrust;
-
-            return total;
+            return v - axis * v.Dot(axis);
         }
 
         public static bool IsWithinAngle(Vector3D planetCenter, Vector3D shipPosition, Vector3D gpsPosition, double angleDegrees)

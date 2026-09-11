@@ -779,6 +779,21 @@ namespace IngameScript.Domain
 
         }
 
+        public static double SumEffectiveThrust(List<IMyThrust> thrusters)
+        {
+            double total = 0;
+            if (thrusters == null)
+                return 0;
+            for (int i = 0; i < thrusters.Count; i++)
+            {
+                IMyThrust t = thrusters[i];
+                if (t == null || !t.IsFunctional)
+                    continue;
+                total += t.MaxEffectiveThrust;
+            }
+            return total;
+        }
+
         public void ResetGyros()
         {
             foreach (var g in gyros)
@@ -788,6 +803,18 @@ namespace IngameScript.Domain
                 g.Roll = 0f;
                 g.GyroOverride = false;
                 g.Enabled = true;
+            }
+        }
+
+        public void ApplyGyroCorrection(Vector3D worldCorrection, float limit)
+        {
+            foreach (var g in gyros)
+            {
+                Vector3D local = Vector3D.TransformNormal(worldCorrection, MatrixD.Transpose(g.WorldMatrix));
+                g.GyroOverride = true;
+                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -limit, limit);
+                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -limit, limit);
+                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -limit, limit);
             }
         }
 

@@ -194,12 +194,7 @@ namespace IngameScript.Physics
             rate = (filled - prevH2Fill) / timeSinceLastRun;
 
             if (Math.Abs(rate) > 1e-6)
-            {
-                if (rate > 0)
-                    time = UtilsHelpder.FormatTime((cap - filled) / rate) + " /\\";
-                else if (rate < 0)
-                    time = UtilsHelpder.FormatTime(filled / -rate) + " \\/";
-            }
+                time = UtilsHelpder.FormatFillEta(filled, cap, rate);
 
             return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Time = time, Rate = rate };
         }
@@ -223,12 +218,7 @@ namespace IngameScript.Physics
             string batTime = "--";
 
             if (Math.Abs(rate) > 0.01)
-            {
-                if (rate > 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / rate) + " /\\";
-                else if (rate < 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * filled / -rate) + " \\/";
-            }
+                batTime = UtilsHelpder.FormatFillEta(filled, cap, rate / 3600);
 
             return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime, Rate = rate };
         }
@@ -261,9 +251,7 @@ namespace IngameScript.Physics
             if (Mass.PhysicalMass <= 1e-6)
                 return 0;
 
-            double thrust = 0;
-            foreach (var t in thrusters)
-                thrust += t.MaxEffectiveThrust;
+            double thrust = GridContext.SumEffectiveThrust(thrusters);
 
             double thrustAccel = thrust / Mass.PhysicalMass;
 
@@ -323,8 +311,7 @@ namespace IngameScript.Physics
 
         double ComputeNetDecel(GridContext gc)
         {
-            double maxThrustUp = 0;
-            foreach (var t in gc.UpwardThrusters) maxThrustUp += t.MaxEffectiveThrust;
+            double maxThrustUp = GridContext.SumEffectiveThrust(gc.UpwardThrusters);
 
             double thrustAccel = maxThrustUp / Mass.TotalMass;
 
@@ -333,12 +320,8 @@ namespace IngameScript.Physics
 
         double GetMaxPitchAngle(GridContext gc)
         {
-            double upThrust = 0;
-            double fwdThrust = 0;
-            foreach (var t in gc.UpwardThrusters)
-                if (t.IsFunctional) upThrust += t.MaxEffectiveThrust;
-            foreach (var t in gc.ForwardThrusters)
-                if (t.IsFunctional) fwdThrust += t.MaxEffectiveThrust;
+            double upThrust = GridContext.SumEffectiveThrust(gc.UpwardThrusters);
+            double fwdThrust = GridContext.SumEffectiveThrust(gc.ForwardThrusters);
 
             double massKg = gc.Controller.CalculateShipMass().PhysicalMass;
             double g = double.IsNaN(peakGravity) ? Gravity : peakGravity;
