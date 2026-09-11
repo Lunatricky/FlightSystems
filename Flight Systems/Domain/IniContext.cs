@@ -9,6 +9,7 @@ namespace IngameScript.Domain
         readonly MyIni ini = new MyIni();
         readonly GridContext gc;
         readonly IniSnapshot snapshot = new IniSnapshot();
+        readonly GpsStore gps = new GpsStore();
 
         bool iniChanged;
 
@@ -111,6 +112,7 @@ namespace IngameScript.Domain
         public string LcdSettingsTag => lcdSettingsTag;
         public string CockpitTag => cockpitTag;
         public string BackupBatteryTag => backupBatteryTag;
+        internal GpsStore Gps => gps;
         public double MaxSpeed
         {
             get { return maxSpeed; }
@@ -252,6 +254,7 @@ namespace IngameScript.Domain
             iniChanged = false;
 
             if (!ini.TryParse(gc.Me.CustomData)) return IniChanged;
+            string rawCustomData = gc.Me.CustomData;
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
@@ -311,6 +314,8 @@ namespace IngameScript.Domain
             spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(ColorMap.GetStringFromColor(SpriteBackgroundColor));
             spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(ColorMap.GetStringFromColor(SpriteFontColor));
 
+            gps.Load(ini, rawCustomData);
+
 
             // ───────────────────── 
             // Delete PB Custom Data
@@ -360,15 +365,27 @@ namespace IngameScript.Domain
 
             ini.Set(AvailableColorsSection, COLORS, colors);
 
-            gc.Me.CustomData = $"[Flight Systems: {gc.Me.EntityId}]\n\n" + ini.ToString();
+            gps.Save(ini);
+
+            WriteCustomData();
 
             return iniChanged;
         }
 
+        public void FlushGps()
+        {
+            gps.Save(ini);
+            WriteCustomData();
+        }
+
         void UpdateIni(string section, string key, object newVal)
         {
-            gc.Me.CustomData = "";
             ini.Set(section, key, newVal.ToString());
+            WriteCustomData();
+        }
+
+        void WriteCustomData()
+        {
             gc.Me.CustomData = $"[Flight Systems: {gc.Me.EntityId}]\n\n" + ini.ToString();
         }
 

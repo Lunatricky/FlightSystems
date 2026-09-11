@@ -25,16 +25,16 @@ namespace IngameScript
 
             Sprites spt = new Sprites(ic);
             spt.Add(gc.GridName ?? "");
-            spt.Add("Type: " + gc.ShipType);
-            spt.Add($"Planet: {planet} | {planetRadius / 1000:F0}km");
+            spt.Add("Type: " + EnumLabels.Ship(gc.ShipType));
+            spt.Add($"Planet: {EnumLabels.PlanetKind(planet)} | {planetRadius / 1000:F0}km");
 
             StringBuilder state = new StringBuilder();
-            state.Append("State: " + command.State);
+            state.Append("State: " + EnumLabels.State(command.State));
 
             if (command.Param.AutoLandState != AutoLandState.Idle)
-                state.Append(" - " + command.Param.AutoLandState);
+                state.Append(" - " + EnumLabels.Land(command.Param.AutoLandState));
             else if (command.Param.Step != Step.Toggle)
-                state.Append(" - " + command.Param.Step);
+                state.Append(" - " + EnumLabels.StepName(command.Param.Step));
             if (command.Param.Number != 0)
                 state.Append(" - " + command.Param.Number);
 

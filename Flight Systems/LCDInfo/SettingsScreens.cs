@@ -3,7 +3,6 @@ using IngameScript.Enums;
 using IngameScript.UseCases;
 using IngameScript.Utils;
 using System;
-using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript
@@ -13,10 +12,12 @@ namespace IngameScript
         public int SelectedRow;
         public int SelectedPage = 1;
         public bool IsDefaultScreen;
-        public Dictionary<string, Vector3D> GpsList = new Dictionary<string, Vector3D>();
+        readonly GpsMenu gpsMenu = new GpsMenu();
 
         public bool ShouldClose(PlayerInput pi)
         {
+            if (gpsMenu.IsOpen)
+                return false;
             return SelectedRow == 0 && pi.Space();
         }
 
@@ -34,9 +35,9 @@ namespace IngameScript
         {
             Navigate(pi, lockInput);
 
-            if (sb.GpsMenuToggle)
+            if (gpsMenu.IsOpen)
             {
-                GpsSection(ic, gc, pi, close);
+                gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort);
                 return;
             }
 
@@ -74,7 +75,6 @@ namespace IngameScript
             else if (sb.LandToggle) SelectedRow = row++;
             else if (sb.GlideToggle) SelectedRow = row++;
             else if (sb.SBurnToggle) SelectedRow = row++;
-            else if (sb.GpsMenuToggle) SelectedRow = row++;
             else SelectedRow = 0;
 
             AddFlightRows(spt, ic, gc);
@@ -84,6 +84,16 @@ namespace IngameScript
 
         void Navigate(PlayerInput pi, Action lockInput)
         {
+            if (gpsMenu.IsOpen)
+            {
+                if (pi.Q())
+                {
+                    lockInput();
+                    gpsMenu.Back();
+                }
+                return;
+            }
+
             if (pi.W())
             {
                 lockInput();
@@ -129,20 +139,26 @@ namespace IngameScript
             Action close)
         {
             Sprites spt = new Sprites(ic);
-            int row = 1;
 
             if (pi.Space())
             {
+                int gpsRow = gc.ShipType != ShipType.Atmo ? 7 : 6;
+                if (SelectedRow == gpsRow)
+                {
+                    gpsMenu.Open();
+                    return;
+                }
+
                 close();
                 MainState ms = MainState.Idle;
+                int pick = 1;
 
-                if (SelectedRow == row++) ms = MainState.Cruise;
-                else if (gc.ShipType != ShipType.Atmo && SelectedRow == row++) ms = MainState.Orbit;
-                else if (SelectedRow == row++) ms = MainState.CNav;
-                else if (SelectedRow == row++) ms = MainState.Land;
-                else if (SelectedRow == row++) ms = MainState.Glide;
-                else if (SelectedRow == row++) ms = MainState.SBurn;
-                else if (SelectedRow == row++) ms = MainState.Gps;
+                if (SelectedRow == pick++) ms = MainState.Cruise;
+                else if (gc.ShipType != ShipType.Atmo && SelectedRow == pick++) ms = MainState.Orbit;
+                else if (SelectedRow == pick++) ms = MainState.CNav;
+                else if (SelectedRow == pick++) ms = MainState.Land;
+                else if (SelectedRow == pick++) ms = MainState.Glide;
+                else if (SelectedRow == pick++) ms = MainState.SBurn;
 
                 if (ms != MainState.Idle)
                 {
@@ -228,46 +244,6 @@ namespace IngameScript
             spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            spt.DrawTo(gc.LcdsSettings);
-        }
-
-        void GpsSection(IniContext ic, GridContext gc, PlayerInput pi, Action close)
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-
-            if (pi.Space())
-                GpsSectionEdit(ic, gc, pi, close);
-
-            int row = 1;
-            spt.Add("GPS");
-
-            foreach (KeyValuePair<string, Vector3D> kvp in GpsList)
-            {
-                spt.Add("Select", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            }
-            spt.Add("Add", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Edit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Delete", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
-            spt.DrawTo(gc.LcdsSettings);
-        }
-
-        void GpsSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action close)
-        {
-            IsDefaultScreen = false;
-            Sprites spt = new Sprites(ic);
-
-            if (pi.Space())
-                close();
-
-            int row = 1;
-            spt.Add("GPS");
-            spt.Add("Select", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Add", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Edit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Delete", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 
             spt.DrawTo(gc.LcdsSettings);
         }

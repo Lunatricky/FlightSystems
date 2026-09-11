@@ -61,30 +61,31 @@ namespace IngameScript.UseCases
 
         static MainState TryParseArgument(string input)
         {
-            MainState State;
-            try
-            {
-                State = (MainState)Enum.Parse(typeof(MainState), input, true);
-            }
-            catch
-            {
-                State = MainState.Abort;
-            }
-            return State;
+            if (input == "abort") return MainState.Abort;
+            if (input == "reload") return MainState.Reload;
+            if (input == "idle") return MainState.Idle;
+            if (input == "cruise") return MainState.Cruise;
+            if (input == "orbit") return MainState.Orbit;
+            if (input == "glide") return MainState.Glide;
+            if (input == "cnav") return MainState.CNav;
+            if (input == "land") return MainState.Land;
+            if (input == "sburn") return MainState.SBurn;
+            if (input == "gps") return MainState.Gps;
+            return MainState.Abort;
         }
 
         static Step TryParseStep(string input)
         {
-            Step mainStateEnum;
-            try
-            {
-                mainStateEnum = (Step)Enum.Parse(typeof(MainState), input, true);
-            }
-            catch
-            {
-                mainStateEnum = Step.Off;
-            }
-            return mainStateEnum;
+            string s = input.ToLowerInvariant();
+            if (s == "toggle") return Step.Toggle;
+            if (s == "on") return Step.On;
+            if (s == "off") return Step.Off;
+            if (s == "aimtogps") return Step.AimToGPS;
+            if (s == "cruise") return Step.Cruise;
+            if (s == "preclimb") return Step.Preclimb;
+            if (s == "climb") return Step.Climb;
+            if (s == "orbit") return Step.Orbit;
+            return Step.Off;
         }
     }
 }

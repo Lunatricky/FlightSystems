@@ -45,9 +45,12 @@
     <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniSnapshot.cs" />
     <Compile Include="Domain\CockpitSpriteIni.cs" />
+    <Compile Include="Domain\GpsWaypoint.cs" />
+    <Compile Include="Domain\GpsStore.cs" />
     <Compile Include="Domain\IniContext.cs" />
     <Compile Include="Enums\ShipType.cs" />
     <Compile Include="Enums\GpsTypes.cs" />
+    <Compile Include="Enums\EnumLabels.cs" />
     <Compile Include="Enums\Task.cs" />
     <Compile Include="Enums\Step.cs" />
     <Compile Include="Enums\PlanetType.cs" />
@@ -55,6 +58,7 @@
     <Compile Include="LCDInfo\Lcd1Display.cs" />
     <Compile Include="LCDInfo\Lcd2Display.cs" />
     <Compile Include="LCDInfo\SettingsScreens.cs" />
+    <Compile Include="LCDInfo\GpsMenu.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
     <Compile Include="Physics\SpeedTime.cs" />

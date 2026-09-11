@@ -64,12 +64,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            List<IMyTextSurface> Lcds = new List<IMyTextSurface>();
-            GridTerminalSystem.GetBlocksOfType(Lcds);
-            Echo("surfaces: " + Lcds.Count);
-            Echo("surfaces: " + gc.Surfaces.Count);
-
-
             if (!string.IsNullOrEmpty(argument))
             {
                 foreach (string param in ic.IniParamList)
@@ -346,7 +340,7 @@ namespace IngameScript
             if (lastRunTimeMs > MaxRuntime)
             {
                 MaxRuntime = lastRunTimeMs;
-                maxTask = task.ToString();
+                maxTask = EnumLabels.TaskName(task);
             }
 
             if (currentInstructions > MaxInstruction)

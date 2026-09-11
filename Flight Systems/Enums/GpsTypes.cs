@@ -5,6 +5,7 @@
         Planet,
         Asteroid,
         Station,
+        Base,
         PoI,
         OreVein
     }
