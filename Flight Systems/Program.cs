@@ -622,13 +622,17 @@ namespace IngameScript
                 case Step.Cruise:
                     if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
                     {
-                        AbortShipContext(gc);
                         if (pc.Gravity > 0)
                         {
-                            command.State = MainState.Land;
-                            sb.GpsToggle = false;
+                            SoftAbort(gc);
+                            sb.RestoreMode(MainState.Land);
+                            command.Param.Step = Step.On;
+                            command.Param.AutoLandState = AutoLandState.Align;
                             previousRate = PREV_RATE;
+                            command.State = MainState.Land;
                         }
+                        else
+                            AbortShipContext(gc);
                         return;
                     }
 
@@ -678,7 +682,6 @@ namespace IngameScript
                         return;
                     }
                     Climb(gc, ic.CruiseSpeed);
-                    Climb(gc, ic.CruiseSpeed);
                     break;
             }
         }
@@ -719,8 +722,7 @@ namespace IngameScript
             switch (command.Param.AutoLandState)
             {
                 case AutoLandState.Align:
-                    SoftAbort(gc);
-                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    if (AlignForVerticalLand(gc)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
@@ -754,8 +756,7 @@ namespace IngameScript
             switch (command.Param.AutoLandState)
             {
                 case AutoLandState.Align:
-                    SoftAbort(gc);
-                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
+                    if (AlignForVerticalLand(gc)) command.Param.AutoLandState = AutoLandState.Drop;
                     break;
 
                 case AutoLandState.Drop:
@@ -938,6 +939,12 @@ namespace IngameScript
         /// FLIGHT
         ////////////////////////////////////////////////////////
 
+        bool AlignForVerticalLand(GridContext gc)
+        {
+            SoftAbort(gc);
+            return GravityAlignedOverride(gc, true);
+        }
+
         bool GravityAlignedOverride(GridContext gc)
         {
             return GravityAlignedOverride(gc, false);
@@ -998,18 +1005,7 @@ namespace IngameScript
             //-----------------------------------
 
             Vector3D correction = desiredRate - angVel;
-            //-----------------------------------
-            foreach (var g in gc.Gyros)
-            {
-                MatrixD inv = MatrixD.Transpose(g.WorldMatrix);
-                Vector3D local = Vector3D.TransformNormal(correction, inv);
-
-                g.GyroOverride = true;
-
-                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -3, 3);
-                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -3, 3);
-                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -3, 3);
-            }
+            gc.ApplyGyroCorrection(correction, 3f);
 
             return false;
         }
@@ -1024,8 +1020,8 @@ namespace IngameScript
             double levelErr = levelAxis.Length();
 
             Vector3D toTarget = targetGps - gc.Controller.GetPosition(); // toward GPS
-            Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
-            Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
+            Vector3D targetHoriz = VectorHelper.Reject(toTarget, gDown);
+            Vector3D fwdHoriz = VectorHelper.Reject(shipFwd, gDown);
 
             double yawErr = 0;
             double yawSign = 0;
@@ -1063,15 +1059,7 @@ namespace IngameScript
             }
 
             Vector3D correction = desiredRate - 1.8 * angVel; // heavier damp than before
-
-            foreach (var g in gc.Gyros)
-            {
-                Vector3D local = Vector3D.TransformNormal(correction, MatrixD.Transpose(g.WorldMatrix));
-                g.GyroOverride = true;
-                g.Pitch = (float)MathHelper.Clamp(local.X / 2, -2, 2);
-                g.Yaw = (float)MathHelper.Clamp(local.Y / 2, -2, 2);
-                g.Roll = (float)MathHelper.Clamp(local.Z / 2, -2, 2);
-            }
+            gc.ApplyGyroCorrection(correction, 2f);
             return false;
         }
 

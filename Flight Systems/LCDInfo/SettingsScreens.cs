@@ -182,14 +182,14 @@ namespace IngameScript
         {
             int row = 1;
             spt.Add("Flight Systems");
-            spt.Add("Cruise control", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            AddRow(spt, ic, "Cruise control", row++);
             if (gc.ShipType != ShipType.Atmo)
-                spt.Add("Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+                AddRow(spt, ic, "Fly to orbit", row++);
+            AddRow(spt, ic, "Circumnavigate", row++);
+            AddRow(spt, ic, "Vertical land", row++);
+            AddRow(spt, ic, "Glide to surface", row++);
+            AddRow(spt, ic, "Suicide burn", row++);
+            AddRow(spt, ic, "Fly to GPS", row++);
         }
 
         void ToggleSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
@@ -239,13 +239,18 @@ namespace IngameScript
 
             row = 1;
             spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            AddRow(spt, ic, $"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", row++);
+            AddRow(spt, ic, $"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", row++);
+            AddRow(spt, ic, $"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", row++);
+            AddRow(spt, ic, $"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", row++);
+            AddRow(spt, ic, $"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", row++);
 
             spt.DrawTo(gc.LcdsSettings);
+        }
+
+        void AddRow(Sprites spt, IniContext ic, string label, int row)
+        {
+            spt.Add(label, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
         }
 
         Color RowColor(int row, Color color)

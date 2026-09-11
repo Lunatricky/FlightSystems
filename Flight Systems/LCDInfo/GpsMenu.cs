@@ -124,7 +124,7 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
             spt.Add("GPS");
 
-            int window = 6;
+            int window = 12;
             int start = row - 1 - window / 2;
             if (start < 0) start = 0;
             if (start > total - window) start = total - window;
