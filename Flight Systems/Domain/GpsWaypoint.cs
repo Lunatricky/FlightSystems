@@ -94,13 +94,14 @@ namespace IngameScript.Domain
             wp.Station = EnumLabels.ParseStation(ini.Get(section, "Station").ToString(""));
 
             string gps = ini.Get(section, "GPS").ToString("");
+            string gpsName;
             Vector3D fromGps;
-            if (UtilsHelpder.TryParseGPS(gps, out fromGps))
+            if (UtilsHelpder.TryParseGPS(gps, out gpsName, out fromGps))
             {
                 if (wp.Position.LengthSquared() < 1)
                     wp.Position = fromGps;
                 if (string.IsNullOrEmpty(wp.Name))
-                    wp.Name = UtilsHelpder.GpsName(gps);
+                    wp.Name = gpsName;
             }
 
             if (string.IsNullOrEmpty(wp.Name))

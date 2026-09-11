@@ -144,15 +144,16 @@ namespace IngameScript.Domain
                     continue;
 
                 string gps = gpsAt == 0 ? line : line.Substring(gpsAt);
+                string gpsName;
                 Vector3D pos;
-                if (!UtilsHelpder.TryParseGPS(gps, out pos))
+                if (!UtilsHelpder.TryParseGPS(gps, out gpsName, out pos))
                     continue;
                 if (ContainsPosition(pos))
                     continue;
 
                 GpsWaypoint wp = new GpsWaypoint();
                 wp.Position = pos;
-                wp.Name = UtilsHelpder.GpsName(gps);
+                wp.Name = gpsName;
                 wp.Location = LocationType.PoI;
                 if (string.IsNullOrEmpty(wp.Name))
                     wp.Name = wp.BuildName();

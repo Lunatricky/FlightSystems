@@ -6,8 +6,9 @@ namespace IngameScript.Utils
     {
 
         // GPS parser for "GPS:name:X:Y:Z:color:" format
-        public static bool TryParseGPS(string gps, out Vector3D v)
+        public static bool TryParseGPS(string gps, out string name, out Vector3D v)
         {
+            name = "";
             v = new Vector3D();
             if (string.IsNullOrWhiteSpace(gps)) return false;
             if (!gps.StartsWith("GPS:")) return false;
@@ -20,16 +21,22 @@ namespace IngameScript.Utils
             if (!double.TryParse(parts[3], out y)) return false;
             if (!double.TryParse(parts[4], out z)) return false;
 
+            name = parts[1];
             v = new Vector3D(x, y, z);
             return true;
         }
 
+        public static bool TryParseGPS(string gps, out Vector3D v)
+        {
+            string name;
+            return TryParseGPS(gps, out name, out v);
+        }
+
         public static string GpsName(string gps)
         {
-            if (string.IsNullOrWhiteSpace(gps) || !gps.StartsWith("GPS:"))
-                return "";
-            string[] parts = gps.Split(':');
-            return parts.Length >= 2 ? parts[1] : "";
+            string name;
+            Vector3D v;
+            return TryParseGPS(gps, out name, out v) ? name : "";
         }
 
         public static string FormatGps(string name, Vector3D pos)
@@ -39,14 +46,23 @@ namespace IngameScript.Utils
             return "GPS:" + name + ":" + pos.X + ":" + pos.Y + ":" + pos.Z + ":#FF75C9F1:";
         }
 
+        public static string FormatFillEta(double filled, double capacity, double rate)
+        {
+            if (rate > 0)
+                return FormatTime((capacity - filled) / rate) + " /\\";
+            if (rate < 0)
+                return FormatTime(filled / -rate) + " \\/";
+            return "";
+        }
+
         public static string FormatTime(double time)
         {
             if (double.IsInfinity(time) || time < 0)
                 return "--";
 
             int intTime = (int)time;
-            int days = intTime / 3600 / 24;
-            int hours = (intTime % 24) / 3600;
+            int days = intTime / 86400;
+            int hours = (intTime / 3600) % 24;
             int minutes = (intTime % 3600) / 60;
             int seconds = intTime % 60;
 
