@@ -33,6 +33,20 @@ namespace IngameScript.Domain
             SetModeState(modeName, !currentState);
         }
 
+        public void RestoreMode(MainState modeName)
+        {
+            CruiseToggle = false;
+            OrbitToggle = false;
+            GlideToggle = false;
+            CNavToggle = false;
+            LandToggle = false;
+            SBurnToggle = false;
+            GpsToggle = false;
+
+            if (modeName != MainState.Idle && modeName != MainState.Abort && modeName != MainState.Reload)
+                SetModeState(modeName, true);
+        }
+
         public bool GetModeState(MainState modeName)
         {
             switch (modeName)

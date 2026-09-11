@@ -7,7 +7,7 @@
         Station,
         Base,
         PoI,
-        OreVein
+        Vein
     }
 
     enum Region

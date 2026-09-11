@@ -57,9 +57,16 @@ namespace IngameScript
             command = new Command();
             settingsHud = new SettingsScreens();
 
-            CheckIni();
+            CheckIni(true);
+            ic.ApplyCommand(command);
+            sb.RestoreMode(command.State);
             
             if (gc.LcdsSettings.Count > 0) settingsHud.FlightSystemIdle(ic, gc, sb);
+        }
+
+        public void Save()
+        {
+            ic.PersistCommand(command);
         }
 
         public void Main(string argument)
@@ -259,11 +266,14 @@ namespace IngameScript
             return false;
         }
 
-        bool CheckIni()
+        bool CheckIni(bool fromCtor = false)
         {
             tickCount = 0;
 
-            bool hasIniChanged = ic.ParseIni();
+            if (!fromCtor)
+                ic.CaptureCommand(command);
+
+            bool hasIniChanged = ic.ParseIni(fromCtor);
 
             if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
             {
@@ -287,6 +297,9 @@ namespace IngameScript
                 gc.ReloadLCDs();
                 return true;
             }
+
+            if (gc.Controller != null && !gc.Controller.Closed)
+                ic.Gps.LoadFromBlock(gc.Controller);
 
             return false;
         }
@@ -791,6 +804,9 @@ namespace IngameScript
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
+
+            if (gc.Controller != null && !gc.Controller.Closed)
+                ic.Gps.LoadFromBlock(gc.Controller);
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command

@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using IngameScript.Enums;
+using IngameScript.UseCases;
+using Sandbox.ModAPI.Ingame;
+using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -12,6 +15,23 @@ namespace IngameScript.Domain
         readonly GpsStore gps = new GpsStore();
 
         bool iniChanged;
+
+        const string CommandSection = "Command";
+        const string CMD_STATE = "State";
+        const string CMD_STEP = "Step";
+        const string CMD_LAND = "Land";
+        const string CMD_NUMBER = "Number";
+        const string CMD_X = "Target X";
+        const string CMD_Y = "Target Y";
+        const string CMD_Z = "Target Z";
+
+        string cmdState = "Idle";
+        string cmdStep = "Toggle";
+        string cmdLand = "Idle";
+        double cmdNumber;
+        double cmdX;
+        double cmdY;
+        double cmdZ;
 
         //ToggleSection
         public const string ToggleSection = "Toggles";
@@ -248,13 +268,12 @@ namespace IngameScript.Domain
         // ───────────────────────────────────────
         // Load config from CustomData (INI style)
         // ───────────────────────────────────────      
-        public bool ParseIni()
+        public bool ParseIni(bool loadCommand)
         {
             ini.Clear();
             iniChanged = false;
 
             if (!ini.TryParse(gc.Me.CustomData)) return IniChanged;
-            string rawCustomData = gc.Me.CustomData;
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
@@ -314,7 +333,8 @@ namespace IngameScript.Domain
             spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(ColorMap.GetStringFromColor(SpriteBackgroundColor));
             spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(ColorMap.GetStringFromColor(SpriteFontColor));
 
-            gps.Load(ini, rawCustomData);
+            if (loadCommand)
+                ReadCommand();
 
 
             // ───────────────────── 
@@ -365,17 +385,71 @@ namespace IngameScript.Domain
 
             ini.Set(AvailableColorsSection, COLORS, colors);
 
-            gps.Save(ini);
+            WriteCommand();
 
             WriteCustomData();
 
             return iniChanged;
         }
 
-        public void FlushGps()
+        public void FlushGps(IMyTerminalBlock block)
         {
-            gps.Save(ini);
+            gps.SaveToBlock(block);
+        }
+
+        internal void CaptureCommand(Command command)
+        {
+            if (command == null)
+                return;
+            cmdState = EnumLabels.State(command.State);
+            cmdStep = EnumLabels.StepName(command.Param.Step);
+            cmdLand = EnumLabels.Land(command.Param.AutoLandState);
+            cmdNumber = command.Param.Number;
+            cmdX = command.Param.TargetCoordinates.X;
+            cmdY = command.Param.TargetCoordinates.Y;
+            cmdZ = command.Param.TargetCoordinates.Z;
+        }
+
+        internal void ApplyCommand(Command command)
+        {
+            if (command == null)
+                return;
+            command.State = EnumLabels.ParseState(cmdState);
+            command.Param.Step = EnumLabels.ParseStep(cmdStep);
+            command.Param.AutoLandState = EnumLabels.ParseLand(cmdLand);
+            command.Param.Number = cmdNumber;
+            command.Param.TargetCoordinates = new Vector3D(cmdX, cmdY, cmdZ);
+            if (cmdX != 0 || cmdY != 0 || cmdZ != 0)
+                command.Param.Type = ParamType.Vector3D;
+        }
+
+        internal void PersistCommand(Command command)
+        {
+            CaptureCommand(command);
+            WriteCommand();
             WriteCustomData();
+        }
+
+        void ReadCommand()
+        {
+            cmdState = ini.Get(CommandSection, CMD_STATE).ToString("Idle");
+            cmdStep = ini.Get(CommandSection, CMD_STEP).ToString("Toggle");
+            cmdLand = ini.Get(CommandSection, CMD_LAND).ToString("Idle");
+            cmdNumber = ini.Get(CommandSection, CMD_NUMBER).ToDouble(0);
+            cmdX = ini.Get(CommandSection, CMD_X).ToDouble(0);
+            cmdY = ini.Get(CommandSection, CMD_Y).ToDouble(0);
+            cmdZ = ini.Get(CommandSection, CMD_Z).ToDouble(0);
+        }
+
+        void WriteCommand()
+        {
+            ini.Set(CommandSection, CMD_STATE, cmdState);
+            ini.Set(CommandSection, CMD_STEP, cmdStep);
+            ini.Set(CommandSection, CMD_LAND, cmdLand);
+            ini.Set(CommandSection, CMD_NUMBER, cmdNumber);
+            ini.Set(CommandSection, CMD_X, cmdX);
+            ini.Set(CommandSection, CMD_Y, cmdY);
+            ini.Set(CommandSection, CMD_Z, cmdZ);
         }
 
         void UpdateIni(string section, string key, object newVal)

@@ -44,21 +44,13 @@ namespace IngameScript.Domain
 
         public string BuildName()
         {
-            switch (Location)
-            {
-                case LocationType.OreVein:
-                    return Join(PlanetLabel(), EnumLabels.Ore(Ore));
-                case LocationType.Planet:
-                    return Join(PlanetLabel(), EnumLabels.RegionName(Region));
-                case LocationType.Asteroid:
-                    return Region == Region.Void ? "Asteroid" : Join("Asteroid", EnumLabels.RegionName(Region));
-                case LocationType.Station:
-                    return Join(PlanetLabel(), EnumLabels.Station(Station), EnumLabels.FactionName(Faction));
-                case LocationType.PoI:
-                    return Join(PlanetLabel(), "PoI", EnumLabels.RegionName(Region));
-                default:
-                    return "GPS";
-            }
+            return Join(
+                KindLabel(),
+                PlanetLabel(),
+                EnumLabels.RegionName(Region),
+                EnumLabels.Ore(Ore),
+                EnumLabels.Station(Station),
+                EnumLabels.FactionName(Faction));
         }
 
         public string KindLabel()
@@ -121,14 +113,16 @@ namespace IngameScript.Domain
             return EnumLabels.Planet(Planet);
         }
 
-        static string Join(string a, string b, string c = "")
+        static string Join(params string[] parts)
         {
-            string s = a ?? "";
-            if (!string.IsNullOrEmpty(b))
-                s = string.IsNullOrEmpty(s) ? b : s + " " + b;
-            if (!string.IsNullOrEmpty(c))
-                s = string.IsNullOrEmpty(s) ? c : s + " " + c;
-            return string.IsNullOrEmpty(s) ? "GPS" : s;
+            string s = "";
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (string.IsNullOrEmpty(parts[i]))
+                    continue;
+                s = s.Length == 0 ? parts[i] : s + " " + parts[i];
+            }
+            return s.Length == 0 ? "GPS" : s;
         }
     }
 }

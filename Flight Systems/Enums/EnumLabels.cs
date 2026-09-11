@@ -91,9 +91,9 @@ namespace IngameScript.Enums
             {
                 case LocationType.Planet: return "Planet";
                 case LocationType.Asteroid: return "Asteroid";
-                case LocationType.Station: return "Station/Base";
+                case LocationType.Station: return "Station";
                 case LocationType.Base: return "Base";
-                case LocationType.OreVein: return "Ore";
+                case LocationType.Vein: return "Ore";
                 default: return "PoI";
             }
         }
@@ -160,13 +160,49 @@ namespace IngameScript.Enums
             }
         }
 
+        public static MainState ParseState(string s)
+        {
+            if (s == "Abort") return MainState.Abort;
+            if (s == "Reload") return MainState.Reload;
+            if (s == "Cruise") return MainState.Cruise;
+            if (s == "Orbit") return MainState.Orbit;
+            if (s == "Glide") return MainState.Glide;
+            if (s == "CNav") return MainState.CNav;
+            if (s == "Land") return MainState.Land;
+            if (s == "SBurn") return MainState.SBurn;
+            if (s == "Gps") return MainState.Gps;
+            return MainState.Idle;
+        }
+
+        public static Step ParseStep(string s)
+        {
+            if (s == "On") return Step.On;
+            if (s == "Off") return Step.Off;
+            if (s == "AimToGPS") return Step.AimToGPS;
+            if (s == "Cruise") return Step.Cruise;
+            if (s == "Preclimb") return Step.Preclimb;
+            if (s == "Climb") return Step.Climb;
+            if (s == "Orbit") return Step.Orbit;
+            return Step.Toggle;
+        }
+
+        public static AutoLandState ParseLand(string s)
+        {
+            if (s == "Abort") return AutoLandState.Abort;
+            if (s == "Align") return AutoLandState.Align;
+            if (s == "Drop") return AutoLandState.Drop;
+            if (s == "Cushion") return AutoLandState.Cushion;
+            if (s == "LockGear") return AutoLandState.LockGear;
+            return AutoLandState.Idle;
+        }
+
         public static LocationType ParseLocation(string s)
         {
             if (s == "Planet") return LocationType.Planet;
             if (s == "Asteroid") return LocationType.Asteroid;
-            if (s == "Station" || s == "Station/Base") return LocationType.Station;
+            if (s == "Station") return LocationType.Station;
             if (s == "Base") return LocationType.Base;
-            if (s == "Ore" || s == "OreVein") return LocationType.OreVein;
+            if (s == "Ore") return LocationType.Vein;
             return LocationType.PoI;
         }
 

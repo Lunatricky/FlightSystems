@@ -240,7 +240,7 @@ namespace IngameScript
         void DrawAddFields(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Action lockInput)
         {
             int fieldCount = FieldCount(draft.Location);
-            int extra = editing ? 3 : 2;
+            int extra = 2;
             int total = fieldCount + extra;
             Clamp(1, total);
 
@@ -258,19 +258,15 @@ namespace IngameScript
                     view = GpsView.AddKind;
                     row = 1;
                 }
-                else if (editing && row == total - 1)
-                    SaveDraft(gc, ic, store, true);
                 else if (row == fieldCount + 1)
-                    SaveDraft(gc, ic, store, false);
+                    SaveDraft(gc, ic, store, editing);
             }
 
             Sprites spt = new Sprites(ic);
             spt.Add(editing ? "Edit GPS" : "Add GPS");
             int r = 1;
             AddFieldRows(spt, ic, draft, ref r);
-            spt.Add("Save here", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            if (editing)
-                spt.Add("Save tags", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
+            spt.Add("Save", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsSettings);
         }
@@ -291,7 +287,7 @@ namespace IngameScript
                 if (row == 1)
                 {
                     store.RemoveAt(selectedIndex);
-                    ic.FlushGps();
+                    ic.FlushGps(gc.Controller);
                     view = GpsView.List;
                     row = 1;
                 }
@@ -334,7 +330,7 @@ namespace IngameScript
             else
                 store.Add(draft);
 
-            ic.FlushGps();
+            ic.FlushGps(gc.Controller);
             view = GpsView.List;
             row = 1;
             editing = false;
@@ -347,7 +343,7 @@ namespace IngameScript
                 case LocationType.Planet: return 2;
                 case LocationType.Asteroid: return 1;
                 case LocationType.Station: return 3;
-                case LocationType.OreVein: return 3;
+                case LocationType.Vein: return 3;
                 default: return 2;
             }
         }
@@ -368,7 +364,7 @@ namespace IngameScript
                     Field(spt, ic, ref r, "Station: " + EnumLabels.Station(wp.Station));
                     Field(spt, ic, ref r, "Faction: " + EnumLabels.FactionName(wp.Faction));
                     break;
-                case LocationType.OreVein:
+                case LocationType.Vein:
                     Field(spt, ic, ref r, "Planet: " + EnumLabels.Planet(wp.Planet));
                     Field(spt, ic, ref r, "Ore: " + EnumLabels.Ore(wp.Ore));
                     Field(spt, ic, ref r, "Region: " + EnumLabels.RegionName(wp.Region));
@@ -402,7 +398,7 @@ namespace IngameScript
                     else if (fieldRow == 2) wp.Station = CycleEnum(wp.Station, next);
                     else if (fieldRow == 3) wp.Faction = CycleEnum(wp.Faction, next);
                     break;
-                case LocationType.OreVein:
+                case LocationType.Vein:
                     if (fieldRow == 1) wp.Planet = CycleEnum(wp.Planet, next);
                     else if (fieldRow == 2) wp.Ore = CycleEnum(wp.Ore, next);
                     else if (fieldRow == 3) wp.Region = CycleEnum(wp.Region, next);

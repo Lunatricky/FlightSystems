@@ -1,5 +1,6 @@
 using IngameScript.Enums;
 using IngameScript.Utils;
+using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
@@ -44,6 +45,26 @@ namespace IngameScript.Domain
                 items[i].Write(ini, Section + "." + (i + 1));
         }
 
+        public void LoadFromBlock(IMyTerminalBlock block)
+        {
+            if (block == null)
+                return;
+            MyIni blockIni = new MyIni();
+            string data = block.CustomData ?? "";
+            blockIni.TryParse(data);
+            Load(blockIni, data);
+        }
+
+        public void SaveToBlock(IMyTerminalBlock block)
+        {
+            if (block == null)
+                return;
+            MyIni blockIni = new MyIni();
+            blockIni.TryParse(block.CustomData ?? "");
+            Save(blockIni);
+            block.CustomData = blockIni.ToString();
+        }
+
         public void Add(GpsWaypoint wp)
         {
             if (wp == null)
@@ -60,9 +81,7 @@ namespace IngameScript.Domain
                 return;
             if (string.IsNullOrEmpty(wp.Name))
                 wp.Name = wp.BuildName();
-            string keep = items[index].Name;
-            if (wp.Name != keep)
-                wp.Name = UniqueName(wp.Name);
+            wp.Name = UniqueName(wp.Name, index);
             items[index] = wp;
         }
 
@@ -73,22 +92,24 @@ namespace IngameScript.Domain
             items.RemoveAt(index);
         }
 
-        public string UniqueName(string baseName)
+        public string UniqueName(string baseName, int ignoreIndex = -1)
         {
             if (string.IsNullOrEmpty(baseName))
                 baseName = "GPS";
-            if (!ContainsName(baseName))
+            if (!ContainsName(baseName, ignoreIndex))
                 return baseName;
             int n = 2;
-            while (ContainsName(baseName + " " + n))
+            while (ContainsName(baseName + " " + n, ignoreIndex))
                 n++;
             return baseName + " " + n;
         }
 
-        bool ContainsName(string name)
+        bool ContainsName(string name, int ignoreIndex = -1)
         {
             for (int i = 0; i < items.Count; i++)
             {
+                if (i == ignoreIndex)
+                    continue;
                 if (items[i].Name == name)
                     return true;
             }
