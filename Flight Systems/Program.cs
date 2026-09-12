@@ -6,7 +6,6 @@ using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using VRageMath;
 
@@ -323,7 +322,9 @@ namespace IngameScript
                 }
             }
 
-            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
+            if (gc.ForwardThrusters.Count == 0)
+                return;
+            if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
             else gc.ResetThrusters(gc.BreakingThrusters);
         }
         
