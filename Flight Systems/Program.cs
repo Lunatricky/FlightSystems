@@ -146,7 +146,7 @@ namespace IngameScript
 
                 settingsHud.Handle(
                     pi, gc, ic, sb, command, settingsToggle,
-                    () => AbortShipContext(gc),
+                    () => AbortFlight(gc),
                     () => SoftAbort(gc),
                     () =>
                     {
@@ -189,7 +189,7 @@ namespace IngameScript
 
                 if (lastDockMode != isDockMode)
                 {
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     DockToggle(gc, isDockMode, anyConnected);
                     lastDockMode = isDockMode;
                 }
@@ -283,7 +283,7 @@ namespace IngameScript
             {
                 if (!ic.AllowDockMode)
                 {
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     DockToggle(gc, false);
                 }
                 ReloadGridContext(gc, ic);
@@ -413,7 +413,7 @@ namespace IngameScript
             // Stop cruise control when leaves gravity well
             if (sb.StopCruiseWhenOutOfGrav && sb.LastCheckIsOnNatGrav && pc.Gravity == 0.0)
             {
-                AbortShipContext(gc);
+                AbortFlight(gc);
                 return;
             }
             else sb.LastCheckIsOnNatGrav = pc.Gravity > 0.0;
@@ -424,7 +424,7 @@ namespace IngameScript
                     ReloadGridContext(gc, ic);
                     break;
                 case MainState.Abort:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
                 case MainState.Cruise:
                     gc.Controller.DampenersOverride = true;
@@ -443,7 +443,7 @@ namespace IngameScript
                     {
                         gc.Controller.DampenersOverride = true;
                         CircumNavigateStateSwitch(gc, ic, command);
-                    } else AbortShipContext(gc);
+                    } else AbortFlight(gc);
                     break;
                 case MainState.Gps: // Fly to GPS
                     gc.Controller.DampenersOverride = true;
@@ -452,7 +452,7 @@ namespace IngameScript
                 case MainState.Land: // Auto Land
                     if (pc.Gravity == 0)
                     {
-                        AbortShipContext(gc);
+                        AbortFlight(gc);
                         return;
                     }
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
@@ -492,7 +492,7 @@ namespace IngameScript
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
             }
         }
@@ -514,7 +514,7 @@ namespace IngameScript
                     }
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
@@ -542,12 +542,12 @@ namespace IngameScript
                     CruiseControl(CruiseSpeed, timeSinceLastRun);
                     if (pc.Gravity > 0 && pc.GroundLevel < ic.SafeAltitude + pc.StopYDist)
                     {
-                        AbortShipContext(gc);
+                        AbortFlight(gc);
                         command.State = MainState.Land;
                     }
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
             }
         }
@@ -575,7 +575,7 @@ namespace IngameScript
                     }
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
@@ -639,6 +639,8 @@ namespace IngameScript
                     {
                         if (pc.Gravity > 0)
                         {
+                            // SoftAbort this tick + RestoreMode(Land) + Step.On + Align.
+                            // AbortFlight() would Empty to Toggle and skip AutoLand this pass.
                             SoftAbort(gc);
                             sb.RestoreMode(MainState.Land);
                             command.Param.Step = Step.On;
@@ -647,7 +649,7 @@ namespace IngameScript
                             command.State = MainState.Land;
                         }
                         else
-                            AbortShipContext(gc);
+                            AbortFlight(gc);
                         return;
                     }
 
@@ -680,7 +682,7 @@ namespace IngameScript
                     break;
 
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
 
                 case Step.Preclimb:
@@ -739,7 +741,7 @@ namespace IngameScript
                     AutoLandSwitch(gc, command);
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
             }
         }
@@ -757,7 +759,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) AbortShipContext(gc);
+                    if (TryLock(gc)) AbortFlight(gc);
                     break;
             }
         }
@@ -773,7 +775,7 @@ namespace IngameScript
                     SBurnSwitch(gc, command);
                     break;
                 case Step.Off:
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     break;
             }
         }
@@ -796,7 +798,7 @@ namespace IngameScript
                         command.State = MainState.Land;
                         command.Param.AutoLandState = AutoLandState.Drop;
                     }
-                    else if (TryLock(gc)) AbortShipContext(gc);
+                    else if (TryLock(gc)) AbortFlight(gc);
                     break;
             }
         }
@@ -940,7 +942,7 @@ namespace IngameScript
             inputLock = 0;
         }
 
-        void AbortShipContext(GridContext gc)
+        void AbortFlight(GridContext gc)
         {
             sb = new SystemBools();
 
@@ -1021,16 +1023,9 @@ namespace IngameScript
 
             Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
 
-            //-----------------------------------
-            // ⭐ ANGULAR RATE LIMIT
-            //-----------------------------------
-
+            // desiredUp is +g so ship Up settles on -g (antipode). Vacuum GPS aim
+            // passes shipPos - target into this helper on purpose. Horizon yaw is AimHorizonToGps.
             Vector3D desiredRate = axis * Math.Min(angle * RESPONSE, maxRate);
-
-            //-----------------------------------
-            // PD ShipContext.Controller on angular velocity
-            //-----------------------------------
-
             Vector3D correction = desiredRate - angVel;
             gc.ApplyGyroCorrection(correction, 3f);
 
@@ -1046,7 +1041,7 @@ namespace IngameScript
             Vector3D levelAxis = shipUp.Cross(gDown);
             double levelErr = levelAxis.Length();
 
-            Vector3D toTarget = targetGps - gc.Controller.GetPosition(); // toward GPS
+            Vector3D toTarget = targetGps - gc.Controller.GetPosition(); // toward GPS, not antipode
             Vector3D targetHoriz = VectorHelper.Reject(toTarget, gDown);
             Vector3D fwdHoriz = VectorHelper.Reject(shipFwd, gDown);
 
@@ -1130,7 +1125,7 @@ namespace IngameScript
             if (gc.ShipType != ShipType.Atmo)
                 if (pc.NetDecel - 1 < 0)
                 {
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     this.command.State = MainState.Orbit;
                     return false;
                 }
@@ -1144,7 +1139,7 @@ namespace IngameScript
             if (gc.ShipType != ShipType.Atmo)
                 if (pc.NetDecel - 0.5 < 0)
                 {
-                    AbortShipContext(gc);
+                    AbortFlight(gc);
                     this.command.State = MainState.Orbit;
                     return false;
                 }

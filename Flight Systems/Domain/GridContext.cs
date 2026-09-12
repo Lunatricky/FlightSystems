@@ -10,7 +10,7 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    public class GridContext : GridManager
+    public class GridContext
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
@@ -420,12 +420,13 @@ namespace IngameScript.Domain
 
             ContentType prev = s.ContentType;
 
-            // panel / text mode
+            // Paint is every surface except [FS_ignore] (cockpit indices past 2 included).
+            // Sprites only bind tagged LCD/cockpit slots. Cockpits often ignore panel
+            // colors until script colors are set. Enable IMyTextPanel only.
             s.ContentType = ContentType.TEXT_AND_IMAGE;
             s.BackgroundColor = bg;
             s.FontColor = fg;
 
-            // cockpit + sprite / script mode (this is what cockpits actually show)
             s.ContentType = ContentType.SCRIPT;
             s.ScriptBackgroundColor = bg;
             s.ScriptForegroundColor = fg;
@@ -548,7 +549,6 @@ namespace IngameScript.Domain
             GridTS.GetBlocksOfType(OverrideBlocks, block =>
                 block.IsSameConstructAs(Me) && (!block.CustomData.Contains("Flight Systems")) &&
                 (block.CustomName.Contains(overrideBlockTag) || block.CustomData.Contains(overrideBlockTag))
-                //TODO improve this!
             );
             return OverrideBlocks;
         }

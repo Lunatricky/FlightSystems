@@ -260,7 +260,8 @@ namespace IngameScript.Physics
 
             Vector3D dir = Vector3D.Normalize(decelDir);
             Vector3D gDir = Vector3D.Normalize(NaturalGravity);
-            // +dot: gravity helps stop along this axis; -dot: gravity fights (up axis)
+            // Gravity only along this decel axis. Do not subtract full g from Z brake.
+            // +dot: gravity helps stop; -dot: gravity fights (up axis).
             double gravityAlongDecel = Vector3D.Dot(gDir, dir) * Gravity;
 
             return thrustAccel + gravityAlongDecel;

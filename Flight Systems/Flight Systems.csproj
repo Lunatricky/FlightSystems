@@ -42,7 +42,6 @@
   <Import Project="MDK/MDK.paths.props" Condition="exists('MDK/MDK.paths.props')" />
   <ItemGroup>
     <Compile Include="Domain\SystemBools.cs" />
-    <Compile Include="Domain\GridManager.cs" />
     <Compile Include="Domain\IniSnapshot.cs" />
     <Compile Include="Domain\CockpitSpriteIni.cs" />
     <Compile Include="Domain\GpsWaypoint.cs" />
