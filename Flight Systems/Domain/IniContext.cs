@@ -46,7 +46,7 @@ namespace IngameScript.Domain
         public const string TRANSPARENTLCD = "Keep LCD Transparency";
 
         bool allowFlightSystems = true;
-        bool analogThrotle = false;
+        bool analogThrottle = false;
         bool allowLowFuelLand = false;
         bool allowDockMode = false;
         bool controlAntennas = false;
@@ -188,13 +188,13 @@ namespace IngameScript.Domain
             }
         }
 
-        public bool AnalogThrotle
+        public bool AnalogThrottle
         {
-            get {return analogThrotle;}
+            get {return analogThrottle;}
             set 
             {
-                analogThrotle = value;
-                UpdateIni(ToggleSection, ANALOG_THROTLE, analogThrotle);
+                analogThrottle = value;
+                UpdateIni(ToggleSection, ANALOG_THROTLE, analogThrottle);
             }
         }
 
@@ -292,7 +292,7 @@ namespace IngameScript.Domain
 
             //ToggleSection
             allowFlightSystems = ini.Get(ToggleSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
-            analogThrotle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
+            analogThrottle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrottle);
             allowLowFuelLand = ini.Get(ToggleSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
             allowDockMode = ini.Get(ToggleSection, DOCK_MODE).ToBoolean(AllowDockMode);
             controlAntennas = ini.Get(ToggleSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
@@ -349,7 +349,7 @@ namespace IngameScript.Domain
 
             //ToggleSection
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, FLIGHT_SYSTEMS, AllowFlightSystems);
-            iniChanged |= ReadAndDetectChange(ini, ToggleSection, ANALOG_THROTLE, AnalogThrotle);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, ANALOG_THROTLE, AnalogThrottle);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, LOW_FUEL_LAND, AllowLowFuelLand);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, DOCK_MODE, AllowDockMode);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, CONTROL_ANTENNAS, ControlAntennas);

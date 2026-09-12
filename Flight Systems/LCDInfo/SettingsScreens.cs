@@ -202,7 +202,7 @@ namespace IngameScript
             {
                 lockInput();
                 if (SelectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
-                else if (SelectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
+                else if (SelectedRow == row++) ic.AnalogThrottle = !ic.AnalogThrottle;
                 else if (SelectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
                 else if (SelectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
                 else if (SelectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
@@ -214,7 +214,7 @@ namespace IngameScript
             row = 1;
             spt.Add($"{IniContext.ToggleSection}");
             spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(SelectedRow == row++, ic.AllowFlightSystems), Color.Black);
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(SelectedRow == row++, ic.AnalogThrotle), Color.Black);
+            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(SelectedRow == row++, ic.AnalogThrottle), Color.Black);
             spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(SelectedRow == row++, ic.AllowLowFuelLand), Color.Black);
             spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(SelectedRow == row++, ic.AllowDockMode), Color.Black);
             spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(SelectedRow == row++, ic.ControlAntennas), Color.Black);

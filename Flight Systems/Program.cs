@@ -118,7 +118,7 @@ namespace IngameScript
 
                     if (settingsToggle)
                     {
-                        pi.OcupiedController(gc.Controllers);
+                        pi.OccupiedController(gc.Controllers);
                         pi.PrepareController();
                     }
                     else pi.ResetControllers(gc.Controllers);
@@ -156,7 +156,7 @@ namespace IngameScript
                     LockInput);
             }
 
-            if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
+            if (!settingsToggle && ic.AnalogThrottle && command.State == MainState.Idle)
             {
                 AnalogThrust();
             }
@@ -305,7 +305,7 @@ namespace IngameScript
 
         void AnalogThrust()
         {
-            pi.OcupiedController(gc.Controllers);
+            pi.OccupiedController(gc.Controllers);
             if (pi.W())
             {
                 foreach (IMyThrust t in gc.ForwardThrusters)
@@ -324,8 +324,8 @@ namespace IngameScript
 
             if (gc.ForwardThrusters.Count == 0)
                 return;
-            if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
-            else gc.ResetThrusters(gc.BreakingThrusters);
+            if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BrakingThrusters);
+            else gc.ResetThrusters(gc.BrakingThrusters);
         }
         
         double TickCounter;
@@ -336,7 +336,7 @@ namespace IngameScript
         int SumCounter;
         string maxTask;
 
-        private String GetRuntimeInfo()
+        private string GetRuntimeInfo()
         {
             if (++TickCounter % 200 == 1)
             {
@@ -914,13 +914,13 @@ namespace IngameScript
                 // Apply thrusters: enable brake thrusters only when brake significant
                 bool useBrakes = currentBrake > 1e-4;
 
-                foreach (var bt in gc.BreakingThrusters)
+                foreach (var bt in gc.BrakingThrusters)
                 {
                     bt.Enabled = useBrakes;
                     bt.ThrustOverridePercentage = (float)currentBrake;
                 }
             }
-            else gc.KillThrusters(gc.BreakingThrusters);
+            else gc.KillThrusters(gc.BrakingThrusters);
 
             // Apply forward thrusters
             bool useForward = currentOverride > 1e-4;

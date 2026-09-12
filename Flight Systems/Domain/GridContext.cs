@@ -50,7 +50,7 @@ namespace IngameScript.Domain
         List<IMyShipController> cockpits = new List<IMyShipController>();
 
         List<IMyThrust> thrusters = new List<IMyThrust>();
-        List<IMyThrust> breakingThrusters = new List<IMyThrust>();
+        List<IMyThrust> brakingThrusters = new List<IMyThrust>();
         List<IMyThrust> forwardThrusters = new List<IMyThrust>();
         List<IMyThrust> upwardThrusters = new List<IMyThrust>(); 
         List<IMyThrust> ionThrusters = new List<IMyThrust>();
@@ -230,7 +230,7 @@ namespace IngameScript.Domain
         void ReloadThrusters()
         {
             ForwardThrusters.Clear();
-            BreakingThrusters.Clear();
+            BrakingThrusters.Clear();
             UpwardThrusters.Clear();
 
             foreach (var thruster in Thrusters)
@@ -241,7 +241,7 @@ namespace IngameScript.Domain
 
                 // Thrusters that push the ship backward
                 else if (thruster.Orientation.Forward == Controller.Orientation.Forward)
-                    BreakingThrusters.Add(thruster);
+                    BrakingThrusters.Add(thruster);
 
                 // Thrusters that push the ship upwards
                 else if (thruster.Orientation.Forward == Base6Directions.GetOppositeDirection(Controller.Orientation.Up))
@@ -706,7 +706,7 @@ namespace IngameScript.Domain
         public List<IMyShipController> Controllers => controllers;
         public List<IMyShipController> Cockpits => cockpits;
         public List<IMyThrust> Thrusters => thrusters;
-        public List<IMyThrust> BreakingThrusters => breakingThrusters;
+        public List<IMyThrust> BrakingThrusters => brakingThrusters;
         public List<IMyThrust> ForwardThrusters => forwardThrusters;
         public List<IMyThrust> UpwardThrusters => upwardThrusters;
         public List<IMyThrust> IonThrusters => ionThrusters;

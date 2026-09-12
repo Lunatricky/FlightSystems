@@ -85,7 +85,7 @@ namespace IngameScript.Physics
             rightVelocity = Vector3D.Dot(Velocity, WorldMatrix.Right);
             upVelocity = Vector3D.Dot(Velocity, WorldMatrix.Up);
 
-            maxZDecel = GetMaxDecel(gc.BreakingThrusters, WorldMatrix.Backward);
+            maxZDecel = GetMaxDecel(gc.BrakingThrusters, WorldMatrix.Backward);
             stopZDist = MaxZDecel > 1e-6
                 ? Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel))
                 : double.PositiveInfinity;

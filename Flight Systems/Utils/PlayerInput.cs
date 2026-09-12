@@ -20,7 +20,7 @@ namespace IngameScript.Utils
             DeadZone = deadZone;
         }
 
-        public void OcupiedController(List<IMyShipController> controllers)
+        public void OccupiedController(List<IMyShipController> controllers)
         {
             foreach (IMyShipController controller in controllers)
             {
