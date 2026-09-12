@@ -11,6 +11,9 @@ namespace IngameScript.UseCases
         public double Number;
         public Step Step = Step.Toggle;
         public Vector3D TargetCoordinates = new Vector3D();
+        public TerrainAvoidPhase AvoidPhase = TerrainAvoidPhase.Off;
+        public Step AvoidResumeStep = Step.Toggle;
+        public Vector3D AvoidHeading = new Vector3D();
 
         // ────────────────────────────────────────────────
         // Constructors — one per type
@@ -22,6 +25,9 @@ namespace IngameScript.UseCases
             Number = 0;
             Step = Step.Toggle;
             TargetCoordinates = new Vector3D();
+            AvoidPhase = TerrainAvoidPhase.Off;
+            AvoidResumeStep = Step.Toggle;
+            AvoidHeading = new Vector3D();
         }
 
         public CommandParam(double n)
@@ -48,6 +54,9 @@ namespace IngameScript.UseCases
             Number = 0;
             Step = Step.Toggle;
             TargetCoordinates = new Vector3D();
-    }
+            AvoidPhase = TerrainAvoidPhase.Off;
+            AvoidResumeStep = Step.Toggle;
+            AvoidHeading = new Vector3D();
+        }
     }
 }

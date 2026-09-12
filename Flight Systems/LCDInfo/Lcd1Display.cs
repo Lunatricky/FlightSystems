@@ -35,6 +35,8 @@ namespace IngameScript
                 state.Append(" - " + EnumLabels.Land(command.Param.AutoLandState));
             else if (command.Param.Step != Step.Toggle)
                 state.Append(" - " + EnumLabels.StepName(command.Param.Step));
+            if (command.Param.AvoidPhase != TerrainAvoidPhase.Off)
+                state.Append(" - Avoid");
             if (command.Param.Number != 0)
                 state.Append(" - " + command.Param.Number);
 

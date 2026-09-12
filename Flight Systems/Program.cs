@@ -372,16 +372,28 @@ namespace IngameScript
             if (ic.ControlAntennas)
             {
                 gc.Antennas.ForEach(b => { if (b != null) b.Enabled = false; });
-                if (gc.Antennas.Count > 0)
+                IMyRadioAntenna firstValid = null;
+                for (int i = 0; i < gc.Antennas.Count; i++)
                 {
-                    var firstValid = gc.Antennas.FirstOrDefault(b => b != null && !b.Closed);
-                    if (firstValid != null) firstValid.Enabled = true;
+                    IMyRadioAntenna b = gc.Antennas[i];
+                    if (b != null && !b.Closed)
+                    {
+                        firstValid = b;
+                        break;
+                    }
                 }
+                if (firstValid != null) firstValid.Enabled = true;
             }
 
-            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
+            bool allowedState = command.State == MainState.CNav
+                || command.State == MainState.Cruise
+                || command.State == MainState.Orbit
+                || command.State == MainState.Glide
+                || command.State == MainState.Land
+                || command.State == MainState.SBurn
+                || command.State == MainState.Gps;
 
-            if (!ic.AllowFlightSystems && allowedStates.Contains(command.State))
+            if (!ic.AllowFlightSystems && allowedState)
             {
                 return;
             }
@@ -549,6 +561,8 @@ namespace IngameScript
                     ToggleCommand(gc, command);
                     break;
                 case Step.On:
+                    if (TickTerrainAvoid(gc, ic, command))
+                        break;
                     if (pc.GroundLevel < ic.SafeAltitude)
                     {
                         SoftAbort(gc);
@@ -637,6 +651,8 @@ namespace IngameScript
                         return;
                     }
 
+                    if (TickTerrainAvoid(gc, ic, command))
+                        return;
                     if (pc.GroundLevel < ic.SafeAltitude)
                     {
                         SoftAbort(gc);
@@ -689,8 +705,18 @@ namespace IngameScript
 
         private void Climb(GridContext gc, double CruiseSpeed)
         {
+            if (TickTerrainAvoid(gc, ic, command))
+                return;
             VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, pc.DesiredUpVector);
             CruiseControl(CruiseSpeed, timeSinceLastRun);
+        }
+
+        bool TickTerrainAvoid(GridContext gc, IniContext ic, Command command)
+        {
+            return TerrainAvoid.Tick(
+                gc, ic, pc, command,
+                () => GravityAlignedOverride(gc),
+                gps => AimHorizonToGps(gc, gps));
         }
 
         private void ToggleCommand(GridContext gc, Command command)
