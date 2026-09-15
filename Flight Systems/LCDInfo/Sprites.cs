@@ -60,6 +60,12 @@ namespace IngameScript
 
         public void DrawInfoPanel(IMyTextSurface panel, int col)
         {
+            if (panel == null)
+                return;
+
+            panel.ContentType = ContentType.SCRIPT;
+            panel.Script = "";
+
             List<MySprite> sprites = new List<MySprite>();
 
             if (texts != null && texts.Count > 0)

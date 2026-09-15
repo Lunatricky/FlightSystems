@@ -279,16 +279,27 @@ namespace IngameScript
                 }
                 ReloadGridContext(gc, ic);
                 tick = 0;
+                RedrawSpriteLcds();
                 return true;
             }
 
             if (gc.SyncTaggedCockpitIni())
             {
                 gc.ReloadLCDs();
+                RedrawSpriteLcds();
                 return true;
             }
 
             return false;
+        }
+
+        void RedrawSpriteLcds()
+        {
+            settingsHud.IsDefaultScreen = false;
+            if (!settingsToggle)
+                settingsHud.FlightSystemIdle(ic, gc, sb);
+            Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
+            Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
         }
 
         void AnalogThrust()
@@ -1123,7 +1134,7 @@ namespace IngameScript
             double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
             VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt);
-            return pc.GroundLevel < 10 + 2 * gc.GridHeight;
+            return pc.GroundLevel < gc.GridHeight - gc.Controller.CubeGrid.WorldAABB.Min.Y;
         }
 
         bool TryLock(GridContext gc)

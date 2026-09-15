@@ -418,19 +418,11 @@ namespace IngameScript.Domain
                 : ColorMap.GetColorFromString(ic.LcdBackgroundColor);
             Color fg = ColorMap.GetColorFromString(ic.LcdFontColor);
 
-            ContentType prev = s.ContentType;
-
-            // panel / text mode
-            s.ContentType = ContentType.TEXT_AND_IMAGE;
+            // Do not toggle ContentType: TEXT→SCRIPT→restore blanks cockpit/PB sprite surfaces.
             s.BackgroundColor = bg;
             s.FontColor = fg;
-
-            // cockpit + sprite / script mode (this is what cockpits actually show)
-            s.ContentType = ContentType.SCRIPT;
             s.ScriptBackgroundColor = bg;
             s.ScriptForegroundColor = fg;
-
-            s.ContentType = prev;
         }
 
         void AddAllSurfaces(IMyTextSurfaceProvider provider, List<IMyTextSurface> dest, bool setupSurface)
@@ -450,7 +442,8 @@ namespace IngameScript.Domain
 
         public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
         {
-            surface.ContentType = ContentType.TEXT_AND_IMAGE;
+            surface.ContentType = ContentType.SCRIPT;
+            surface.Script = "";
             surface.Font = "DEBUG";
             surface.FontSize = fontSize;
             surface.Alignment = TextAlignment.LEFT;
@@ -825,8 +818,6 @@ namespace IngameScript.Domain
         {
             foreach (IMyTextSurface lcd in lcds)
             {
-                lcd.AddImageToSelection("Online");
-                lcd.RemoveImageFromSelection("Online");
                 lcd.ContentType = ContentType.SCRIPT;
                 lcd.Script = "";
             }
