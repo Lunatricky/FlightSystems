@@ -18,7 +18,6 @@ namespace IngameScript
         static PlanetType boundPlanet;
         static double boundRadius;
         static SystemBools boundSb;
-        static bool settingsOpen;
         static Sprites hud;
         static bool hudReady;
 
@@ -29,8 +28,7 @@ namespace IngameScript
             Command command,
             PlanetType planet,
             double planetRadius,
-            SystemBools sb,
-            bool settingsAreOpen)
+            SystemBools sb)
         {
             boundGc = gc;
             boundIc = ic;
@@ -39,7 +37,6 @@ namespace IngameScript
             boundPlanet = planet;
             boundRadius = planetRadius;
             boundSb = sb;
-            settingsOpen = settingsAreOpen;
             hudReady = false;
         }
 
@@ -74,7 +71,7 @@ namespace IngameScript
 
         public static bool TryDrawAsThirdColumn(Sprites menu, IMyTextSurface panel)
         {
-            if (!settingsOpen || menu == null || panel == null || boundGc == null)
+            if (menu == null || panel == null || boundGc == null)
                 return false;
             if (!Listed(boundGc.Lcds1, panel) && !Listed(boundGc.Lcds2, panel))
                 return false;
@@ -91,7 +88,7 @@ namespace IngameScript
         {
             if (surface == null)
                 return;
-            if (settingsOpen && boundGc != null && Listed(boundGc.LcdsSettings, surface))
+            if (boundGc != null && Listed(boundGc.LcdsSettings, surface))
                 return;
 
             lines.DrawFlightPanel(surface, fromLcd2List);

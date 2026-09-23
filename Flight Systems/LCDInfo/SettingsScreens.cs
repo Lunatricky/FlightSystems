@@ -63,9 +63,6 @@ namespace IngameScript
 
         public void FlightSystemIdle(IniContext ic, GridContext gc, SystemBools sb)
         {
-            if (IsDefaultScreen)
-                return;
-
             Sprites spt = new Sprites(ic);
             int row = 1;
 

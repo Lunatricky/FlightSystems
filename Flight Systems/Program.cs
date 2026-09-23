@@ -131,7 +131,7 @@ namespace IngameScript
                 settingsIsLocked = false;
             }
 
-            Lcd1Display.Bind(gc, ic, pc, command, planet, planetRadius, sb, settingsToggle);
+            Lcd1Display.Bind(gc, ic, pc, command, planet, planetRadius, sb);
 
             if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
@@ -241,10 +241,10 @@ namespace IngameScript
                     break;
                 case 2:
                     task = Task.LCDs;
+                    if (!settingsToggle)
+                        settingsHud.FlightSystemIdle(ic, gc, sb);
                     if (IsShipControlled())
-                    {
                         Lcd1Display.DrawHud(gc.Lcds1, gc.Lcds2);
-                    }
                     pc.CacheValues();
                     break;
             }
