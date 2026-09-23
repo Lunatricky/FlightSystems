@@ -5,8 +5,6 @@ using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
 using System;
-using System.Collections.Generic;
-using System.Text;
 using VRageMath;
 
 namespace IngameScript
@@ -1118,7 +1116,7 @@ namespace IngameScript
         }
 
         ////////////////////////////////////////////////////////
-        /// SAFE DEscENT
+        /// SAFE DESCENT
         ////////////////////////////////////////////////////////
         bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
         {

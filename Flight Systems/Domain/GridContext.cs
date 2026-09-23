@@ -33,7 +33,6 @@ namespace IngameScript.Domain
         double gridHeight;
 
         IMyRemoteControl controller;
-        IMyBatteryBlock backupBattery;
 
         ShipType shipType;
 
@@ -45,6 +44,7 @@ namespace IngameScript.Domain
         List<IMyGasTank> tanks = new List<IMyGasTank>();
         List<IMyGasTank> h2Tanks = new List<IMyGasTank>();
         List<IMyBatteryBlock> batteries = new List<IMyBatteryBlock>();
+        List<IMyBatteryBlock> backupBattery = new List<IMyBatteryBlock>();
         List<IMyRadioAntenna> antennas = new List<IMyRadioAntenna>();
         List<IMyShipController> controllers = new List<IMyShipController>();
         List<IMyShipController> cockpits = new List<IMyShipController>();
@@ -490,32 +490,43 @@ namespace IngameScript.Domain
 
         public GridContext ReloadBatteries()
         {
-            GetSameConstructBlocks(Batteries, ignoreTag);
+            List<IMyBatteryBlock> TempBatteries = new List<IMyBatteryBlock>();
+
+            GetSameConstructBlocks(TempBatteries, ignoreTag);
 
             // Backup Battery
-            if (BackupBattery == null || BackupBattery.Closed)
+            if (BackupBattery.Count == 0)
             {
-                foreach (var battery in Batteries)
+                foreach (var battery in TempBatteries)
                 {
                     if (!battery.Closed && battery.CustomName.ToLower().Contains(backupTag.ToLower()))
                     {
-                        BackupBattery = battery;
-                        break;
+                        BackupBattery.Add(battery);
+                    }
+                    else
+                    {
+                        Batteries.Add(battery);
                     }
                 }
-                Batteries.Remove(BackupBattery);
             }
 
-            if ((BackupBattery == null || BackupBattery.Closed) && Batteries.Count > 1)
-            { 
+            if (BackupBattery.Count == 0 && Batteries.Count > 1)
+            {
+                IMyBatteryBlock tempBattery = null;
                 foreach (var battery in Batteries)
-                {
-                    if (Me.CubeGrid == battery.CubeGrid)
+                {                    
+                    if (tempBattery != null && Me.CubeGrid == battery.CubeGrid && battery.MaxStoredPower < tempBattery.MaxStoredPower)
                     {
-                        BackupBattery = battery;
-                        BackupBattery.CustomName = BackupBattery.CustomName + " " + backupTag;
-                        return this;
+                        tempBattery = battery;
                     }
+                    else if(tempBattery == null) tempBattery = battery;
+                }
+
+                if (tempBattery != null)
+                {
+                    BackupBattery.Add(tempBattery);
+                    Batteries.Remove(tempBattery);
+                    tempBattery.CustomName = tempBattery.CustomName + " " + backupTag;
                 }
             }
 
@@ -683,7 +694,7 @@ namespace IngameScript.Domain
             }
         }
 
-        public IMyBatteryBlock BackupBattery
+        public List<IMyBatteryBlock> BackupBattery
         {
             get
             {
@@ -831,20 +842,15 @@ namespace IngameScript.Domain
         {
             if (BackupBattery != null)
             {
-                BackupBattery.ChargeMode = ChargeMode.Auto;
+                foreach (IMyBatteryBlock battery in BackupBattery) battery.ChargeMode = ChargeMode.Auto;
                 foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Recharge;
             }
         }
 
         public void AutoBatteries()
         {
-            if (BackupBattery != null)
-                BackupBattery.ChargeMode = ChargeMode.Recharge;
-
-            foreach (IMyBatteryBlock battery in Batteries)
-            {
-                battery.ChargeMode = ChargeMode.Auto;
-            }
+            foreach (IMyBatteryBlock battery in BackupBattery) battery.ChargeMode = ChargeMode.Recharge;
+            foreach (IMyBatteryBlock battery in Batteries) battery.ChargeMode = ChargeMode.Auto;
         }
 
         public void CleanSurfaces() => CleanSurfaces(surfaces);

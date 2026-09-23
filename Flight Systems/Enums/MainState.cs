@@ -2,6 +2,7 @@
 {
     public enum MainState
     {
+        Dock,
         Abort,
         Reload,
         Idle,
