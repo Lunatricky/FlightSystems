@@ -131,6 +131,8 @@ namespace IngameScript
                 settingsIsLocked = false;
             }
 
+            Lcd1Display.Bind(gc, ic, pc, command, planet, planetRadius, sb, settingsToggle);
+
             if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
                 if (settingsHud.ShouldClose(pi))
@@ -176,8 +178,7 @@ namespace IngameScript
                 if (!settingsToggle)
                     settingsHud.FlightSystemIdle(ic, gc, sb);
 
-                Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
+                Lcd1Display.DrawHud(gc.Lcds1, gc.Lcds2);
             }
 
             if (ic.AllowDockMode)
@@ -242,8 +243,7 @@ namespace IngameScript
                     task = Task.LCDs;
                     if (IsShipControlled())
                     {
-                        Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                        Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
+                        Lcd1Display.DrawHud(gc.Lcds1, gc.Lcds2);
                     }
                     pc.CacheValues();
                     break;

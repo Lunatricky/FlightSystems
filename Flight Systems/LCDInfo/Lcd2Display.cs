@@ -3,25 +3,21 @@ using IngameScript.Enums;
 using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
-using Sandbox.ModAPI.Ingame;
-using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript
 {
     class Lcd2Display
     {
-        public static void Draw(
-            List<IMyTextSurface> surfaces,
+        public static void Fill(
+            Sprites spt,
             IniContext ic,
             PhysicsContext pc,
             Command command,
             SystemBools sb)
         {
-            if (surfaces == null || surfaces.Count == 0 || pc == null)
+            if (spt == null || pc == null)
                 return;
-
-            Sprites spt = new Sprites(ic);
 
             if (pc.Gravity > 0)
             {
@@ -67,8 +63,6 @@ namespace IngameScript
                 spt.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
                 spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
             }
-
-            spt.DrawTo(surfaces);
         }
     }
 }
