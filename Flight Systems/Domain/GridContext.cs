@@ -74,6 +74,7 @@ namespace IngameScript.Domain
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
+            else GridName = "";
         }
 
         public void Setup(IniContext ic)
