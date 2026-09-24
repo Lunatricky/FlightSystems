@@ -10,7 +10,7 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    public class GridContext : GridManager
+    public class GridContext
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
@@ -74,7 +74,7 @@ namespace IngameScript.Domain
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
-            else GridName = "";
+            else GridName = "temp";
         }
 
         public void Setup(IniContext ic)
@@ -179,6 +179,10 @@ namespace IngameScript.Domain
             else if (AtmoThrusters.Count + HydroThrusters.Count == 0) ShipType = ShipType.Space;
             else ShipType = ShipType.Interplanetary;
 
+            string tempGridName = Me.CubeGrid.CustomName;
+            if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
+                GridName = tempGridName;
+            else GridName = ShipType.ToString();
 
             ReloadGridHeight();
             if (Thrusters.Count > 0) ReloadThrusters();

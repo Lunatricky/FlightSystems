@@ -268,6 +268,10 @@ namespace IngameScript
             if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
             {
                 gc.Me.CubeGrid.CustomName = gc.GridName;
+            } 
+            else
+            {
+                gc.Me.CubeGrid.CustomName = gc.ShipType.ToString();
             }
 
             if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
@@ -773,8 +777,6 @@ namespace IngameScript
 
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
-            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
-
             gc.Setup(ic);
 
             gc.ReloadLCDs()
@@ -802,6 +804,8 @@ namespace IngameScript
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
+
+            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command
