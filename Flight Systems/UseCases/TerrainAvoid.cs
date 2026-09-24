@@ -1,7 +1,6 @@
 using IngameScript.Domain;
 using IngameScript.Enums;
 using IngameScript.Physics;
-using IngameScript.Utils;
 using System;
 using VRageMath;
 
@@ -9,8 +8,6 @@ namespace IngameScript.UseCases
 {
     class TerrainAvoid
     {
-        const double ClimbTargetMs = 5;
-
         public static bool Tick(
             GridContext gc,
             IniContext ic,
@@ -66,7 +63,7 @@ namespace IngameScript.UseCases
                 }
                 else
                 {
-                    BrakeClimb(gc, pc, level);
+                    BrakeClimb(gc, pc, ic, level);
                     return true;
                 }
             }
@@ -106,11 +103,11 @@ namespace IngameScript.UseCases
             command.Param.AvoidHeading = heading;
         }
 
-        static void BrakeClimb(GridContext gc, PhysicsContext pc, Func<bool> level)
+        static void BrakeClimb(GridContext gc, PhysicsContext pc, IniContext ic, Func<bool> level)
         {
             gc.ResetThrusters(gc.ForwardThrusters);
             level();
-            VectorHelper.MatchVerticalSpeed(gc, pc, ClimbTargetMs);
+            VectorHelper.MatchVerticalSpeed(gc, pc, ic.MaxSpeed);
         }
 
         static bool ResumeHeading(GridContext gc, Command command, Func<Vector3D, bool> aimHorizon)
