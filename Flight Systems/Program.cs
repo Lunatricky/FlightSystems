@@ -786,6 +786,8 @@ namespace IngameScript
             if (gc.ErrorMessage.Length > 0)
                 return;
 
+            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
+
             // Flight cached blocks
             if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
             {                
@@ -804,8 +806,6 @@ namespace IngameScript
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
-
-            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command

@@ -11,7 +11,6 @@ namespace IngameScript
         static public void GetSubgridsAndRename(IMyGridTerminalSystem gridTerminalSystem, IMyCubeGrid mainGrid)
         {
             string baseName = mainGrid.CustomName;
-
             // Collect all connected grids (recursive)
             HashSet<IMyCubeGrid> connectedGrids = new HashSet<IMyCubeGrid>();
 
