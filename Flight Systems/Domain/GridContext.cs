@@ -59,6 +59,11 @@ namespace IngameScript.Domain
         List<IMyThrust> hydroThrusters = new List<IMyThrust>();
 
         List<IMyGyro> gyros = new List<IMyGyro>();
+        readonly List<IMyCameraBlock> cameras = new List<IMyCameraBlock>();
+        readonly List<long> ownGridIds = new List<long>();
+        IMyCameraBlock rayCamera;
+
+
 
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
@@ -89,6 +94,9 @@ namespace IngameScript.Domain
             Thrusters.Clear();
             Gyros.Clear();
             Gears.Clear();
+            cameras.Clear();
+            ownGridIds.Clear();
+            rayCamera = null;
 
             Antennas.Clear();
 
@@ -103,6 +111,8 @@ namespace IngameScript.Domain
 
             foreach (IMyTerminalBlock block in blocks)
             {
+                RememberGrid(block.CubeGrid.EntityId);
+
                 if (IsBlockType<IMyRemoteControl>(block) != null)
                 {
                     IMyRemoteControl remote = (IMyRemoteControl)block;
@@ -140,6 +150,10 @@ namespace IngameScript.Domain
                 else if (IsBlockType<IMyLandingGear>(block) != null)
                 {
                     Add(Gears, block);
+                }
+                else if (IsBlockType<IMyCameraBlock>(block) != null)
+                {
+                    cameras.Add((IMyCameraBlock)block);
                 }
                 else if (ic.ControlAntennas && IsBlockType<IMyRadioAntenna>(block) != null)
                 {
@@ -187,6 +201,55 @@ namespace IngameScript.Domain
 
             ReloadGridHeight();
             if (Thrusters.Count > 0) ReloadThrusters();
+            RememberGrid(Me.CubeGrid.EntityId);
+            PickRayCamera(ic.RayCameraTag);
+        }
+
+        void RememberGrid(long id)
+        {
+            for (int i = 0; i < ownGridIds.Count; i++)
+            {
+                if (ownGridIds[i] == id)
+                    return;
+            }
+            ownGridIds.Add(id);
+        }
+
+        void PickRayCamera(string tag)
+        {
+            rayCamera = null;
+            IMyCameraBlock forward = null;
+            for (int i = 0; i < cameras.Count; i++)
+            {
+                IMyCameraBlock cam = cameras[i];
+                if (cam == null || cam.Closed)
+                    continue;
+
+                string name = cam.CustomName ?? "";
+                if (!string.IsNullOrEmpty(tag) && name.Contains(tag))
+                {
+                    rayCamera = cam;
+                    break;
+                }
+
+                if (forward == null && Controller != null && cam.Orientation.Forward == Controller.Orientation.Forward)
+                    forward = cam;
+            }
+
+            if (rayCamera == null)
+                rayCamera = forward;
+            if (rayCamera != null)
+                rayCamera.Enabled = true;
+        }
+
+        public bool IsOwnGrid(long entityId)
+        {
+            for (int i = 0; i < ownGridIds.Count; i++)
+            {
+                if (ownGridIds[i] == entityId)
+                    return true;
+            }
+            return false;
         }
 
         private void ControllerErrorMessage()
@@ -737,6 +800,7 @@ namespace IngameScript.Domain
         public List<IMyThrust> HydroThrusters => hydroThrusters;
         public List<IMyGyro> Gyros => gyros;
         public List<IMyLandingGear> Gears => gears;
+        public IMyCameraBlock RayCamera => rayCamera;
         public List<IMyTextSurface> Lcds1 => lcds1;
         public List<IMyTextSurface> Lcds2 => lcds2;
         public List<IMyTextSurface> LcdsSettings => lcdsSettings;

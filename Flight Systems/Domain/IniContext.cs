@@ -46,6 +46,7 @@ namespace IngameScript.Domain
         const string INI_LCD2_TAG = "LCD 2";
         const string INI_LCD_SETTINGS_TAG = "LCD Settings";
         const string INI_COCKPIT_TAG = "Cockpit";
+        const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
 
         string dockGroupTag = "Flight Systems";
@@ -56,6 +57,7 @@ namespace IngameScript.Domain
         string lcd2Tag = "[FS_LCD2]";
         string lcdSettingsTag = "[FS_LCD_SETTINGS]";
         string cockpitTag = "[FS_COCKPIT]";
+        string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
 
         //ParamsSection
@@ -111,6 +113,7 @@ namespace IngameScript.Domain
         public string Lcd2Tag => lcd2Tag;
         public string LcdSettingsTag => lcdSettingsTag;
         public string CockpitTag => cockpitTag;
+        public string RayCameraTag => rayCameraTag;
         public string BackupBatteryTag => backupBatteryTag;
         internal GpsStore Gps => gps;
         public double MaxSpeed
@@ -293,6 +296,7 @@ namespace IngameScript.Domain
             lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2Tag);
             lcdSettingsTag = ini.Get(NamesTagsSection, INI_LCD_SETTINGS_TAG).ToString(LcdSettingsTag);
             cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(CockpitTag);
+            rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(RayCameraTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
 
             //ParamsSection
@@ -347,6 +351,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, Lcd2Tag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD_SETTINGS_TAG, LcdSettingsTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_COCKPIT_TAG, CockpitTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
 
             //ParamsSection
