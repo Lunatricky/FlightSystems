@@ -1169,8 +1169,12 @@ namespace IngameScript
 
             double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
-            VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt, false);
-            return pc.GroundLevel < gc.GridHeight - gc.Controller.CubeGrid.WorldAABB.Min.Y;
+            double agl = pc.GroundLevel;
+            double stop = pc.StopYDist;
+            // ease to about -2 m/s as AGL approaches one ship-height
+            double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
+            VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
+            return agl < Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
         }
 
         string gearLockNote;
