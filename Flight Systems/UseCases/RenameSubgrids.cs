@@ -31,33 +31,35 @@ namespace IngameScript
             // Rename each subgrid
             int counter = 1;
             foreach (IMyCubeGrid subGrid in connectedGrids)
-            {                
-                string newName = baseName + " - Sub " + counter;
-                subGrid.CustomName = newName;
+            {
+                if (subGrid == null || subGrid == mainGrid)
+                    continue;
+                subGrid.CustomName = baseName + " - Sub " + counter;
                 counter++;
             }
         }
 
         static void CollectConnectedGrids(IMyCubeGrid current, HashSet<IMyCubeGrid> visited, List<IMyMechanicalConnectionBlock> allBlocks)
         {
-            List<IMyMechanicalConnectionBlock> allBlocks2 = new List<IMyMechanicalConnectionBlock>(allBlocks);
-            if (visited.Contains(current))
+            if (current == null || visited.Contains(current))
                 return;
 
             visited.Add(current);
-            // Filter to current grid only
-            foreach (IMyMechanicalConnectionBlock block in allBlocks)
+
+            for (int i = 0; i < allBlocks.Count; i++)
             {
+                IMyMechanicalConnectionBlock block = allBlocks[i];
+                if (block == null || block.Closed)
+                    continue;
                 if (block.CubeGrid != current)
                     continue;
-
+                if (block.TopGrid == null)
+                    continue;
                 if (blockIds.Contains(block.EntityId))
                     continue;
 
                 blockIds.Add(block.EntityId);
-                allBlocks2.Remove(block);
-
-                if (allBlocks2.Count > 0) CollectConnectedGrids(block.TopGrid, visited, allBlocks2);
+                CollectConnectedGrids(block.TopGrid, visited, allBlocks);
             }
         }
     }
