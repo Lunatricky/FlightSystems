@@ -535,8 +535,11 @@ namespace IngameScript
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
-                        command.Param.Step = Step.Climb;
+                        BeginClimbOrLift(gc, command);
                     }
+                    break;
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
                 case Step.Climb:
                     Climb(gc, ic.CruiseSpeed);
@@ -592,9 +595,10 @@ namespace IngameScript
                     break;
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
-                    {
-                        command.Param.Step = Step.Climb;
-                    }
+                        BeginClimbOrLift(gc, command);
+                    break;
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
                 case Step.Climb:
                     if (pc.GroundLevel > ic.SafeAltitude)
@@ -692,9 +696,11 @@ namespace IngameScript
 
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
-                    {
-                        command.Param.Step = Step.Climb;
-                    }
+                        BeginClimbOrLift(gc, command);
+                    break;
+
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
 
                 case Step.Climb:
@@ -709,6 +715,45 @@ namespace IngameScript
                     Climb(gc, ic.CruiseSpeed);
                     break;
             }
+        }
+
+        const double ClearanceLiftRate = 8;
+
+        void BeginClimbOrLift(GridContext gc, Command command)
+        {
+            command.Param.Step = NeedsTailClearance(gc) ? Step.Lift : Step.Climb;
+        }
+
+        bool NeedsTailClearance(GridContext gc)
+        {
+            if (pc == null || pc.Gravity <= 0)
+                return false;
+            if (pc.GroundLevel >= ic.SafeAltitude)
+                return false;
+
+            double thetaDeg = pc.GetMaxPitchAngle(gc);
+            if (thetaDeg < 1.0)
+                return false;
+
+            return pc.GroundLevel < TailClearance(gc, thetaDeg);
+        }
+
+        double TailClearance(GridContext gc, double thetaDeg)
+        {
+            double theta = thetaDeg * (Math.PI / 180.0);
+            double pad = gc.IsLG ? 2.5 : 0.5;
+            double sweep = gc.GridLength * 0.5 * Math.Sin(theta);
+            return gc.GridHeight + sweep + pad;
+        }
+
+        void LiftClearance(GridContext gc, Command command)
+        {
+            // Stay level until the tail can swing through the pitch Climb is about to use.
+            GravityAlignedOverride(gc);
+            gc.ResetThrusters(gc.ForwardThrusters);
+            VectorHelper.MatchVerticalSpeed(gc, pc, ClearanceLiftRate, false);
+            if (!NeedsTailClearance(gc))
+                command.Param.Step = Step.Climb;
         }
 
         private void Climb(GridContext gc, double CruiseSpeed)

@@ -66,6 +66,7 @@ namespace IngameScript.Enums
                 case Step.AimToGPS: return "AimToGPS";
                 case Step.Cruise: return "Cruise";
                 case Step.Preclimb: return "Preclimb";
+                case Step.Lift: return "Lift";
                 case Step.Climb: return "Climb";
                 case Step.Orbit: return "Orbit";
                 default: return "Toggle";

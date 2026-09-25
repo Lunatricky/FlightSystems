@@ -331,7 +331,7 @@ namespace IngameScript.Physics
             return thrustAccel - Gravity;  // positive = can decelerate
         }
 
-        double GetMaxPitchAngle(GridContext gc)
+        public double GetMaxPitchAngle(GridContext gc)
         {
             double upThrust = 0;
             double fwdThrust = 0;

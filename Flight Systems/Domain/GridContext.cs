@@ -31,6 +31,7 @@ namespace IngameScript.Domain
         double centerGridHeight;
         double bottomGridHeight;
         double gridHeight;
+        double gridLength;
 
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
@@ -230,6 +231,17 @@ namespace IngameScript.Domain
             GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
 
             GridHeight = IsLG ? GridHeight * 2.5 : GridHeight * 0.5;
+
+            Vector3D gravity = Controller.GetNaturalGravity();
+            if (gravity.LengthSquared() < 1e-6)
+            {
+                GridLength = 0;
+                return;
+            }
+
+            // Length along forward, once per grid reload. Tick clearance must not rebuild the box.
+            BoundingBoxD box = Me.CubeGrid.WorldAABB;
+            GridLength = 2 * Math.Abs(box.HalfExtents.Dot(Controller.WorldMatrix.Forward));
         }
 
         void ReloadThrusters()
@@ -665,6 +677,19 @@ namespace IngameScript.Domain
             set
             {
                 gridHeight = value;
+            }
+        }
+
+        public double GridLength
+        {
+            get
+            {
+                return gridLength;
+            }
+
+            set
+            {
+                gridLength = value;
             }
         }
 

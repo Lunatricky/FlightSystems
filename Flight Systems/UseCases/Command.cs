@@ -83,6 +83,7 @@ namespace IngameScript.UseCases
             if (s == "aimtogps") return Step.AimToGPS;
             if (s == "cruise") return Step.Cruise;
             if (s == "preclimb") return Step.Preclimb;
+            if (s == "lift") return Step.Lift;
             if (s == "climb") return Step.Climb;
             if (s == "orbit") return Step.Orbit;
             return Step.Off;
