@@ -22,6 +22,9 @@ namespace IngameScript
 
         Command command;
         SettingsScreens settingsHud;
+        Sprites hudStack1;
+        Sprites hudStack2;
+        Sprites settingsStack;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -56,6 +59,9 @@ namespace IngameScript
             pi = new PlayerInput(gc.Controllers);
             command = new Command();
             settingsHud = new SettingsScreens();
+            hudStack1 = new Sprites(ic);
+            hudStack2 = new Sprites(ic);
+            settingsStack = new Sprites(ic);
 
             CheckIni();
             
@@ -129,6 +135,7 @@ namespace IngameScript
 
             if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
+                RefreshHudLines();
                 if (settingsHud.ShouldClose(pi))
                 {
                     settingsToggle = false;
@@ -168,13 +175,7 @@ namespace IngameScript
             }
 
             if (tickCount % 50 == 2 && !IsShipControlled())
-            {
-                if (!settingsToggle)
-                    settingsHud.FlightSystemIdle(ic, gc, sb);
-
-                Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
-            }
+                DrawFlightLcds();
 
             if (ic.AllowDockMode)
             {
@@ -237,10 +238,7 @@ namespace IngameScript
                 case 2:
                     task = Task.LCDs;
                     if (IsShipControlled())
-                    {
-                        Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                        Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
-                    }
+                        DrawFlightLcds();
                     pc.CacheValues();
                     break;
             }
@@ -297,13 +295,33 @@ namespace IngameScript
             return false;
         }
 
+        void RefreshHudLines()
+        {
+            if (pc == null)
+            {
+                hudStack1.Clear();
+                hudStack2.Clear();
+                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, null, null, settingsStack);
+                return;
+            }
+
+            Lcd1Display.Fill(hudStack1, ic, gc, pc, command, planet, planetRadius);
+            Lcd2Display.Fill(hudStack2, pc, command, sb);
+            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, hudStack1, hudStack2, settingsStack);
+        }
+
+        void DrawFlightLcds()
+        {
+            RefreshHudLines();
+            if (!settingsToggle)
+                settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
+            Sprites.PaintHud();
+        }
+
         void RedrawSpriteLcds()
         {
             settingsHud.IsDefaultScreen = false;
-            if (!settingsToggle)
-                settingsHud.FlightSystemIdle(ic, gc, sb);
-            Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-            Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
+            DrawFlightLcds();
         }
 
         void AnalogThrust()

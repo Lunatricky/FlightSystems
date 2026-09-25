@@ -63,10 +63,17 @@ namespace IngameScript
 
         public void FlightSystemIdle(IniContext ic, GridContext gc, SystemBools sb)
         {
-            if (IsDefaultScreen)
-                return;
+            FlightSystemIdle(ic, gc, sb, null);
+        }
 
-            Sprites spt = new Sprites(ic);
+        public void FlightSystemIdle(IniContext ic, GridContext gc, SystemBools sb, Sprites reuse)
+        {
+            Sprites spt = reuse;
+            if (spt == null)
+                spt = new Sprites(ic);
+            else
+                spt.Clear();
+
             int row = 1;
 
             if (sb.CruiseToggle) SelectedRow = row++;
@@ -79,7 +86,6 @@ namespace IngameScript
 
             AddFlightRows(spt, ic, gc);
             spt.DrawTo(gc.LcdsSettings);
-            IsDefaultScreen = true;
         }
 
         void Navigate(PlayerInput pi, Action lockInput)
