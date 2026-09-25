@@ -769,12 +769,14 @@ namespace IngameScript.Domain
         public void ResetThrusters() => ResetThrusters(thrusters);
         public void ResetThrusters(List<IMyThrust> thrusters)
         {
-            foreach (var t in thrusters)
+            for (int i = 0; i < thrusters.Count; i++)
             {
+                IMyThrust t = thrusters[i];
+                if (t == null || t.Closed)
+                    continue;
                 t.ThrustOverridePercentage = 0f;
                 t.Enabled = true;
             }
-
         }
 
         public void ResetGyros()

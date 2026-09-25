@@ -4,6 +4,7 @@ using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -327,6 +328,9 @@ namespace IngameScript
         void AnalogThrust()
         {
             pi.OcupiedController(gc.Controllers);
+            if (gc.ForwardThrusters.Count == 0)
+                return;
+
             if (pi.W())
             {
                 foreach (IMyThrust t in gc.ForwardThrusters)
@@ -343,7 +347,8 @@ namespace IngameScript
                 }
             }
 
-            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
+            // No W/S this tick leaves the last override. Abort is what clears it.
+            if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
             else gc.ResetThrusters(gc.BreakingThrusters);
         }
         
@@ -382,7 +387,10 @@ namespace IngameScript
             double avgRuntime = RunTimeSum / SumCounter;
             double avgInstructions = InstructionSum / SumCounter;
 
-            return $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
+            string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
+            if (gearLockNote != null)
+                report = report + "\n" + gearLockNote;
+            return report;
         }
 
 
@@ -748,7 +756,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) AbortShipContext(gc);
+                    HandleLockGear(gc, command, false);
                     break;
             }
         }
@@ -783,12 +791,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.GroundLevel > 1 + pc.StopYDist)
-                    {
-                        command.State = MainState.Land;
-                        command.Param.AutoLandState = AutoLandState.Drop;
-                    }
-                    else if (TryLock(gc)) AbortShipContext(gc);
+                    HandleLockGear(gc, command, true);
                     break;
             }
         }
@@ -844,7 +847,12 @@ namespace IngameScript
         {
             if (pc.ForwardVelocity >= ic.CruiseSpeed)
             {
+                currentOverride = 0;
+                currentBrake = 0;
+                integral = 0;
+                lastError = 0;
                 gc.ResetThrusters(gc.ForwardThrusters);
+                gc.ResetThrusters(gc.BreakingThrusters);
                 return;
             }
 
@@ -941,6 +949,12 @@ namespace IngameScript
 
         void SoftAbort(GridContext gc)
         {
+            currentOverride = 0;
+            currentBrake = 0;
+            integral = 0;
+            lastError = 0;
+            gearLockNote = null;
+
             if (gc.Controller != null)
                 gc.Controller.DampenersOverride = true;
             sb.StopCruiseWhenOutOfGrav = false;
@@ -1155,20 +1169,72 @@ namespace IngameScript
 
             double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
-            VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt);
+            VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt, false);
             return pc.GroundLevel < gc.GridHeight - gc.Controller.CubeGrid.WorldAABB.Min.Y;
+        }
+
+        string gearLockNote;
+
+        // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
+        void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
+        {
+            if (!GearHolding(gc) && pc.GroundLevel > 3 * gc.GridHeight && pc.ClimbRate > 2)
+            {
+                if (leaveToLand)
+                    command.State = MainState.Land;
+                command.Param.AutoLandState = AutoLandState.Drop;
+                return;
+            }
+
+            if (TryLock(gc))
+                AbortShipContext(gc);
+        }
+
+        bool GearHolding(GridContext gc)
+        {
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear g = gc.Gears[i];
+                if (g == null || g.Closed)
+                    continue;
+                if (g.IsLocked || g.LockMode == LandingGearMode.ReadyToLock)
+                    return true;
+            }
+            return false;
         }
 
         bool TryLock(GridContext gc)
         {
             GravityAlignedOverride(gc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -2);
-            gc.Controller.DampenersOverride = true;
+            if (gc.Controller != null)
+                gc.Controller.DampenersOverride = true;
 
-            foreach (var g in gc.Gears)
+            if (gc.Gears.Count == 0)
+            {
+                // No gear to grab. Dampeners only — do not keep the -2 descent.
+                gearLockNote = "No landing gear";
+                return false;
+            }
+
+            gearLockNote = null;
+            VectorHelper.MatchVerticalSpeed(gc, pc, -2, true);
+
+            bool grabbed = false;
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear g = gc.Gears[i];
+                if (g == null || g.Closed)
+                    continue;
+
+                g.Enabled = true;
+                g.AutoLock = true;
+                bool ready = g.LockMode == LandingGearMode.ReadyToLock;
                 g.Lock();
+                if (g.IsLocked || ready || g.LockMode == LandingGearMode.ReadyToLock)
+                    grabbed = true;
+            }
 
-            return gc.Gears.Exists(g => g.IsLocked);
+            return grabbed;
         }
     }
 }
