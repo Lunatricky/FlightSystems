@@ -2,8 +2,6 @@ using IngameScript.Domain;
 using IngameScript.Enums;
 using IngameScript.Physics;
 using IngameScript.UseCases;
-using Sandbox.ModAPI.Ingame;
-using System.Collections.Generic;
 using System.Text;
 using VRageMath;
 
@@ -11,8 +9,10 @@ namespace IngameScript
 {
     class Lcd1Display
     {
-        public static void Draw(
-            List<IMyTextSurface> surfaces,
+        static readonly StringBuilder stateLine = new StringBuilder();
+
+        public static void Fill(
+            Sprites spt,
             IniContext ic,
             GridContext gc,
             PhysicsContext pc,
@@ -20,25 +20,35 @@ namespace IngameScript
             PlanetType planet,
             double planetRadius)
         {
-            if (surfaces == null || surfaces.Count == 0 || pc == null)
+            if (spt == null || pc == null)
                 return;
 
-            Sprites spt = new Sprites(ic);
+            spt.Clear();
             spt.Add(gc.GridName ?? "");
-            spt.Add("Type: " + gc.ShipType);
-            spt.Add($"Planet: {planet} | {planetRadius / 1000:F0}km");
+            spt.Add("Type: " + EnumLabels.Ship(gc.ShipType));
+            spt.Add($"Planet: {EnumLabels.PlanetKind(planet)} | {planetRadius / 1000:F0}km");
 
-            StringBuilder state = new StringBuilder();
-            state.Append("State: " + command.State);
+            stateLine.Clear();
+            stateLine.Append("State: ");
+            stateLine.Append(EnumLabels.State(command.State));
 
             if (command.Param.AutoLandState != AutoLandState.Idle)
-                state.Append(" - " + command.Param.AutoLandState);
+            {
+                stateLine.Append(" - ");
+                stateLine.Append(EnumLabels.Land(command.Param.AutoLandState));
+            }
             else if (command.Param.Step != Step.Toggle)
-                state.Append(" - " + command.Param.Step);
+            {
+                stateLine.Append(" - ");
+                stateLine.Append(EnumLabels.StepName(command.Param.Step));
+            }
             if (command.Param.Number != 0)
-                state.Append(" - " + command.Param.Number);
+            {
+                stateLine.Append(" - ");
+                stateLine.Append(command.Param.Number);
+            }
 
-            spt.Add(state.ToString());
+            spt.Add(stateLine.ToString());
 
             spt.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
             spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
@@ -47,8 +57,6 @@ namespace IngameScript
                 AddResource(spt, "H2", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate, ic.MinimumAcceptedFuel);
             if (pc.BatCache.Capacity > 0)
                 AddResource(spt, "Bat", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate, ic.MinimumAcceptedFuel);
-
-            spt.DrawTo(surfaces);
         }
 
         static void AddResource(Sprites spt, string label, double percent, string time, double rate, double minFuel)

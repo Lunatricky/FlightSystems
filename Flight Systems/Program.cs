@@ -4,6 +4,7 @@ using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
 using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +23,9 @@ namespace IngameScript
 
         Command command;
         SettingsScreens settingsHud;
+        Sprites hudStack1;
+        Sprites hudStack2;
+        Sprites settingsStack;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -56,6 +60,9 @@ namespace IngameScript
             pi = new PlayerInput(gc.Controllers);
             command = new Command();
             settingsHud = new SettingsScreens();
+            hudStack1 = new Sprites(ic);
+            hudStack2 = new Sprites(ic);
+            settingsStack = new Sprites(ic);
 
             CheckIni();
             
@@ -64,12 +71,6 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            List<IMyTextSurface> Lcds = new List<IMyTextSurface>();
-            GridTerminalSystem.GetBlocksOfType(Lcds);
-            Echo("surfaces: " + Lcds.Count);
-            Echo("surfaces: " + gc.Surfaces.Count);
-
-
             if (!string.IsNullOrEmpty(argument))
             {
                 foreach (string param in ic.IniParamList)
@@ -135,6 +136,7 @@ namespace IngameScript
 
             if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
+                RefreshHudLines();
                 if (settingsHud.ShouldClose(pi))
                 {
                     settingsToggle = false;
@@ -174,13 +176,7 @@ namespace IngameScript
             }
 
             if (tickCount % 50 == 2 && !IsShipControlled())
-            {
-                if (!settingsToggle)
-                    settingsHud.FlightSystemIdle(ic, gc, sb);
-
-                Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
-            }
+                DrawFlightLcds();
 
             if (ic.AllowDockMode)
             {
@@ -243,10 +239,7 @@ namespace IngameScript
                 case 2:
                     task = Task.LCDs;
                     if (IsShipControlled())
-                    {
-                        Lcd1Display.Draw(gc.Lcds1, ic, gc, pc, command, planet, planetRadius);
-                        Lcd2Display.Draw(gc.Lcds2, ic, pc, command, sb);
-                    }
+                        DrawFlightLcds();
                     pc.CacheValues();
                     break;
             }
@@ -274,6 +267,10 @@ namespace IngameScript
             if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
             {
                 gc.Me.CubeGrid.CustomName = gc.GridName;
+            } 
+            else
+            {
+                gc.Me.CubeGrid.CustomName = gc.ShipType.ToString();
             }
 
             if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
@@ -285,21 +282,55 @@ namespace IngameScript
                 }
                 ReloadGridContext(gc, ic);
                 tick = 0;
+                RedrawSpriteLcds();
                 return true;
             }
 
             if (gc.SyncTaggedCockpitIni())
             {
                 gc.ReloadLCDs();
+                RedrawSpriteLcds();
                 return true;
             }
 
             return false;
         }
 
+        void RefreshHudLines()
+        {
+            if (pc == null)
+            {
+                hudStack1.Clear();
+                hudStack2.Clear();
+                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, null, null, settingsStack);
+                return;
+            }
+
+            Lcd1Display.Fill(hudStack1, ic, gc, pc, command, planet, planetRadius);
+            Lcd2Display.Fill(hudStack2, pc, command, sb);
+            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, hudStack1, hudStack2, settingsStack);
+        }
+
+        void DrawFlightLcds()
+        {
+            RefreshHudLines();
+            if (!settingsToggle)
+                settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
+            Sprites.PaintHud();
+        }
+
+        void RedrawSpriteLcds()
+        {
+            settingsHud.IsDefaultScreen = false;
+            DrawFlightLcds();
+        }
+
         void AnalogThrust()
         {
             pi.OcupiedController(gc.Controllers);
+            if (gc.ForwardThrusters.Count == 0)
+                return;
+
             if (pi.W())
             {
                 foreach (IMyThrust t in gc.ForwardThrusters)
@@ -316,7 +347,8 @@ namespace IngameScript
                 }
             }
 
-            if (gc.ForwardThrusters.First().ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
+            // No W/S this tick leaves the last override. Abort is what clears it.
+            if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
             else gc.ResetThrusters(gc.BreakingThrusters);
         }
         
@@ -346,7 +378,7 @@ namespace IngameScript
             if (lastRunTimeMs > MaxRuntime)
             {
                 MaxRuntime = lastRunTimeMs;
-                maxTask = task.ToString();
+                maxTask = EnumLabels.TaskName(task);
             }
 
             if (currentInstructions > MaxInstruction)
@@ -355,7 +387,10 @@ namespace IngameScript
             double avgRuntime = RunTimeSum / SumCounter;
             double avgInstructions = InstructionSum / SumCounter;
 
-            return $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
+            string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
+            if (gearLockNote != null)
+                report = report + "\n" + gearLockNote;
+            return report;
         }
 
 
@@ -500,8 +535,11 @@ namespace IngameScript
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                     {
                         SoftAbort(gc);
-                        command.Param.Step = Step.Climb;
+                        BeginClimbOrLift(gc, command);
                     }
+                    break;
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
                 case Step.Climb:
                     Climb(gc, ic.CruiseSpeed);
@@ -557,9 +595,10 @@ namespace IngameScript
                     break;
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
-                    {
-                        command.Param.Step = Step.Climb;
-                    }
+                        BeginClimbOrLift(gc, command);
+                    break;
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
                 case Step.Climb:
                     if (pc.GroundLevel > ic.SafeAltitude)
@@ -657,9 +696,11 @@ namespace IngameScript
 
                 case Step.Preclimb:
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
-                    {
-                        command.Param.Step = Step.Climb;
-                    }
+                        BeginClimbOrLift(gc, command);
+                    break;
+
+                case Step.Lift:
+                    LiftClearance(gc, command);
                     break;
 
                 case Step.Climb:
@@ -674,6 +715,45 @@ namespace IngameScript
                     Climb(gc, ic.CruiseSpeed);
                     break;
             }
+        }
+
+        const double ClearanceLiftRate = 8;
+
+        void BeginClimbOrLift(GridContext gc, Command command)
+        {
+            command.Param.Step = NeedsTailClearance(gc) ? Step.Lift : Step.Climb;
+        }
+
+        bool NeedsTailClearance(GridContext gc)
+        {
+            if (pc == null || pc.Gravity <= 0)
+                return false;
+            if (pc.GroundLevel >= ic.SafeAltitude)
+                return false;
+
+            double thetaDeg = pc.GetMaxPitchAngle(gc);
+            if (thetaDeg < 1.0)
+                return false;
+
+            return pc.GroundLevel < TailClearance(gc, thetaDeg);
+        }
+
+        double TailClearance(GridContext gc, double thetaDeg)
+        {
+            double theta = thetaDeg * (Math.PI / 180.0);
+            double pad = gc.IsLG ? 2.5 : 0.5;
+            double sweep = gc.GridLength * 0.5 * Math.Sin(theta);
+            return gc.GridHeight + sweep + pad;
+        }
+
+        void LiftClearance(GridContext gc, Command command)
+        {
+            // Stay level until the tail can swing through the pitch Climb is about to use.
+            GravityAlignedOverride(gc);
+            gc.ResetThrusters(gc.ForwardThrusters);
+            VectorHelper.MatchVerticalSpeed(gc, pc, ClearanceLiftRate, false);
+            if (!NeedsTailClearance(gc))
+                command.Param.Step = Step.Climb;
         }
 
         private void Climb(GridContext gc, double CruiseSpeed)
@@ -721,7 +801,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (TryLock(gc)) AbortShipContext(gc);
+                    HandleLockGear(gc, command, false);
                     break;
             }
         }
@@ -756,20 +836,13 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    if (pc.UpVelocity > -(ic.CruiseSpeed / 4) && 4 * pc.GroundLevel > 1 + pc.StopYDist)
-                    {
-                        command.State = MainState.Land;
-                        command.Param.AutoLandState = AutoLandState.Drop;
-                    }
-                    else if (TryLock(gc)) AbortShipContext(gc);
+                    HandleLockGear(gc, command, true);
                     break;
             }
         }
 
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
-            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
-
             gc.Setup(ic);
 
             gc.ReloadLCDs()
@@ -778,6 +851,8 @@ namespace IngameScript
 
             if (gc.ErrorMessage.Length > 0)
                 return;
+
+            pc = new PhysicsContext(gc, stt, timeSinceLastRun);
 
             // Flight cached blocks
             if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
@@ -817,7 +892,12 @@ namespace IngameScript
         {
             if (pc.ForwardVelocity >= ic.CruiseSpeed)
             {
+                currentOverride = 0;
+                currentBrake = 0;
+                integral = 0;
+                lastError = 0;
                 gc.ResetThrusters(gc.ForwardThrusters);
+                gc.ResetThrusters(gc.BreakingThrusters);
                 return;
             }
 
@@ -914,6 +994,12 @@ namespace IngameScript
 
         void SoftAbort(GridContext gc)
         {
+            currentOverride = 0;
+            currentBrake = 0;
+            integral = 0;
+            lastError = 0;
+            gearLockNote = null;
+
             if (gc.Controller != null)
                 gc.Controller.DampenersOverride = true;
             sb.StopCruiseWhenOutOfGrav = false;
@@ -1128,20 +1214,76 @@ namespace IngameScript
 
             double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
-            VectorHelper.MatchVerticalSpeed(gc, pc, -speedFromAlt);
-            return pc.GroundLevel < 10 + 2 * gc.GridHeight;
+            double agl = pc.GroundLevel;
+            double stop = pc.StopYDist;
+            // ease to about -2 m/s as AGL approaches one ship-height
+            double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
+            VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
+            return agl < Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
+        }
+
+        string gearLockNote;
+
+        // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
+        void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
+        {
+            if (!GearHolding(gc) && pc.GroundLevel > 3 * gc.GridHeight && pc.ClimbRate > 2)
+            {
+                if (leaveToLand)
+                    command.State = MainState.Land;
+                command.Param.AutoLandState = AutoLandState.Drop;
+                return;
+            }
+
+            if (TryLock(gc))
+                AbortShipContext(gc);
+        }
+
+        bool GearHolding(GridContext gc)
+        {
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear g = gc.Gears[i];
+                if (g == null || g.Closed)
+                    continue;
+                if (g.IsLocked || g.LockMode == LandingGearMode.ReadyToLock)
+                    return true;
+            }
+            return false;
         }
 
         bool TryLock(GridContext gc)
         {
             GravityAlignedOverride(gc);
-            VectorHelper.MatchVerticalSpeed(gc, pc, -2);
-            gc.Controller.DampenersOverride = true;
+            if (gc.Controller != null)
+                gc.Controller.DampenersOverride = true;
 
-            foreach (var g in gc.Gears)
+            if (gc.Gears.Count == 0)
+            {
+                // No gear to grab. Dampeners only — do not keep the -2 descent.
+                gearLockNote = "No landing gear";
+                return false;
+            }
+
+            gearLockNote = null;
+            VectorHelper.MatchVerticalSpeed(gc, pc, -2, true);
+
+            bool grabbed = false;
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear g = gc.Gears[i];
+                if (g == null || g.Closed)
+                    continue;
+
+                g.Enabled = true;
+                g.AutoLock = true;
+                bool ready = g.LockMode == LandingGearMode.ReadyToLock;
                 g.Lock();
+                if (g.IsLocked || ready || g.LockMode == LandingGearMode.ReadyToLock)
+                    grabbed = true;
+            }
 
-            return gc.Gears.Exists(g => g.IsLocked);
+            return grabbed;
         }
     }
 }

@@ -10,7 +10,7 @@ using VRageMath;
 
 namespace IngameScript.Domain
 {
-    public class GridContext : GridManager
+    public class GridContext
     {
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
@@ -31,6 +31,7 @@ namespace IngameScript.Domain
         double centerGridHeight;
         double bottomGridHeight;
         double gridHeight;
+        double gridLength;
 
         IMyRemoteControl controller;
         IMyBatteryBlock backupBattery;
@@ -74,6 +75,7 @@ namespace IngameScript.Domain
             string tempGridName = Me.CubeGrid.CustomName;
             if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
                 GridName = tempGridName;
+            else GridName = "temp";
         }
 
         public void Setup(IniContext ic)
@@ -178,6 +180,10 @@ namespace IngameScript.Domain
             else if (AtmoThrusters.Count + HydroThrusters.Count == 0) ShipType = ShipType.Space;
             else ShipType = ShipType.Interplanetary;
 
+            string tempGridName = Me.CubeGrid.CustomName;
+            if (!string.IsNullOrWhiteSpace(tempGridName) && !tempGridName.Contains(" Grid "))
+                GridName = tempGridName;
+            else GridName = ShipType.ToString();
 
             ReloadGridHeight();
             if (Thrusters.Count > 0) ReloadThrusters();
@@ -225,6 +231,17 @@ namespace IngameScript.Domain
             GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
 
             GridHeight = IsLG ? GridHeight * 2.5 : GridHeight * 0.5;
+
+            Vector3D gravity = Controller.GetNaturalGravity();
+            if (gravity.LengthSquared() < 1e-6)
+            {
+                GridLength = 0;
+                return;
+            }
+
+            // Length along forward, once per grid reload. Tick clearance must not rebuild the box.
+            BoundingBoxD box = Me.CubeGrid.WorldAABB;
+            GridLength = 2 * Math.Abs(box.HalfExtents.Dot(Controller.WorldMatrix.Forward));
         }
 
         void ReloadThrusters()
@@ -418,19 +435,11 @@ namespace IngameScript.Domain
                 : ColorMap.GetColorFromString(ic.LcdBackgroundColor);
             Color fg = ColorMap.GetColorFromString(ic.LcdFontColor);
 
-            ContentType prev = s.ContentType;
-
-            // panel / text mode
-            s.ContentType = ContentType.TEXT_AND_IMAGE;
+            // Do not toggle ContentType: TEXT→SCRIPT→restore blanks cockpit/PB sprite surfaces.
             s.BackgroundColor = bg;
             s.FontColor = fg;
-
-            // cockpit + sprite / script mode (this is what cockpits actually show)
-            s.ContentType = ContentType.SCRIPT;
             s.ScriptBackgroundColor = bg;
             s.ScriptForegroundColor = fg;
-
-            s.ContentType = prev;
         }
 
         void AddAllSurfaces(IMyTextSurfaceProvider provider, List<IMyTextSurface> dest, bool setupSurface)
@@ -450,7 +459,8 @@ namespace IngameScript.Domain
 
         public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
         {
-            surface.ContentType = ContentType.TEXT_AND_IMAGE;
+            surface.ContentType = ContentType.SCRIPT;
+            surface.Script = "";
             surface.Font = "DEBUG";
             surface.FontSize = fontSize;
             surface.Alignment = TextAlignment.LEFT;
@@ -670,6 +680,19 @@ namespace IngameScript.Domain
             }
         }
 
+        public double GridLength
+        {
+            get
+            {
+                return gridLength;
+            }
+
+            set
+            {
+                gridLength = value;
+            }
+        }
+
         public IMyRemoteControl Controller
         {
             get
@@ -771,12 +794,14 @@ namespace IngameScript.Domain
         public void ResetThrusters() => ResetThrusters(thrusters);
         public void ResetThrusters(List<IMyThrust> thrusters)
         {
-            foreach (var t in thrusters)
+            for (int i = 0; i < thrusters.Count; i++)
             {
+                IMyThrust t = thrusters[i];
+                if (t == null || t.Closed)
+                    continue;
                 t.ThrustOverridePercentage = 0f;
                 t.Enabled = true;
             }
-
         }
 
         public void ResetGyros()
@@ -825,8 +850,6 @@ namespace IngameScript.Domain
         {
             foreach (IMyTextSurface lcd in lcds)
             {
-                lcd.AddImageToSelection("Online");
-                lcd.RemoveImageFromSelection("Online");
                 lcd.ContentType = ContentType.SCRIPT;
                 lcd.Script = "";
             }

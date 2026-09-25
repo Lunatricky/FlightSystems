@@ -7,6 +7,7 @@
         AimToGPS,
         Cruise,
         Preclimb,
+        Lift,
         Climb,
         Orbit
     }

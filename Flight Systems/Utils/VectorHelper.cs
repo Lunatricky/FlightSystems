@@ -44,14 +44,19 @@ namespace IngameScript
             return Vector3D.Normalize(Math.Cos(theta) * gDown + Math.Sin(theta) * fHoriz);
         }
 
-        public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target)
+        public static void MatchVerticalSpeed(GridContext gc, PhysicsContext pc, double target, bool lockHover)
         {
             double hover = (pc.Mass.PhysicalMass * pc.Gravity) / SumThrust(gc);
 
             double current = GetGravityAlignedVerticalVelocity(gc, pc);
             double error = target - current;
 
-            double output = MathHelper.Clamp(hover + error * 0.5, 0.01, 1);
+            // Lock may sit on a 1% hover. Anywhere else a small error must be allowed to reach 0.
+            double floor = 0.01;
+            if (!lockHover && Math.Abs(error) < 1.0)
+                floor = 0;
+
+            double output = MathHelper.Clamp(hover + error * 0.5, floor, 1);
 
             foreach (var t in gc.UpwardThrusters)
                 t.ThrustOverridePercentage = (float)output;

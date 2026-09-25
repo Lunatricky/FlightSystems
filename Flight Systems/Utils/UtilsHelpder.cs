@@ -24,6 +24,21 @@ namespace IngameScript.Utils
             return true;
         }
 
+        public static string GpsName(string gps)
+        {
+            if (string.IsNullOrWhiteSpace(gps) || !gps.StartsWith("GPS:"))
+                return "";
+            string[] parts = gps.Split(':');
+            return parts.Length >= 2 ? parts[1] : "";
+        }
+
+        public static string FormatGps(string name, Vector3D pos)
+        {
+            if (string.IsNullOrEmpty(name))
+                name = "GPS";
+            return "GPS:" + name + ":" + pos.X + ":" + pos.Y + ":" + pos.Z + ":#FF75C9F1:";
+        }
+
         public static string FormatTime(double time)
         {
             if (double.IsInfinity(time) || time < 0)
