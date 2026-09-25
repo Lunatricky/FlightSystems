@@ -65,7 +65,7 @@ namespace IngameScript
             settingsStack = new Sprites(ic);
 
             CheckIni();
-            
+
             if (gc.LcdsSettings.Count > 0) settingsHud.FlightSystemIdle(ic, gc, sb);
         }
 
@@ -78,7 +78,7 @@ namespace IngameScript
                     if (argument.Contains(param))
                     {
                         var parts = argument.Trim().Split(
-                            new[] {':'},
+                            new[] { ':' },
                             StringSplitOptions.RemoveEmptyEntries
                         );
 
@@ -112,7 +112,7 @@ namespace IngameScript
                         return;
                     }
                 }
-                
+
                 if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     settingsToggle = !settingsToggle;
@@ -267,7 +267,7 @@ namespace IngameScript
             if (!string.IsNullOrWhiteSpace(gc.GridName) && !gc.GridName.Contains(" Grid "))
             {
                 gc.Me.CubeGrid.CustomName = gc.GridName;
-            } 
+            }
             else
             {
                 gc.Me.CubeGrid.CustomName = gc.ShipType.ToString();
@@ -351,7 +351,7 @@ namespace IngameScript
             if (gc.ForwardThrusters[0].ThrustOverridePercentage > 0) gc.KillThrusters(gc.BreakingThrusters);
             else gc.ResetThrusters(gc.BreakingThrusters);
         }
-        
+
         double TickCounter;
         double MaxRuntime;
         double MaxInstruction;
@@ -458,7 +458,8 @@ namespace IngameScript
                     {
                         gc.Controller.DampenersOverride = true;
                         CircumNavigateStateSwitch(gc, ic, command);
-                    } else AbortShipContext(gc);
+                    }
+                    else AbortShipContext(gc);
                     break;
                 case MainState.Gps: // Fly to GPS
                     gc.Controller.DampenersOverride = true;
@@ -542,6 +543,8 @@ namespace IngameScript
                     LiftClearance(gc, command);
                     break;
                 case Step.Climb:
+                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
+                        ArmClimbBoost();
                     Climb(gc, ic.CruiseSpeed);
                     break;
             }
@@ -593,7 +596,7 @@ namespace IngameScript
                             break;
                         }
                         GravityAlignedOverride(gc);
-                        CruiseControl(CruiseSpeed, timeSinceLastRun); 
+                        CruiseControl(CruiseSpeed, timeSinceLastRun);
                     }
                     break;
                 case Step.Off:
@@ -607,7 +610,9 @@ namespace IngameScript
                     LiftClearance(gc, command);
                     break;
                 case Step.Climb:
-                    if (pc.GroundLevel > ic.SafeAltitude)
+                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, CruiseSpeed))
+                        ArmClimbBoost();
+                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost && !rayBlocksLevel)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
@@ -626,7 +631,7 @@ namespace IngameScript
                     ToggleCommand(gc, command);
                     break;
 
-                case Step.On:                    
+                case Step.On:
                     if (pc.Gravity == 0)
                     {
                         if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - command.Param.TargetCoordinates))
@@ -699,6 +704,8 @@ namespace IngameScript
                         command.Param.Step = Step.On;
                         return;
                     }
+                    if (ForwardTerrainClose(gc, ic.CruiseSpeed))
+                        ArmClimbBoost();
                     Climb(gc, ic.CruiseSpeed);
                     break;
 
@@ -716,7 +723,9 @@ namespace IngameScript
                     break;
 
                 case Step.Climb:
-                    if (pc.GroundLevel > ic.SafeAltitude)
+                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
+                        ArmClimbBoost();
+                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost && !rayBlocksLevel)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
@@ -725,57 +734,89 @@ namespace IngameScript
                         return;
                     }
                     Climb(gc, ic.CruiseSpeed);
-                    Climb(gc, ic.CruiseSpeed);
                     break;
             }
         }
 
         const double ClearanceLiftRate = 8;
         const double RayLookCap = 2000;
+        const double RayMinCast = 20;
         int lastRayTick = -10;
+        int rayCacheTick = -1;
+        bool rayDidScan;
+        bool rayHitClose;
+        bool rayBlocksLevel;
+
+        double ThreatRange(double cruiseSpeed)
+        {
+            double threat = pc.StopZDist * 1.5;
+            double bySpeed = cruiseSpeed * 4;
+            if (bySpeed > threat)
+                threat = bySpeed;
+            if (threat > RayLookCap || double.IsInfinity(threat) || double.IsNaN(threat))
+                threat = RayLookCap;
+            if (threat < 50)
+                threat = 50;
+            return threat;
+        }
 
         bool ForwardTerrainClose(GridContext grid, double cruiseSpeed)
         {
-            if (pc == null || pc.Gravity <= 0 || climbBoost)
+            if (rayCacheTick == tick)
+                return rayHitClose;
+
+            rayCacheTick = tick;
+            rayDidScan = false;
+            rayHitClose = false;
+
+            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
                 return false;
             if (command.Param.Step == Step.Lift || command.Param.Step == Step.Preclimb)
                 return false;
 
             IMyCameraBlock cam = grid.RayCamera;
-            if (cam == null || cam.Closed || grid.Controller == null)
+            if (cam == null || cam.Closed)
                 return false;
-
-            if (tick - lastRayTick < 10)
-                return false;
-
-            double look = pc.StopZDist * 1.5;
-            double speedLook = cruiseSpeed * 4;
-            if (speedLook > look)
-                look = speedLook;
-            if (look > RayLookCap || double.IsInfinity(look) || double.IsNaN(look))
-                look = RayLookCap;
-            if (look < 1)
-                look = 1;
 
             if (!cam.Enabled)
                 cam.Enabled = true;
+            // Leave raycast enabled so the camera keeps charging between casts.
             cam.EnableRaycast = true;
-            if (!cam.CanScan(look) || cam.AvailableScanRange < look)
-                return false;
+
+            if (tick - lastRayTick < 10)
+            {
+                rayHitClose = rayBlocksLevel;
+                return rayHitClose;
+            }
+
+            double threat = ThreatRange(cruiseSpeed);
+            double charged = cam.AvailableScanRange;
+            double cast = charged < threat ? charged : threat;
+            if (cast < RayMinCast || !cam.CanScan(cast))
+            {
+                rayHitClose = rayBlocksLevel;
+                return rayHitClose;
+            }
 
             lastRayTick = tick;
-            MyDetectedEntityInfo hit = cam.Raycast(look, grid.Controller.WorldMatrix.Forward);
-            cam.EnableRaycast = false;
+            rayDidScan = true;
+            MyDetectedEntityInfo hit = cam.Raycast(cast);
 
-            if (hit.IsEmpty() || hit.Type == MyDetectedEntityType.None)
+            if (hit.IsEmpty() || hit.Type == MyDetectedEntityType.None || !hit.HitPosition.HasValue)
+            {
+                rayBlocksLevel = false;
                 return false;
-            if (!hit.HitPosition.HasValue)
-                return false;
+            }
             if (grid.IsOwnGrid(hit.EntityId))
+            {
+                rayBlocksLevel = false;
                 return false;
+            }
 
             double distance = Vector3D.Distance(grid.Controller.GetPosition(), hit.HitPosition.Value);
-            return distance < pc.StopZDist * 1.5;
+            rayHitClose = distance < threat;
+            rayBlocksLevel = rayHitClose;
+            return rayHitClose;
         }
 
         void DisarmForwardRay(GridContext grid)
@@ -833,7 +874,7 @@ namespace IngameScript
 
         private void Climb(GridContext gc, double CruiseSpeed)
         {
-            bool inClimb = command.Param.Step == Step.Climb;
+            bool inClimb = command.Param.Step == Step.Climb || command.Param.Step == Step.Orbit;
             if (!inClimb)
             {
                 climbReleasedThisTick = false;
@@ -841,7 +882,7 @@ namespace IngameScript
                     ClearClimbBoost(gc);
             }
             else
-                SampleClimbBoost(gc);
+                SampleClimbBoost(gc, CruiseSpeed);
 
             VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, pc.DesiredUpVector);
 
@@ -858,7 +899,14 @@ namespace IngameScript
             CruiseControl(CruiseSpeed, timeSinceLastRun);
         }
 
-        void SampleClimbBoost(GridContext grid)
+        void ArmClimbBoost()
+        {
+            climbBoost = true;
+            climbDropStreak = 0;
+            climbRiseStreak = 0;
+        }
+
+        void SampleClimbBoost(GridContext grid, double cruiseSpeed)
         {
             if (climbSampleTick == tick)
                 return;
@@ -868,15 +916,19 @@ namespace IngameScript
 
             if (climbBoost)
             {
-                if (pc.ClimbRate > 1)
-                    climbRiseStreak++;
-                else
-                    climbRiseStreak = 0;
-
-                if (climbRiseStreak >= 5)
+                ForwardTerrainClose(grid, cruiseSpeed);
+                if (rayDidScan)
                 {
-                    ClearClimbBoost(grid);
-                    climbReleasedThisTick = true;
+                    if (rayHitClose || pc.ClimbRate <= 1)
+                        climbRiseStreak = 0;
+                    else
+                        climbRiseStreak++;
+
+                    if (climbRiseStreak >= 2)
+                    {
+                        ClearClimbBoost(grid);
+                        climbReleasedThisTick = true;
+                    }
                 }
                 return;
             }
@@ -888,11 +940,7 @@ namespace IngameScript
                 climbDropStreak = 0;
 
             if (climbDropStreak >= 5)
-            {
-                climbBoost = true;
-                climbDropStreak = 0;
-                climbRiseStreak = 0;
-            }
+                ArmClimbBoost();
         }
 
         void BoostClimb(GridContext grid)
@@ -1014,7 +1062,7 @@ namespace IngameScript
 
             // Flight cached blocks
             if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
-            {                
+            {
                 SoftAbort(gc);
 
                 sb.LastCheckIsOnNatGrav = pc.Gravity > 0;
