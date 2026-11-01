@@ -169,7 +169,7 @@ namespace IngameScript
 
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
-                isDocked = anyConnected || isGearlocked;
+                isDocked = anyConnected;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -1050,6 +1050,7 @@ namespace IngameScript
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             gc.Setup(ic);
+            StaticConnectorStamp.Apply(gc.GridTS, gc.Me.CubeGrid);
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
@@ -1431,6 +1432,34 @@ namespace IngameScript
         }
 
         string gearLockNote;
+
+        const double GearDockAgl = 2;
+
+        // Locked gear whose pad is under GearDockAgl. Not a dock trigger.
+        bool GearOnGround()
+        {
+            if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
+                return false;
+            if (pc.NaturalGravity.LengthSquared() == 0)
+                return false;
+            double ground = pc.GroundLevel;
+            if (double.IsNaN(ground) || double.IsInfinity(ground))
+                return false;
+
+            Vector3D up = Vector3D.Normalize(-pc.NaturalGravity);
+            Vector3D controllerPos = gc.Controller.GetPosition();
+
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear gear = gc.Gears[i];
+                if (gear == null || gear.Closed || !gear.IsLocked)
+                    continue;
+                double gearAgl = ground - (controllerPos - gear.GetPosition()).Dot(up);
+                if (gearAgl < GearDockAgl)
+                    return true;
+            }
+            return false;
+        }
 
         // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
         void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
