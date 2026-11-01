@@ -41,6 +41,12 @@ namespace IngameScript
         bool isGearlocked;
         int connectorSafePasses;
         bool mothershipPortWarning;
+        bool dockWarning;
+        int dockWarningTicks;
+        int dockWarningRow = 1;
+        bool dockLatch;
+        bool autoDockSuppress;
+        bool suppressSawUnsafe;
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -115,7 +121,17 @@ namespace IngameScript
                     }
                 }
 
-                if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
+                string dockArg = argument.Trim().ToLowerInvariant();
+                if (dockArg == "dock" || dockArg == "dock confirm" || dockArg == "dock cancel")
+                {
+                    if (dockArg == "dock")
+                        OnDock();
+                    else if (dockArg == "dock confirm")
+                        OnDockConfirm();
+                    else
+                        CancelDockWarning();
+                }
+                else if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     settingsToggle = !settingsToggle;
 
@@ -136,7 +152,20 @@ namespace IngameScript
                 settingsIsLocked = false;
             }
 
-            if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
+            if (dockWarning)
+            {
+                dockWarningTicks++;
+                if (dockWarningTicks >= 900)
+                    CancelDockWarning();
+            }
+
+            if (dockWarning)
+            {
+                HandleDockWarningInput();
+                if (dockWarning)
+                    DrawDockWarning();
+            }
+            else if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
                 RefreshHudLines();
                 if (settingsHud.ShouldClose(pi))
@@ -180,7 +209,22 @@ namespace IngameScript
                 }
                 else
                     connectorSafePasses = 0;
-                isDocked = connectorSafePasses >= 2;
+
+                if (autoDockSuppress)
+                {
+                    bool safeNow = ConnectorSafeToDock();
+                    if (!safeNow)
+                        suppressSawUnsafe = true;
+                    else if (suppressSawUnsafe)
+                        autoDockSuppress = false;
+                }
+
+                if (dockLatch)
+                    isDocked = true;
+                else if (autoDockSuppress)
+                    isDocked = false;
+                else
+                    isDocked = connectorSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -188,6 +232,9 @@ namespace IngameScript
 
             if (tickCount % 50 == 2 && !IsShipControlled())
                 DrawFlightLcds();
+
+            if (dockLatch)
+                isDocked = true;
 
             if (ic.AllowDockMode)
             {
@@ -286,10 +333,11 @@ namespace IngameScript
 
             if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
             {
-                if (!ic.AllowDockMode)
+                if (!ic.AllowDockMode && !dockLatch)
                 {
                     AbortShipContext(gc);
                     DockToggle(gc, false);
+                    lastDockMode = isDockMode;
                 }
                 ReloadGridContext(gc, ic);
                 tick = 0;
@@ -324,6 +372,12 @@ namespace IngameScript
 
         void DrawFlightLcds()
         {
+            if (dockWarning)
+            {
+                DrawDockWarning();
+                return;
+            }
+
             RefreshHudLines();
             if (!settingsToggle)
                 settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
@@ -511,6 +565,162 @@ namespace IngameScript
             {
                 gc.AutoBatteries();
             }
+        }
+
+        void OnDock()
+        {
+            if (isDockMode)
+            {
+                ManualExitDock();
+                return;
+            }
+
+            if (ConnectorSafeToDock())
+            {
+                ManualEnterDock();
+                return;
+            }
+
+            if (!dockWarning)
+                ArmDockWarning();
+        }
+
+        void OnDockConfirm()
+        {
+            if (!dockWarning || isDockMode)
+                return;
+            ManualEnterDock();
+        }
+
+        void ArmDockWarning()
+        {
+            dockWarning = true;
+            dockWarningTicks = 0;
+            dockWarningRow = 1;
+            DrawDockWarning();
+        }
+
+        void CancelDockWarning()
+        {
+            if (!dockWarning)
+                return;
+            ClearDockWarning();
+            DrawFlightLcds();
+        }
+
+        void ClearDockWarning()
+        {
+            dockWarning = false;
+            dockWarningTicks = 0;
+            dockWarningRow = 1;
+        }
+
+        void ManualEnterDock()
+        {
+            ClearDockWarning();
+            dockLatch = true;
+            autoDockSuppress = false;
+            suppressSawUnsafe = false;
+            isDocked = true;
+            AbortShipContext(gc);
+            DockToggle(gc, true);
+            lastDockMode = isDockMode;
+            DrawFlightLcds();
+        }
+
+        void ManualExitDock()
+        {
+            ClearDockWarning();
+            dockLatch = false;
+            autoDockSuppress = true;
+            suppressSawUnsafe = !ConnectorSafeToDock();
+            isDocked = false;
+            AbortShipContext(gc);
+            DockToggle(gc, false);
+            lastDockMode = isDockMode;
+            DrawFlightLcds();
+        }
+
+        void HandleDockWarningInput()
+        {
+            if (settingsIsLocked || !CockpitOccupied())
+                return;
+
+            pi.OcupiedController(gc.Controllers);
+            if (settingsToggle && settingsHud.ShouldClose(pi))
+            {
+                LockInput();
+                CancelDockWarning();
+                return;
+            }
+
+            if (pi.Q())
+            {
+                LockInput();
+                CancelDockWarning();
+                return;
+            }
+
+            if (pi.W())
+            {
+                dockWarningRow = 1;
+                LockInput();
+            }
+            else if (pi.S())
+            {
+                dockWarningRow = 2;
+                LockInput();
+            }
+
+            if (pi.Space())
+            {
+                LockInput();
+                if (dockWarningRow == 2)
+                    CancelDockWarning();
+                else
+                    OnDockConfirm();
+            }
+        }
+
+        bool CockpitOccupied()
+        {
+            for (int i = 0; i < gc.Controllers.Count; i++)
+            {
+                IMyShipController seat = gc.Controllers[i];
+                if (seat != null && !seat.Closed && seat.IsUnderControl)
+                    return true;
+            }
+            return false;
+        }
+
+        void DrawDockWarning()
+        {
+            Sprites.BindFlight(null, null, null, false, null, null, null);
+
+            hudStack1.Clear();
+            hudStack2.Clear();
+            hudStack1.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            hudStack1.Add("Thrusters and tools will turn off");
+            hudStack1.Add("No safe connector");
+            hudStack1.Add("Send dock confirm");
+            hudStack1.DrawTo(gc.Lcds1);
+            hudStack1.DrawTo(gc.Lcds2);
+
+            settingsStack.Clear();
+            settingsStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            settingsStack.Add("Thrusters and tools will turn off");
+            settingsStack.Add("No safe connector");
+            settingsStack.Add("Send dock confirm");
+            settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
+            settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
+            settingsStack.DrawTo(gc.LcdsSettings);
+        }
+
+        Color WarningRowColor(int row)
+        {
+            if (dockWarningRow == row)
+                return Color.DarkOrange;
+            return ic.SpriteBackgroundColor;
         }
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, Command command)
