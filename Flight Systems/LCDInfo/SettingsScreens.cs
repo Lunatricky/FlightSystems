@@ -12,6 +12,7 @@ namespace IngameScript
         public int SelectedRow;
         public int SelectedPage = 1;
         public bool IsDefaultScreen;
+        bool dockPortsListed;
         readonly GpsMenu gpsMenu = new GpsMenu();
 
         public bool ShouldClose(PlayerInput pi)
@@ -41,6 +42,9 @@ namespace IngameScript
                 return;
             }
 
+            if (SelectedPage != 2)
+                dockPortsListed = false;
+
             switch (SelectedPage)
             {
                 case 1:
@@ -51,7 +55,7 @@ namespace IngameScript
                         FlightSystemIdle(ic, gc, sb);
                     break;
                 case 2:
-                    ClampRow(1, 8);
+                    ClampRow(1, 10);
                     ToggleSectionEdit(ic, gc, pi, lockInput);
                     break;
                 case 3:
@@ -203,6 +207,7 @@ namespace IngameScript
             IsDefaultScreen = false;
             Sprites spt = new Sprites(ic);
             int row = 1;
+            EnsureDockPortConnectors(gc, ic);
 
             if (pi.A() || pi.D())
             {
@@ -211,6 +216,8 @@ namespace IngameScript
                 else if (SelectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
                 else if (SelectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
                 else if (SelectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
+                else if (SelectedRow == row++) ic.Mothership = !ic.Mothership;
+                else if (SelectedRow == row++) CycleDockPort(ic, gc, pi);
                 else if (SelectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
                 else if (SelectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
                 else if (SelectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
@@ -223,6 +230,8 @@ namespace IngameScript
             spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(SelectedRow == row++, ic.AnalogThrotle), Color.Black);
             spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(SelectedRow == row++, ic.AllowLowFuelLand), Color.Black);
             spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(SelectedRow == row++, ic.AllowDockMode), Color.Black);
+            spt.Add($"{IniContext.MOTHERSHIP}", BoolSpriteColor(SelectedRow == row++, ic.Mothership), Color.Black);
+            spt.Add(IniContext.DOCK_PORT + ": " + DockPortLabel(gc, ic), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(SelectedRow == row++, ic.ControlAntennas), Color.Black);
             spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
@@ -285,6 +294,64 @@ namespace IngameScript
             }
 
             return value < 0 ? 0 : value;
+        }
+
+        void EnsureDockPortConnectors(GridContext gc, IniContext ic)
+        {
+            if (dockPortsListed)
+                return;
+            dockPortsListed = true;
+            if (gc.Connectors.Count == 0)
+                gc.GetSameConstructBlocks(gc.Connectors, ic.IgnoreTag);
+        }
+
+        string DockPortLabel(GridContext gc, IniContext ic)
+        {
+            if (gc.Connectors.Count == 0 || string.IsNullOrEmpty(ic.DockPort))
+                return "none";
+
+            for (int i = 0; i < gc.Connectors.Count; i++)
+            {
+                var connector = gc.Connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (connector.CustomName == ic.DockPort)
+                    return connector.CustomName;
+            }
+            return "none";
+        }
+
+        void CycleDockPort(IniContext ic, GridContext gc, PlayerInput pi)
+        {
+            int count = gc.Connectors.Count;
+            if (count == 0)
+                return;
+
+            int index = -1;
+            for (int i = 0; i < count; i++)
+            {
+                var connector = gc.Connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (connector.CustomName == ic.DockPort)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            int next;
+            if (pi.D())
+                next = index < 0 ? 0 : (index + 1) % count;
+            else
+                next = index < 0 ? count - 1 : (index - 1 + count) % count;
+
+            var picked = gc.Connectors[next];
+            if (picked == null || picked.Closed)
+                return;
+
+            ic.DockPort = picked.CustomName;
+            StaticConnectorStamp.ApplyDockPort(gc.Connectors, ic.DockPort);
         }
 
         static Color BoolSpriteColor(bool isSelected, bool toggle)

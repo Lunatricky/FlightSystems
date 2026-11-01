@@ -10,6 +10,8 @@ namespace IngameScript
     class StaticConnectorStamp
     {
         public const string Line = "FS_STATIC=1";
+        public const string DockMe = "FS_DOCK=Me";
+        public const string DockOther = "FS_DOCK=Other";
 
         static readonly List<IMyMotorStator> motors = new List<IMyMotorStator>();
         static readonly List<IMyPistonBase> pistons = new List<IMyPistonBase>();
@@ -71,7 +73,37 @@ namespace IngameScript
                     continue;
                 if (!seen.Contains(connector.CubeGrid.EntityId))
                     continue;
-                SetLine(connector, anyStatic);
+                SetLine(connector, Line, anyStatic);
+            }
+        }
+
+        // One managed connector keeps FS_DOCK=Other. Other lines on that block stay.
+        public static void ApplyDockPort(List<IMyShipConnector> connectors, string portName)
+        {
+            if (connectors == null || string.IsNullOrEmpty(portName))
+                return;
+
+            bool matched = false;
+            for (int i = 0; i < connectors.Count; i++)
+            {
+                IMyShipConnector connector = connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (connector.CustomName == portName)
+                {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched)
+                return;
+
+            for (int i = 0; i < connectors.Count; i++)
+            {
+                IMyShipConnector connector = connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                SetLine(connector, DockOther, connector.CustomName == portName);
             }
         }
 
@@ -108,22 +140,22 @@ namespace IngameScript
             return a != null && b != null && !a.Closed && !b.Closed && a.EntityId == b.EntityId;
         }
 
-        static void SetLine(IMyTerminalBlock block, bool shouldHave)
+        static void SetLine(IMyTerminalBlock block, string line, bool shouldHave)
         {
             string data = block.CustomData ?? "";
-            bool has = HasExactLine(data, Line);
+            bool has = HasExactLine(data, line);
             if (shouldHave == has)
                 return;
 
             if (shouldHave)
             {
-                block.CustomData = AppendExactLine(data, Line);
+                block.CustomData = AppendExactLine(data, line);
                 return;
             }
 
             string stripped = data;
-            while (HasExactLine(stripped, Line))
-                stripped = RemoveExactLine(stripped, Line);
+            while (HasExactLine(stripped, line))
+                stripped = RemoveExactLine(stripped, line);
             if (stripped != data)
                 block.CustomData = stripped;
         }

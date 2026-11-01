@@ -39,6 +39,8 @@ namespace IngameScript
         bool lastDockMode;
         bool anyConnected;
         bool isGearlocked;
+        int connectorSafePasses;
+        bool mothershipPortWarning;
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -169,7 +171,16 @@ namespace IngameScript
 
                 isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
-                isDocked = anyConnected;
+                // Two passes to enter. The failing pass clears on the next tick.
+                bool connectorSafe = ic.AllowDockMode && ConnectorSafeToDock();
+                if (connectorSafe)
+                {
+                    if (connectorSafePasses < 2)
+                        connectorSafePasses++;
+                }
+                else
+                    connectorSafePasses = 0;
+                isDocked = connectorSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -390,6 +401,13 @@ namespace IngameScript
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
+            if (mothershipPortWarning)
+            {
+                if (ic != null && ic.Mothership && string.IsNullOrEmpty(ic.DockPort))
+                    report = report + "\nMothership is on but no dock port is assigned.";
+                else
+                    mothershipPortWarning = false;
+            }
             return report;
         }
 
@@ -1074,6 +1092,11 @@ namespace IngameScript
                 gc.ReloadConnectors()
                     .ReloadTanks()
                     .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
+            else if (!string.IsNullOrEmpty(ic.DockPort))
+                gc.GetSameConstructBlocks(gc.Connectors, ic.IgnoreTag);
+
+            StaticConnectorStamp.ApplyDockPort(gc.Connectors, ic.DockPort);
+            mothershipPortWarning = ic.Mothership && string.IsNullOrEmpty(ic.DockPort);
 
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
@@ -1434,6 +1457,37 @@ namespace IngameScript
         string gearLockNote;
 
         const double GearDockAgl = 2;
+
+        // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
+        // Mothership skips its own connectors. Never reads the other grid's IsStatic.
+        bool ConnectorSafeToDock()
+        {
+            if (gc == null || ic == null)
+                return false;
+
+            for (int i = 0; i < gc.Connectors.Count; i++)
+            {
+                IMyShipConnector connector = gc.Connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (connector.Status != MyShipConnectorStatus.Connected)
+                    continue;
+
+                if (!ic.Mothership && StaticConnectorStamp.HasExactLine(connector.CustomData, StaticConnectorStamp.DockMe))
+                    return true;
+
+                IMyShipConnector other = connector.OtherConnector;
+                if (other == null || other.Closed)
+                    continue;
+
+                string otherData = other.CustomData;
+                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.DockOther))
+                    return true;
+                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.Line))
+                    return true;
+            }
+            return false;
+        }
 
         // Locked gear whose pad is under GearDockAgl. Not a dock trigger.
         bool GearOnGround()
