@@ -45,6 +45,7 @@ namespace IngameScript
         int dockWarningTicks;
         int dockWarningRow = 1;
         bool dockLatch;
+        bool landDocked;
         bool autoDockSuppress;
         bool suppressSawUnsafe;
         bool settingsToggle;
@@ -219,7 +220,7 @@ namespace IngameScript
                         autoDockSuppress = false;
                 }
 
-                if (dockLatch)
+                if (dockLatch || landDocked)
                     isDocked = true;
                 else if (autoDockSuppress)
                     isDocked = false;
@@ -233,7 +234,7 @@ namespace IngameScript
             if (tickCount % 50 == 2 && !IsShipControlled())
                 DrawFlightLcds();
 
-            if (dockLatch)
+            if (dockLatch || landDocked)
                 isDocked = true;
 
             if (ic.AllowDockMode)
@@ -335,6 +336,7 @@ namespace IngameScript
             {
                 if (!ic.AllowDockMode && !dockLatch)
                 {
+                    landDocked = false;
                     AbortShipContext(gc);
                     DockToggle(gc, false);
                     lastDockMode = isDockMode;
@@ -632,6 +634,7 @@ namespace IngameScript
         {
             ClearDockWarning();
             dockLatch = false;
+            landDocked = false;
             autoDockSuppress = true;
             suppressSawUnsafe = !ConnectorSafeToDock();
             isDocked = false;
@@ -1737,7 +1740,17 @@ namespace IngameScript
             }
 
             if (TryLock(gc))
+            {
+                // Land only. SBurn passes leaveToLand and must not dock. Not the manual latch.
+                if (!leaveToLand && ic.AllowDockMode && GearOnGround())
+                {
+                    landDocked = true;
+                    isDocked = true;
+                    DockToggle(gc, true);
+                    lastDockMode = isDockMode;
+                }
                 AbortShipContext(gc);
+            }
         }
 
         bool GearHolding(GridContext gc)
