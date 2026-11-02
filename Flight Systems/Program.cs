@@ -39,7 +39,6 @@ namespace IngameScript
         bool lastDockMode;
         bool anyConnected;
         int connectorSafePasses;
-        int gearSafePasses;
         bool mothershipPortWarning;
         bool dockWarning;
         int dockWarningTicks;
@@ -200,10 +199,9 @@ namespace IngameScript
 
                 anyConnected = gc.IsAnyConnectorConnected();
                 // Two passes to enter. The failing pass clears on the next tick.
+                // A locked mag plate is a tug, not a dock. Near the ground it must not enter dock mode.
                 bool connectorOpen = ConnectorSafeToDock();
-                bool gearOnGround = GearOnGround();
                 bool connectorSafe = ic.AllowDockMode && connectorOpen;
-                bool gearSafe = ic.AllowDockMode && gearOnGround;
                 if (connectorSafe)
                 {
                     if (connectorSafePasses < 2)
@@ -211,18 +209,10 @@ namespace IngameScript
                 }
                 else
                     connectorSafePasses = 0;
-                if (gearSafe)
-                {
-                    if (gearSafePasses < 2)
-                        gearSafePasses++;
-                }
-                else
-                    gearSafePasses = 0;
 
                 if (autoDockSuppress)
                 {
-                    bool safeNow = connectorOpen || gearOnGround;
-                    if (!safeNow)
+                    if (!connectorOpen)
                         suppressSawUnsafe = true;
                     else if (suppressSawUnsafe)
                         autoDockSuppress = false;
@@ -233,7 +223,7 @@ namespace IngameScript
                 else if (autoDockSuppress)
                     isDocked = false;
                 else
-                    isDocked = connectorSafePasses >= 2 || gearSafePasses >= 2;
+                    isDocked = connectorSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -642,7 +632,7 @@ namespace IngameScript
             ClearDockWarning();
             dockLatch = false;
             autoDockSuppress = true;
-            suppressSawUnsafe = !(ConnectorSafeToDock() || GearOnGround());
+            suppressSawUnsafe = !ConnectorSafeToDock();
             isDocked = false;
             AbortShipContext(gc);
             DockToggle(gc, false);
@@ -1709,8 +1699,7 @@ namespace IngameScript
             return false;
         }
 
-        // Locked gear on the surface. Block center is above the foot, and GroundLevel
-        // is the surface under the controller, so a pad on a rock needs horizontal slack.
+        // Surface test for a locked gear. Not a dock enter: a tug lock near the ground stays in flight.
         bool GearOnGround()
         {
             if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
