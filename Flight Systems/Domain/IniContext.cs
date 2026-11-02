@@ -62,7 +62,7 @@ namespace IngameScript.Domain
         string cockpitTag = "[FS_COCKPIT]";
         string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
-        string dockPort = "";
+        string dockPort = "[FS_dock]";
 
         //ParamsSection
         public const string ParamsSection = "Params";
