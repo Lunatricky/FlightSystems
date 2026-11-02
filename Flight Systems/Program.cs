@@ -38,14 +38,13 @@ namespace IngameScript
         bool isDockMode;
         bool lastDockMode;
         bool anyConnected;
-        bool isGearlocked;
         int connectorSafePasses;
+        int gearSafePasses;
         bool mothershipPortWarning;
         bool dockWarning;
         int dockWarningTicks;
         int dockWarningRow = 1;
         bool dockLatch;
-        bool landDocked;
         bool autoDockSuppress;
         bool suppressSawUnsafe;
         bool settingsToggle;
@@ -199,10 +198,12 @@ namespace IngameScript
             if (tickCount % 50 == 1)
             {
 
-                isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
                 // Two passes to enter. The failing pass clears on the next tick.
-                bool connectorSafe = ic.AllowDockMode && ConnectorSafeToDock();
+                bool connectorOpen = ConnectorSafeToDock();
+                bool gearOnGround = GearOnGround();
+                bool connectorSafe = ic.AllowDockMode && connectorOpen;
+                bool gearSafe = ic.AllowDockMode && gearOnGround;
                 if (connectorSafe)
                 {
                     if (connectorSafePasses < 2)
@@ -210,22 +211,29 @@ namespace IngameScript
                 }
                 else
                     connectorSafePasses = 0;
+                if (gearSafe)
+                {
+                    if (gearSafePasses < 2)
+                        gearSafePasses++;
+                }
+                else
+                    gearSafePasses = 0;
 
                 if (autoDockSuppress)
                 {
-                    bool safeNow = ConnectorSafeToDock();
+                    bool safeNow = connectorOpen || gearOnGround;
                     if (!safeNow)
                         suppressSawUnsafe = true;
                     else if (suppressSawUnsafe)
                         autoDockSuppress = false;
                 }
 
-                if (dockLatch || landDocked)
+                if (dockLatch)
                     isDocked = true;
                 else if (autoDockSuppress)
                     isDocked = false;
                 else
-                    isDocked = connectorSafePasses >= 2;
+                    isDocked = connectorSafePasses >= 2 || gearSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -234,7 +242,7 @@ namespace IngameScript
             if (tickCount % 50 == 2 && !IsShipControlled())
                 DrawFlightLcds();
 
-            if (dockLatch || landDocked)
+            if (dockLatch)
                 isDocked = true;
 
             if (ic.AllowDockMode)
@@ -336,7 +344,6 @@ namespace IngameScript
             {
                 if (!ic.AllowDockMode && !dockLatch)
                 {
-                    landDocked = false;
                     AbortShipContext(gc);
                     DockToggle(gc, false);
                     lastDockMode = isDockMode;
@@ -634,9 +641,8 @@ namespace IngameScript
         {
             ClearDockWarning();
             dockLatch = false;
-            landDocked = false;
             autoDockSuppress = true;
-            suppressSawUnsafe = !ConnectorSafeToDock();
+            suppressSawUnsafe = !(ConnectorSafeToDock() || GearOnGround());
             isDocked = false;
             AbortShipContext(gc);
             DockToggle(gc, false);
@@ -1669,7 +1675,8 @@ namespace IngameScript
 
         string gearLockNote;
 
-        const double GearDockAgl = 2;
+        const double GearPadLarge = 4;
+        const double GearPadSmall = 1.5;
 
         // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
         // Mothership skips its own connectors. Never reads the other grid's IsStatic.
@@ -1702,7 +1709,8 @@ namespace IngameScript
             return false;
         }
 
-        // Locked gear whose pad is under GearDockAgl. Not a dock trigger.
+        // Locked gear on the surface. Block center is above the foot, and GroundLevel
+        // is the surface under the controller, so a pad on a rock needs horizontal slack.
         bool GearOnGround()
         {
             if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
@@ -1713,7 +1721,7 @@ namespace IngameScript
             if (double.IsNaN(ground) || double.IsInfinity(ground))
                 return false;
 
-            Vector3D up = Vector3D.Normalize(-pc.NaturalGravity);
+            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
             Vector3D controllerPos = gc.Controller.GetPosition();
 
             for (int i = 0; i < gc.Gears.Count; i++)
@@ -1721,8 +1729,18 @@ namespace IngameScript
                 IMyLandingGear gear = gc.Gears[i];
                 if (gear == null || gear.Closed || !gear.IsLocked)
                     continue;
-                double gearAgl = ground - (controllerPos - gear.GetPosition()).Dot(up);
-                if (gearAgl < GearDockAgl)
+
+                Vector3D gearPos = gear.GetPosition();
+                Vector3D toGear = gearPos - controllerPos;
+                double drop = (controllerPos - gearPos).Dot(-down);
+                double along = toGear.Dot(down);
+                Vector3D lateral = toGear - down * along;
+                double horiz = lateral.Length();
+                double pad = GearPadSmall;
+                if (gear.CubeGrid != null && !gear.CubeGrid.Closed && gear.CubeGrid.GridSize > 1f)
+                    pad = GearPadLarge;
+                double limit = drop + horiz + pad;
+                if (ground < limit)
                     return true;
             }
             return false;
@@ -1740,17 +1758,7 @@ namespace IngameScript
             }
 
             if (TryLock(gc))
-            {
-                // Land only. SBurn passes leaveToLand and must not dock. Not the manual latch.
-                if (!leaveToLand && ic.AllowDockMode && GearOnGround())
-                {
-                    landDocked = true;
-                    isDocked = true;
-                    DockToggle(gc, true);
-                    lastDockMode = isDockMode;
-                }
                 AbortShipContext(gc);
-            }
         }
 
         bool GearHolding(GridContext gc)
