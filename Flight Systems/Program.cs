@@ -543,8 +543,6 @@ namespace IngameScript
                     LiftClearance(gc, command);
                     break;
                 case Step.Climb:
-                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
-                        ArmClimbBoost();
                     Climb(gc, ic.CruiseSpeed);
                     break;
             }
@@ -610,9 +608,7 @@ namespace IngameScript
                     LiftClearance(gc, command);
                     break;
                 case Step.Climb:
-                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, CruiseSpeed))
-                        ArmClimbBoost();
-                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost && !rayBlocksLevel)
+                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.CNav;
@@ -704,8 +700,6 @@ namespace IngameScript
                         command.Param.Step = Step.On;
                         return;
                     }
-                    if (ForwardTerrainClose(gc, ic.CruiseSpeed))
-                        ArmClimbBoost();
                     Climb(gc, ic.CruiseSpeed);
                     break;
 
@@ -723,9 +717,7 @@ namespace IngameScript
                     break;
 
                 case Step.Climb:
-                    if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
-                        ArmClimbBoost();
-                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost && !rayBlocksLevel)
+                    if (pc.GroundLevel > ic.SafeAltitude && !climbBoost)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
                         command.State = MainState.Gps;
@@ -740,24 +732,21 @@ namespace IngameScript
 
         const double ClearanceLiftRate = 8;
         const double RayLookCap = 2000;
-        const double RayMinCast = 20;
         int lastRayTick = -10;
         int rayCacheTick = -1;
-        bool rayDidScan;
         bool rayHitClose;
-        bool rayBlocksLevel;
 
-        double ThreatRange(double cruiseSpeed)
+        double LookRange(double cruiseSpeed)
         {
-            double threat = pc.StopZDist * 1.5;
+            double look = pc.StopZDist * 1.5;
             double bySpeed = cruiseSpeed * 4;
-            if (bySpeed > threat)
-                threat = bySpeed;
-            if (threat > RayLookCap || double.IsInfinity(threat) || double.IsNaN(threat))
-                threat = RayLookCap;
-            if (threat < 50)
-                threat = 50;
-            return threat;
+            if (bySpeed > look)
+                look = bySpeed;
+            if (look > RayLookCap || double.IsInfinity(look) || double.IsNaN(look))
+                look = RayLookCap;
+            if (look < 0)
+                look = 0;
+            return look;
         }
 
         bool ForwardTerrainClose(GridContext grid, double cruiseSpeed)
@@ -766,12 +755,17 @@ namespace IngameScript
                 return rayHitClose;
 
             rayCacheTick = tick;
-            rayDidScan = false;
             rayHitClose = false;
 
-            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
+            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null || grid.Controller.Closed)
                 return false;
-            if (command.Param.Step == Step.Lift || command.Param.Step == Step.Preclimb)
+            if (command == null || climbBoost)
+                return false;
+            if (command.State == MainState.Land || command.State == MainState.SBurn)
+                return false;
+            // Orbit calls Climb(). Lift and Climb are not level cruise.
+            if (command.Param.Step == Step.Lift || command.Param.Step == Step.Preclimb
+                || command.Param.Step == Step.Climb || command.Param.Step == Step.Orbit)
                 return false;
 
             IMyCameraBlock cam = grid.RayCamera;
@@ -780,42 +774,39 @@ namespace IngameScript
 
             if (!cam.Enabled)
                 cam.Enabled = true;
-            // Leave raycast enabled so the camera keeps charging between casts.
-            cam.EnableRaycast = true;
 
             if (tick - lastRayTick < 10)
-            {
-                rayHitClose = rayBlocksLevel;
-                return rayHitClose;
-            }
+                return false;
 
-            double threat = ThreatRange(cruiseSpeed);
-            double charged = cam.AvailableScanRange;
-            double cast = charged < threat ? charged : threat;
-            if (cast < RayMinCast || !cam.CanScan(cast))
-            {
-                rayHitClose = rayBlocksLevel;
-                return rayHitClose;
-            }
+            double look = LookRange(cruiseSpeed);
+            double limit = (float)cam.RaycastDistanceLimit;
+            if (limit > 0 && look > limit)
+                look = limit;
+            if (!(look > 0))
+                return false;
+
+            // Cast is due. The camera charges only while this flag is set, so a short range skips Raycast.
+            cam.EnableRaycast = true;
+            if (cam.AvailableScanRange < look)
+                return false;
+
+            Vector3D forward = grid.Controller.WorldMatrix.Forward;
+            if (forward.LengthSquared() == 0 || !cam.CanScan(look, forward))
+                return false;
 
             lastRayTick = tick;
-            rayDidScan = true;
-            MyDetectedEntityInfo hit = cam.Raycast(cast);
+            MyDetectedEntityInfo hit = cam.Raycast(look, forward);
 
             if (hit.IsEmpty() || hit.Type == MyDetectedEntityType.None || !hit.HitPosition.HasValue)
-            {
-                rayBlocksLevel = false;
                 return false;
-            }
             if (grid.IsOwnGrid(hit.EntityId))
-            {
-                rayBlocksLevel = false;
                 return false;
-            }
 
             double distance = Vector3D.Distance(grid.Controller.GetPosition(), hit.HitPosition.Value);
-            rayHitClose = distance < threat;
-            rayBlocksLevel = rayHitClose;
+            double brake = pc.StopZDist * 1.5;
+            if (double.IsNaN(brake) || double.IsInfinity(brake))
+                return false;
+            rayHitClose = distance < brake;
             return rayHitClose;
         }
 
@@ -828,7 +819,7 @@ namespace IngameScript
                 return;
             cam.EnableRaycast = false;
         }
-
+            
         void BeginClimbOrLift(GridContext gc, Command command)
         {
             command.Param.Step = NeedsTailClearance(gc) ? Step.Lift : Step.Climb;
@@ -882,7 +873,7 @@ namespace IngameScript
                     ClearClimbBoost(gc);
             }
             else
-                SampleClimbBoost(gc, CruiseSpeed);
+                SampleClimbBoost(gc);
 
             VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Up, false, pc.DesiredUpVector);
 
@@ -906,7 +897,7 @@ namespace IngameScript
             climbRiseStreak = 0;
         }
 
-        void SampleClimbBoost(GridContext grid, double cruiseSpeed)
+        void SampleClimbBoost(GridContext grid)
         {
             if (climbSampleTick == tick)
                 return;
@@ -916,19 +907,15 @@ namespace IngameScript
 
             if (climbBoost)
             {
-                ForwardTerrainClose(grid, cruiseSpeed);
-                if (rayDidScan)
-                {
-                    if (rayHitClose || pc.ClimbRate <= 1)
-                        climbRiseStreak = 0;
-                    else
-                        climbRiseStreak++;
+                if (pc.ClimbRate > 1)
+                    climbRiseStreak++;
+                else
+                    climbRiseStreak = 0;
 
-                    if (climbRiseStreak >= 2)
-                    {
-                        ClearClimbBoost(grid);
-                        climbReleasedThisTick = true;
-                    }
+                if (climbRiseStreak >= 5)
+                {
+                    ClearClimbBoost(grid);
+                    climbReleasedThisTick = true;
                 }
                 return;
             }
