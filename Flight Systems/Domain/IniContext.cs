@@ -20,6 +20,7 @@ namespace IngameScript.Domain
         public const string ANALOG_THROTLE = "Analog Throtle";
         public const string LOW_FUEL_LAND = "Low Fuel Auto Land";
         public const string DOCK_MODE = "Dock Mode";
+        public const string MOTHERSHIP = "Mothership";
         public const string CONTROL_ANTENNAS = "Control Antennas";
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
@@ -29,6 +30,7 @@ namespace IngameScript.Domain
         bool analogThrotle = false;
         bool allowLowFuelLand = false;
         bool allowDockMode = false;
+        bool mothership = false;
         bool controlAntennas = false;
         bool renameSubgrids = false;
         bool paintSurfaces = false;
@@ -48,6 +50,7 @@ namespace IngameScript.Domain
         const string INI_COCKPIT_TAG = "Cockpit";
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
+        public const string DOCK_PORT = "Dock Port";
 
         string dockGroupTag = "Flight Systems";
         string controllerTag = "[FS_reference]";
@@ -59,6 +62,7 @@ namespace IngameScript.Domain
         string cockpitTag = "[FS_COCKPIT]";
         string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
+        string dockPort = "[FS_dock]";
 
         //ParamsSection
         public const string ParamsSection = "Params";
@@ -201,6 +205,26 @@ namespace IngameScript.Domain
             }
         }
 
+        public bool Mothership
+        {
+            get { return mothership; }
+            set
+            {
+                mothership = value;
+                UpdateIni(ToggleSection, MOTHERSHIP, mothership);
+            }
+        }
+
+        public string DockPort
+        {
+            get { return dockPort; }
+            set
+            {
+                dockPort = value ?? "";
+                UpdateIni(NamesTagsSection, DOCK_PORT, dockPort);
+            }
+        }
+
         public bool ControlAntennas
         {
             get { return controlAntennas; }
@@ -279,6 +303,7 @@ namespace IngameScript.Domain
             analogThrotle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
             allowLowFuelLand = ini.Get(ToggleSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
             allowDockMode = ini.Get(ToggleSection, DOCK_MODE).ToBoolean(AllowDockMode);
+            mothership = ini.Get(ToggleSection, MOTHERSHIP).ToBoolean(Mothership);
             controlAntennas = ini.Get(ToggleSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
             renameSubgrids = ini.Get(ToggleSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
             paintSurfaces = ini.Get(ToggleSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
@@ -298,6 +323,7 @@ namespace IngameScript.Domain
             cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(CockpitTag);
             rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(RayCameraTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
+            dockPort = ini.Get(NamesTagsSection, DOCK_PORT).ToString(DockPort);
 
             //ParamsSection
             string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
@@ -336,6 +362,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, ANALOG_THROTLE, AnalogThrotle);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, LOW_FUEL_LAND, AllowLowFuelLand);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, DOCK_MODE, AllowDockMode);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, MOTHERSHIP, Mothership);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, CONTROL_ANTENNAS, ControlAntennas);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, RENAME_SUBGRIDS, RenameSubgrids);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
@@ -353,6 +380,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_COCKPIT_TAG, CockpitTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, DOCK_PORT, DockPort);
 
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);

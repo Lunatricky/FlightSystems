@@ -38,7 +38,14 @@ namespace IngameScript
         bool isDockMode;
         bool lastDockMode;
         bool anyConnected;
-        bool isGearlocked;
+        int connectorSafePasses;
+        bool mothershipPortWarning;
+        bool dockWarning;
+        int dockWarningTicks;
+        int dockWarningRow = 1;
+        bool dockLatch;
+        bool autoDockSuppress;
+        bool suppressSawUnsafe;
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -113,7 +120,17 @@ namespace IngameScript
                     }
                 }
 
-                if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
+                string dockArg = argument.Trim().ToLowerInvariant();
+                if (dockArg == "dock" || dockArg == "dock confirm" || dockArg == "dock cancel")
+                {
+                    if (dockArg == "dock")
+                        OnDock();
+                    else if (dockArg == "dock confirm")
+                        OnDockConfirm();
+                    else
+                        CancelDockWarning();
+                }
+                else if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     settingsToggle = !settingsToggle;
 
@@ -134,7 +151,20 @@ namespace IngameScript
                 settingsIsLocked = false;
             }
 
-            if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
+            if (dockWarning)
+            {
+                dockWarningTicks++;
+                if (dockWarningTicks >= 900)
+                    CancelDockWarning();
+            }
+
+            if (dockWarning)
+            {
+                HandleDockWarningInput();
+                if (dockWarning)
+                    DrawDockWarning();
+            }
+            else if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
                 RefreshHudLines();
                 if (settingsHud.ShouldClose(pi))
@@ -167,9 +197,33 @@ namespace IngameScript
             if (tickCount % 50 == 1)
             {
 
-                isGearlocked = gc.Gears.Exists(g => g.IsLocked);
                 anyConnected = gc.IsAnyConnectorConnected();
-                isDocked = anyConnected || isGearlocked;
+                // Two passes to enter. The failing pass clears on the next tick.
+                // A locked mag plate is a tug, not a dock. Near the ground it must not enter dock mode.
+                bool connectorOpen = ConnectorSafeToDock();
+                bool connectorSafe = ic.AllowDockMode && connectorOpen;
+                if (connectorSafe)
+                {
+                    if (connectorSafePasses < 2)
+                        connectorSafePasses++;
+                }
+                else
+                    connectorSafePasses = 0;
+
+                if (autoDockSuppress)
+                {
+                    if (!connectorOpen)
+                        suppressSawUnsafe = true;
+                    else if (suppressSawUnsafe)
+                        autoDockSuppress = false;
+                }
+
+                if (dockLatch)
+                    isDocked = true;
+                else if (autoDockSuppress)
+                    isDocked = false;
+                else
+                    isDocked = connectorSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -177,6 +231,9 @@ namespace IngameScript
 
             if (tickCount % 50 == 2 && !IsShipControlled())
                 DrawFlightLcds();
+
+            if (dockLatch)
+                isDocked = true;
 
             if (ic.AllowDockMode)
             {
@@ -275,10 +332,11 @@ namespace IngameScript
 
             if (hasIniChanged || gc.Controller == null || gc.Controller.Closed)
             {
-                if (!ic.AllowDockMode)
+                if (!ic.AllowDockMode && !dockLatch)
                 {
                     AbortShipContext(gc);
                     DockToggle(gc, false);
+                    lastDockMode = isDockMode;
                 }
                 ReloadGridContext(gc, ic);
                 tick = 0;
@@ -313,6 +371,12 @@ namespace IngameScript
 
         void DrawFlightLcds()
         {
+            if (dockWarning)
+            {
+                DrawDockWarning();
+                return;
+            }
+
             RefreshHudLines();
             if (!settingsToggle)
                 settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
@@ -390,6 +454,13 @@ namespace IngameScript
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
+            if (mothershipPortWarning)
+            {
+                if (ic != null && ic.Mothership && string.IsNullOrEmpty(ic.DockPort))
+                    report = report + "\nMothership is on but no dock port is assigned.";
+                else
+                    mothershipPortWarning = false;
+            }
             return report;
         }
 
@@ -493,6 +564,162 @@ namespace IngameScript
             {
                 gc.AutoBatteries();
             }
+        }
+
+        void OnDock()
+        {
+            if (isDockMode)
+            {
+                ManualExitDock();
+                return;
+            }
+
+            if (ConnectorSafeToDock())
+            {
+                ManualEnterDock();
+                return;
+            }
+
+            if (!dockWarning)
+                ArmDockWarning();
+        }
+
+        void OnDockConfirm()
+        {
+            if (!dockWarning || isDockMode)
+                return;
+            ManualEnterDock();
+        }
+
+        void ArmDockWarning()
+        {
+            dockWarning = true;
+            dockWarningTicks = 0;
+            dockWarningRow = 1;
+            DrawDockWarning();
+        }
+
+        void CancelDockWarning()
+        {
+            if (!dockWarning)
+                return;
+            ClearDockWarning();
+            DrawFlightLcds();
+        }
+
+        void ClearDockWarning()
+        {
+            dockWarning = false;
+            dockWarningTicks = 0;
+            dockWarningRow = 1;
+        }
+
+        void ManualEnterDock()
+        {
+            ClearDockWarning();
+            dockLatch = true;
+            autoDockSuppress = false;
+            suppressSawUnsafe = false;
+            isDocked = true;
+            AbortShipContext(gc);
+            DockToggle(gc, true);
+            lastDockMode = isDockMode;
+            DrawFlightLcds();
+        }
+
+        void ManualExitDock()
+        {
+            ClearDockWarning();
+            dockLatch = false;
+            autoDockSuppress = true;
+            suppressSawUnsafe = !ConnectorSafeToDock();
+            isDocked = false;
+            AbortShipContext(gc);
+            DockToggle(gc, false);
+            lastDockMode = isDockMode;
+            DrawFlightLcds();
+        }
+
+        void HandleDockWarningInput()
+        {
+            if (settingsIsLocked || !CockpitOccupied())
+                return;
+
+            pi.OcupiedController(gc.Controllers);
+            if (settingsToggle && settingsHud.ShouldClose(pi))
+            {
+                LockInput();
+                CancelDockWarning();
+                return;
+            }
+
+            if (pi.Q())
+            {
+                LockInput();
+                CancelDockWarning();
+                return;
+            }
+
+            if (pi.W())
+            {
+                dockWarningRow = 1;
+                LockInput();
+            }
+            else if (pi.S())
+            {
+                dockWarningRow = 2;
+                LockInput();
+            }
+
+            if (pi.Space())
+            {
+                LockInput();
+                if (dockWarningRow == 2)
+                    CancelDockWarning();
+                else
+                    OnDockConfirm();
+            }
+        }
+
+        bool CockpitOccupied()
+        {
+            for (int i = 0; i < gc.Controllers.Count; i++)
+            {
+                IMyShipController seat = gc.Controllers[i];
+                if (seat != null && !seat.Closed && seat.IsUnderControl)
+                    return true;
+            }
+            return false;
+        }
+
+        void DrawDockWarning()
+        {
+            Sprites.BindFlight(null, null, null, false, null, null, null);
+
+            hudStack1.Clear();
+            hudStack2.Clear();
+            hudStack1.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            hudStack1.Add("Thrusters and tools will turn off");
+            hudStack1.Add("No safe connector");
+            hudStack1.Add("Send dock confirm");
+            hudStack1.DrawTo(gc.Lcds1);
+            hudStack1.DrawTo(gc.Lcds2);
+
+            settingsStack.Clear();
+            settingsStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            settingsStack.Add("Thrusters and tools will turn off");
+            settingsStack.Add("No safe connector");
+            settingsStack.Add("Send dock confirm");
+            settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
+            settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
+            settingsStack.DrawTo(gc.LcdsSettings);
+        }
+
+        Color WarningRowColor(int row)
+        {
+            if (dockWarningRow == row)
+                return Color.DarkOrange;
+            return ic.SpriteBackgroundColor;
         }
 
         void CruiseControlStateSwitch(GridContext gc, IniContext ic, Command command)
@@ -1050,6 +1277,7 @@ namespace IngameScript
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             gc.Setup(ic);
+            StaticConnectorStamp.Apply(gc.GridTS, gc.Me.CubeGrid);
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
@@ -1073,6 +1301,11 @@ namespace IngameScript
                 gc.ReloadConnectors()
                     .ReloadTanks()
                     .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
+            else if (!string.IsNullOrEmpty(ic.DockPort))
+                gc.GetSameConstructBlocks(gc.Connectors, ic.IgnoreTag);
+
+            StaticConnectorStamp.ApplyDockPort(gc.Connectors, ic.DockPort);
+            mothershipPortWarning = ic.Mothership && string.IsNullOrEmpty(ic.DockPort);
 
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
@@ -1431,6 +1664,76 @@ namespace IngameScript
         }
 
         string gearLockNote;
+
+        const double GearPadLarge = 4;
+        const double GearPadSmall = 1.5;
+
+        // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
+        // Mothership skips its own connectors. Never reads the other grid's IsStatic.
+        bool ConnectorSafeToDock()
+        {
+            if (gc == null || ic == null)
+                return false;
+
+            for (int i = 0; i < gc.Connectors.Count; i++)
+            {
+                IMyShipConnector connector = gc.Connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (connector.Status != MyShipConnectorStatus.Connected)
+                    continue;
+
+                if (!ic.Mothership && StaticConnectorStamp.HasExactLine(connector.CustomData, StaticConnectorStamp.DockMe))
+                    return true;
+
+                IMyShipConnector other = connector.OtherConnector;
+                if (other == null || other.Closed)
+                    continue;
+
+                string otherData = other.CustomData;
+                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.DockOther))
+                    return true;
+                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.Line))
+                    return true;
+            }
+            return false;
+        }
+
+        // Surface test for a locked gear. Not a dock enter: a tug lock near the ground stays in flight.
+        bool GearOnGround()
+        {
+            if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
+                return false;
+            if (pc.NaturalGravity.LengthSquared() == 0)
+                return false;
+            double ground = pc.GroundLevel;
+            if (double.IsNaN(ground) || double.IsInfinity(ground))
+                return false;
+
+            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
+            Vector3D controllerPos = gc.Controller.GetPosition();
+
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear gear = gc.Gears[i];
+                if (gear == null || gear.Closed || !gear.IsLocked)
+                    continue;
+
+                Vector3D gearPos = gear.GetPosition();
+                Vector3D toGear = gearPos - controllerPos;
+                double drop = (controllerPos - gearPos).Dot(-down);
+                double along = toGear.Dot(down);
+                Vector3D lateral = toGear - down * along;
+                double horiz = lateral.Length();
+                double pad = GearPadSmall;
+                if (gear.CubeGrid != null && !gear.CubeGrid.Closed && gear.CubeGrid.GridSize > 1f)
+                    pad = GearPadLarge;
+                double limit = drop + horiz + pad;
+                if (ground < limit)
+                    return true;
+            }
+            return false;
+        }
 
         // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
         void HandleLockGear(GridContext gc, Command command, bool leaveToLand)

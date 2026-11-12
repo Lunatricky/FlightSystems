@@ -69,6 +69,7 @@
     <Compile Include="Utils\VectorHelper.cs" />
     <Compile Include="Domain\GridContext.cs" />
     <Compile Include="UseCases\RenameSubgrids.cs" />
+    <Compile Include="UseCases\StaticConnectorStamp.cs" />
     <Compile Include="Enums\ParamType.cs" />
     <Compile Include="Enums\AutoLandState.cs" />
     <Compile Include="Enums\MainState.cs" />
