@@ -51,6 +51,8 @@ namespace IngameScript.Domain
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
         public const string DOCK_PORT = "Dock Port";
+        const string INI_DOCK_TRIGGER_TAG = "Dock Trigger Tag";
+        const string RestoreSection = "Restore";
 
         string dockGroupTag = "Flight Systems";
         string controllerTag = "[FS_reference]";
@@ -63,6 +65,8 @@ namespace IngameScript.Domain
         string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
         string dockPort = "[FS_dock]";
+        string dockTriggerTag = "[FS_trigger]";
+        string dockTriggerRestore = "";
 
         //ParamsSection
         public const string ParamsSection = "Params";
@@ -113,6 +117,8 @@ namespace IngameScript.Domain
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
         public string IgnoreTag => ignoreTag;
+        public string DockTriggerTag => dockTriggerTag;
+        public string DockTriggerRestore => dockTriggerRestore;
         public string Lcd1Tag => lcd1Tag;
         public string Lcd2Tag => lcd2Tag;
         public string LcdSettingsTag => lcdSettingsTag;
@@ -324,6 +330,9 @@ namespace IngameScript.Domain
             rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(RayCameraTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
             dockPort = ini.Get(NamesTagsSection, DOCK_PORT).ToString(DockPort);
+            dockTriggerTag = ini.Get(NamesTagsSection, INI_DOCK_TRIGGER_TAG).ToString("[FS_trigger]");
+            // Missing Restore is empty. The in-memory field is wiped by a recompile, so it is not the default.
+            dockTriggerRestore = ini.Get(RestoreSection, INI_DOCK_TRIGGER_TAG).ToString("");
 
             //ParamsSection
             string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
@@ -381,6 +390,9 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, DOCK_PORT, DockPort);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag);
+            // Snapshot keys are the ini key alone. Restore uses the same key name, so it must not go through that map.
+            ini.Set(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore ?? "");
 
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
@@ -409,6 +421,14 @@ namespace IngameScript.Domain
         {
             gps.Save(ini);
             WriteCustomData();
+        }
+
+        public void SetDockTriggerRestore(string current)
+        {
+            dockTriggerRestore = current ?? "";
+            if (!ini.ContainsSection(NamesTagsSection))
+                return;
+            UpdateIni(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore);
         }
 
         void UpdateIni(string section, string key, object newVal)
