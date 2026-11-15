@@ -694,6 +694,10 @@ namespace IngameScript
             if (settingsIsLocked || !CockpitOccupied())
                 return;
 
+            // The only seat still flies. Leave W, S, Space, and Q on the thrusters.
+            if (gc.Cockpits.Count <= 1)
+                return;
+
             pi.OcupiedController(gc.Controllers);
             HoldDockSeats();
             if (settingsToggle && settingsHud.ShouldClose(pi))
@@ -752,6 +756,8 @@ namespace IngameScript
             hudStack1.Add("Thrusters and tools will turn off");
             hudStack1.Add("No safe connector");
             hudStack1.Add("Send dock confirm");
+            if (gc.Cockpits.Count <= 1)
+                AddDockPressCount(hudStack1);
             hudStack1.DrawTo(gc.Lcds1);
             hudStack1.DrawTo(gc.Lcds2);
 
@@ -760,9 +766,25 @@ namespace IngameScript
             settingsStack.Add("Thrusters and tools will turn off");
             settingsStack.Add("No safe connector");
             settingsStack.Add("Send dock confirm");
-            settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
-            settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
+            if (gc.Cockpits.Count <= 1)
+                AddDockPressCount(settingsStack);
+            else
+            {
+                settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
+                settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
+            }
             settingsStack.DrawTo(gc.LcdsSettings);
+        }
+
+        void AddDockPressCount(Sprites stack)
+        {
+            stack.Add("Press dock 3 times");
+            // Read on every draw. A saved "1/3" would stay up after the second press.
+            // Literals stay intact after MDK minify.
+            if (dockPressCount >= 2)
+                stack.Add("2/3");
+            else
+                stack.Add("1/3");
         }
 
         Color WarningRowColor(int row)
