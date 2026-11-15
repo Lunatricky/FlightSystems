@@ -49,9 +49,6 @@ namespace IngameScript
         bool dockLatch;
         bool autoDockSuppress;
         bool suppressSawUnsafe;
-        readonly List<IMyLandingGear> dockTriggerGroup = new List<IMyLandingGear>();
-        const string DockTriggerGroupName = "Dock trigger";
-        const string DockTriggerLine = "[FS_trigger]";
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -213,11 +210,9 @@ namespace IngameScript
             {
 
                 anyConnected = gc.IsAnyConnectorConnected();
-                // Two connector passes to enter. The failing pass clears on the next tick.
-                // A locked [FS_trigger] gear joins connectorOpen as one hold, at any altitude.
+                // Two passes to enter. The failing pass clears on the next tick.
+                // A locked mag plate is a tug, not a dock. Near the ground it must not enter dock mode.
                 bool connectorOpen = ConnectorSafeToDock();
-                bool gearDock = GearDocking();
-                bool held = connectorOpen || gearDock;
                 bool connectorSafe = ic.AllowDockMode && connectorOpen;
                 if (connectorSafe)
                 {
@@ -229,7 +224,7 @@ namespace IngameScript
 
                 if (autoDockSuppress)
                 {
-                    if (!held)
+                    if (!connectorOpen)
                         suppressSawUnsafe = true;
                     else if (suppressSawUnsafe)
                         autoDockSuppress = false;
@@ -240,7 +235,7 @@ namespace IngameScript
                 else if (autoDockSuppress)
                     isDocked = false;
                 else
-                    isDocked = connectorSafePasses >= 2 || gearDock;
+                    isDocked = connectorSafePasses >= 2;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -680,8 +675,7 @@ namespace IngameScript
             ClearDockWarning();
             dockLatch = false;
             autoDockSuppress = true;
-            // Same hold as the 50-tick check. A gear that is still locked must not count as already clear.
-            suppressSawUnsafe = !(ConnectorSafeToDock() || GearDocking());
+            suppressSawUnsafe = !ConnectorSafeToDock();
             isDocked = false;
             AbortShipContext(gc);
             DockToggle(gc, false);
@@ -1327,7 +1321,6 @@ namespace IngameScript
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             gc.Setup(ic);
-            SyncDockTriggerGears();
             StaticConnectorStamp.Apply(gc.GridTS, gc.Me.CubeGrid);
 
             gc.ReloadLCDs()
@@ -1718,79 +1711,6 @@ namespace IngameScript
 
         const double GearPadLarge = 4;
         const double GearPadSmall = 1.5;
-
-        void SyncDockTriggerGears()
-        {
-            dockTriggerGroup.Clear();
-            if (gc == null || gc.GridTS == null)
-                return;
-
-            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(DockTriggerGroupName);
-            if (group != null)
-                group.GetBlocksOfType(dockTriggerGroup);
-
-            for (int i = 0; i < gc.Gears.Count; i++)
-            {
-                IMyLandingGear gear = gc.Gears[i];
-                if (gear == null || gear.Closed || GearIgnored(gear))
-                    continue;
-
-                bool inGroup = false;
-                for (int g = 0; g < dockTriggerGroup.Count; g++)
-                {
-                    IMyLandingGear member = dockTriggerGroup[g];
-                    if (member != null && !member.Closed && member.EntityId == gear.EntityId)
-                    {
-                        inGroup = true;
-                        break;
-                    }
-                }
-
-                string data = gear.CustomData ?? "";
-                bool has = StaticConnectorStamp.HasExactLine(data, DockTriggerLine);
-                if (inGroup)
-                {
-                    if (!has)
-                        gear.CustomData = StaticConnectorStamp.AppendExactLine(data, DockTriggerLine);
-                }
-                else if (has)
-                {
-                    string stripped = data;
-                    while (StaticConnectorStamp.HasExactLine(stripped, DockTriggerLine))
-                        stripped = StaticConnectorStamp.RemoveExactLine(stripped, DockTriggerLine);
-                    if (stripped != data)
-                        gear.CustomData = stripped;
-                }
-            }
-        }
-
-        bool GearIgnored(IMyLandingGear gear)
-        {
-            string tag = ic.IgnoreTag;
-            if (string.IsNullOrEmpty(tag))
-                return false;
-            if (gear.CustomName != null && gear.CustomName.Contains(tag))
-                return true;
-            string data = gear.CustomData;
-            return data != null && data.Contains(tag);
-        }
-
-        // Dock Mode off still writes the line, but a locked gear must not enter or hold suppress.
-        bool GearDocking()
-        {
-            if (ic == null || !ic.AllowDockMode || gc == null)
-                return false;
-
-            for (int i = 0; i < gc.Gears.Count; i++)
-            {
-                IMyLandingGear gear = gc.Gears[i];
-                if (gear == null || gear.Closed || !gear.IsLocked || GearIgnored(gear))
-                    continue;
-                if (StaticConnectorStamp.HasExactLine(gear.CustomData, DockTriggerLine))
-                    return true;
-            }
-            return false;
-        }
 
         // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
         // Mothership skips its own connectors. Never reads the other grid's IsStatic.
