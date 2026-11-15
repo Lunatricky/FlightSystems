@@ -43,6 +43,9 @@ namespace IngameScript
         bool dockWarning;
         int dockWarningTicks;
         int dockWarningRow = 1;
+        int dockPressCount;
+        int ticksSinceDockPress;
+        bool dockSeatsHeld;
         bool dockLatch;
         bool autoDockSuppress;
         bool suppressSawUnsafe;
@@ -78,6 +81,10 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            // Stop at 121 so a long idle cannot wrap the gap back into the 120-tick window.
+            if (dockPressCount > 0 && ticksSinceDockPress <= 120)
+                ticksSinceDockPress++;
+
             if (!string.IsNullOrEmpty(argument))
             {
                 foreach (string param in ic.IniParamList)
@@ -155,7 +162,12 @@ namespace IngameScript
             {
                 dockWarningTicks++;
                 if (dockWarningTicks >= 900)
+                {
+                    // Timeout is its own reset. A dock after it starts at 1 even inside 120 ticks.
+                    dockPressCount = 0;
+                    ticksSinceDockPress = 0;
                     CancelDockWarning();
+                }
             }
 
             if (dockWarning)
@@ -574,14 +586,19 @@ namespace IngameScript
                 return;
             }
 
-            if (ConnectorSafeToDock())
+            if (dockPressCount > 0 && ticksSinceDockPress <= 120)
+                dockPressCount++;
+            else
+                dockPressCount = 1;
+            ticksSinceDockPress = 0;
+
+            if (dockPressCount >= 3)
             {
                 ManualEnterDock();
                 return;
             }
 
-            if (!dockWarning)
-                ArmDockWarning();
+            ArmDockWarning();
         }
 
         void OnDockConfirm()
@@ -596,6 +613,7 @@ namespace IngameScript
             dockWarning = true;
             dockWarningTicks = 0;
             dockWarningRow = 1;
+            HoldDockSeats();
             DrawDockWarning();
         }
 
@@ -612,10 +630,33 @@ namespace IngameScript
             dockWarning = false;
             dockWarningTicks = 0;
             dockWarningRow = 1;
+            ReleaseDockSeats();
+        }
+
+        void HoldDockSeats()
+        {
+            if (dockSeatsHeld || gc.Cockpits.Count <= 1 || !CockpitOccupied())
+                return;
+            pi.OcupiedController(gc.Controllers);
+            pi.PrepareController();
+            dockSeatsHeld = true;
+        }
+
+        void ReleaseDockSeats()
+        {
+            if (!dockSeatsHeld)
+                return;
+            dockSeatsHeld = false;
+            // Settings still owns the seat lock. Resetting here would turn thrust back on under that menu.
+            if (settingsToggle)
+                return;
+            pi.ResetControllers(gc.Controllers);
         }
 
         void ManualEnterDock()
         {
+            dockPressCount = 0;
+            ticksSinceDockPress = 0;
             ClearDockWarning();
             dockLatch = true;
             autoDockSuppress = false;
@@ -629,6 +670,8 @@ namespace IngameScript
 
         void ManualExitDock()
         {
+            dockPressCount = 0;
+            ticksSinceDockPress = 0;
             ClearDockWarning();
             dockLatch = false;
             autoDockSuppress = true;
@@ -646,6 +689,7 @@ namespace IngameScript
                 return;
 
             pi.OcupiedController(gc.Controllers);
+            HoldDockSeats();
             if (settingsToggle && settingsHud.ShouldClose(pi))
             {
                 LockInput();
@@ -671,7 +715,7 @@ namespace IngameScript
                 LockInput();
             }
 
-            if (pi.Space())
+            if (gc.Cockpits.Count > 1 && pi.Space())
             {
                 LockInput();
                 if (dockWarningRow == 2)
