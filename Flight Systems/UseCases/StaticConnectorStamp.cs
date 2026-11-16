@@ -7,7 +7,6 @@ namespace IngameScript
     // Exact custom-data lines, plus the [Connector] Static flag visitors read.
     class StaticConnectorStamp
     {
-        public const string PadLine = "[FS_pad]";
         const string FlightSection = "Flight Systems";
         const string ConnectorSection = "Connector";
         const string StaticKey = "Static";

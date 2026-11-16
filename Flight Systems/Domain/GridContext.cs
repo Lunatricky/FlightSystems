@@ -39,6 +39,7 @@ namespace IngameScript.Domain
         ShipType shipType;
 
         List<IMyTerminalBlock> unfilteredBlocks = new List<IMyTerminalBlock>();
+        readonly List<IMyTerminalBlock> tokenRenameBlocks = new List<IMyTerminalBlock>();
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
         List<IMyShipConnector> connectors = new List<IMyShipConnector>();
@@ -817,6 +818,39 @@ namespace IngameScript.Domain
                 && (!hasIgnore || !block.CustomName.Contains(__ignoreTag))
                 && (!hasIgnore || !block.CustomData.Contains(__ignoreTag))
             );
+        }
+
+        // One pass while an old default tag is still the saved value. Later parses see the new value and do not call this.
+        public void ReplaceNameTokens(List<string> oldTokens, List<string> newTokens)
+        {
+            if (oldTokens == null || newTokens == null || oldTokens.Count == 0 || newTokens.Count < oldTokens.Count || GridTS == null || Me == null)
+                return;
+
+            int count = oldTokens.Count;
+            GetSameConstructBlocks(tokenRenameBlocks, "");
+            for (int i = 0; i < tokenRenameBlocks.Count; i++)
+            {
+                IMyTerminalBlock block = tokenRenameBlocks[i];
+                if (block == null || block.Closed)
+                    continue;
+
+                string name = block.CustomName;
+                if (string.IsNullOrEmpty(name))
+                    continue;
+
+                string updated = name;
+                for (int t = 0; t < count; t++)
+                {
+                    string oldToken = oldTokens[t];
+                    if (string.IsNullOrEmpty(oldToken))
+                        continue;
+                    if (updated.Contains(oldToken))
+                        updated = updated.Replace(oldToken, newTokens[t] ?? "");
+                }
+
+                if (updated != name)
+                    block.CustomName = updated;
+            }
         }
 
         public void GetOwnGridBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock

@@ -1380,6 +1380,7 @@ namespace IngameScript
             SyncDockTriggerGears();
             SyncDockConnectors();
             ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
+            ic.SetLandingPadRestore(ic.LandingPadTag ?? "");
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
@@ -1775,6 +1776,9 @@ namespace IngameScript
             string current = ic.DockTriggerTag ?? "";
             string previous = ic.DockTriggerRestore ?? "";
             bool stripPrevious = previous.Length > 0 && previous != current;
+            string padPrevious = ic.LandingPadRestore ?? "";
+            string pad = ic.LandingPadTag ?? "";
+            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
 
             dockTriggerGroup.Clear();
             // Group name is not stamped on the gear. The next reload uses whatever the ini says now.
@@ -1792,6 +1796,9 @@ namespace IngameScript
 
                 if (stripPrevious)
                     RemoveExactLine(gear, previous);
+                // A gear is not in the landing-pad group, so a changed pad line is rewritten only where it already was.
+                if (stripPad)
+                    RetagExactLine(gear, padPrevious, pad);
 
                 bool inGroup = false;
                 for (int g = 0; g < dockTriggerGroup.Count; g++)
@@ -1820,6 +1827,9 @@ namespace IngameScript
             string current = ic.DockTriggerTag ?? "";
             string previous = ic.DockTriggerRestore ?? "";
             bool stripPrevious = previous.Length > 0 && previous != current;
+            string pad = ic.LandingPadTag ?? "";
+            string padPrevious = ic.LandingPadRestore ?? "";
+            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
 
             FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
             FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
@@ -1833,6 +1843,8 @@ namespace IngameScript
 
                 if (stripPrevious)
                     RemoveExactLine(connector, previous);
+                if (stripPad)
+                    RemoveExactLine(connector, padPrevious);
                 StaticConnectorStamp.StripLegacyLines(connector);
                 if (ConnectorIgnored(connector))
                     continue;
@@ -1841,14 +1853,16 @@ namespace IngameScript
                 bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
                 if (inPad)
                 {
-                    // Pad wins. Remove the trigger line first so a tag equal to [FS_pad] is not deleted after the append.
-                    if (current.Length > 0 && current != StaticConnectorStamp.PadLine)
+                    // Pad wins. Equal spellings are one line, so the trigger line is not written as well.
+                    if (current.Length > 0 && current != pad)
                         RemoveExactLine(connector, current);
-                    AppendExactLine(connector, StaticConnectorStamp.PadLine);
+                    if (pad.Length > 0)
+                        AppendExactLine(connector, pad);
                 }
                 else
                 {
-                    RemoveExactLine(connector, StaticConnectorStamp.PadLine);
+                    if (pad.Length > 0)
+                        RemoveExactLine(connector, pad);
                     if (inTrigger && current.Length > 0)
                         AppendExactLine(connector, current);
                     else if (current.Length > 0)
@@ -1914,6 +1928,18 @@ namespace IngameScript
             return gc != null && gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
         }
 
+        static void RetagExactLine(IMyTerminalBlock block, string previous, string current)
+        {
+            if (block == null || block.Closed || string.IsNullOrEmpty(previous) || previous == current)
+                return;
+            string data = block.CustomData ?? "";
+            if (!StaticConnectorStamp.HasExactLine(data, previous))
+                return;
+            RemoveExactLine(block, previous);
+            if (!string.IsNullOrEmpty(current))
+                AppendExactLine(block, current);
+        }
+
         static void AppendExactLine(IMyTerminalBlock block, string line)
         {
             string data = block.CustomData ?? "";
@@ -1976,6 +2002,7 @@ namespace IngameScript
                 return false;
 
             string trigger = ic.DockTriggerTag ?? "";
+            string pad = ic.LandingPadTag ?? "";
             for (int i = 0; i < gc.Connectors.Count; i++)
             {
                 IMyShipConnector connector = gc.Connectors[i];
@@ -1985,7 +2012,7 @@ namespace IngameScript
                     continue;
 
                 string ownData = connector.CustomData;
-                bool ownPad = StaticConnectorStamp.HasExactLine(ownData, StaticConnectorStamp.PadLine);
+                bool ownPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, pad);
                 if (!ownPad && trigger.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, trigger))
                     return true;
 
@@ -1994,7 +2021,7 @@ namespace IngameScript
                     continue;
 
                 string otherData = other.CustomData;
-                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.PadLine))
+                if (pad.Length > 0 && StaticConnectorStamp.HasExactLine(otherData, pad))
                     return true;
                 if (StaticConnectorStamp.ReadsStatic(otherData))
                     return true;
