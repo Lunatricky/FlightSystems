@@ -13,28 +13,13 @@ namespace IngameScript
         public int SelectedPage = 1;
         public bool IsDefaultScreen;
         bool dockPortsListed;
-        int closeRow;
         readonly GpsMenu gpsMenu = new GpsMenu();
 
         public bool ShouldClose(PlayerInput pi)
         {
             if (gpsMenu.IsOpen)
                 return false;
-            return pi.Space() && closeRow > 0 && SelectedRow == closeRow;
-        }
-
-        public void SyncCloseRow(GridContext gc)
-        {
-            closeRow = CloseRowFor(gc);
-        }
-
-        int CloseRowFor(GridContext gc)
-        {
-            if (SelectedPage == 2)
-                return 11;
-            if (SelectedPage == 3)
-                return 6;
-            return gc.ShipType != ShipType.Atmo ? 8 : 7;
+            return SelectedRow == 0 && pi.Space();
         }
 
         public void Handle(
@@ -47,38 +32,35 @@ namespace IngameScript
             Action abort,
             Action softAbort,
             Action close,
-            Action lockInput,
-            bool readKeys)
+            Action lockInput)
         {
-            if (readKeys)
-                Navigate(pi, lockInput);
+            Navigate(pi, lockInput);
 
             if (gpsMenu.IsOpen)
             {
-                gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort, readKeys);
+                gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort);
                 return;
             }
 
             if (SelectedPage != 2)
                 dockPortsListed = false;
 
-            closeRow = CloseRowFor(gc);
             switch (SelectedPage)
             {
                 case 1:
-                    ClampRow(1, closeRow);
+                    ClampRow(1, 7);
                     if (settingsToggle)
-                        FlightSystemSectionEdit(ic, gc, sb, pi, command, abort, softAbort, close, readKeys);
+                        FlightSystemSectionEdit(ic, gc, sb, pi, command, abort, softAbort, close);
                     else
                         FlightSystemIdle(ic, gc, sb);
                     break;
                 case 2:
-                    ClampRow(1, closeRow);
-                    ToggleSectionEdit(ic, gc, pi, lockInput, readKeys);
+                    ClampRow(1, 10);
+                    ToggleSectionEdit(ic, gc, pi, lockInput);
                     break;
                 case 3:
-                    ClampRow(1, closeRow);
-                    ParamSectionEdit(ic, gc, pi, lockInput, readKeys);
+                    ClampRow(1, 5);
+                    ParamSectionEdit(ic, gc, pi, lockInput);
                     break;
             }
         }
@@ -152,7 +134,7 @@ namespace IngameScript
 
         void ClampRow(int min, int max)
         {
-            if (SelectedRow < min) SelectedRow = max;
+            if (SelectedRow < 0) SelectedRow = max;
             else if (SelectedRow > max) SelectedRow = min;
         }
 
@@ -164,12 +146,11 @@ namespace IngameScript
             Command command,
             Action abort,
             Action softAbort,
-            Action close,
-            bool readKeys)
+            Action close)
         {
             Sprites spt = new Sprites(ic);
 
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 int gpsRow = gc.ShipType != ShipType.Atmo ? 7 : 6;
                 if (SelectedRow == gpsRow)
@@ -178,12 +159,7 @@ namespace IngameScript
                     return;
                 }
 
-                if (SelectedRow == gpsRow + 1)
-                {
-                    close();
-                    return;
-                }
-
+                close();
                 MainState ms = MainState.Idle;
                 int pick = 1;
 
@@ -196,7 +172,6 @@ namespace IngameScript
 
                 if (ms != MainState.Idle)
                 {
-                    close();
                     if (sb.GetModeState(ms))
                     {
                         abort();
@@ -206,12 +181,10 @@ namespace IngameScript
 
                     softAbort();
                     command.Empty(ms);
-                    return;
                 }
             }
 
             AddFlightRows(spt, ic, gc);
-            spt.Add("Close", RowColor(closeRow, ic.SpriteBackgroundColor), RowColor(closeRow, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsSettings);
         }
 
@@ -229,14 +202,14 @@ namespace IngameScript
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
         }
 
-        void ToggleSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput, bool readKeys)
+        void ToggleSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
         {
             IsDefaultScreen = false;
             Sprites spt = new Sprites(ic);
             int row = 1;
             EnsureDockPortConnectors(gc, ic);
 
-            if (readKeys && (pi.A() || pi.D()))
+            if (pi.A() || pi.D())
             {
                 lockInput();
                 if (SelectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
@@ -263,25 +236,21 @@ namespace IngameScript
             spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
-            spt.Add("Close", RowColor(closeRow, ic.SpriteBackgroundColor), RowColor(closeRow, ic.SpriteFontColor));
 
             spt.DrawTo(gc.LcdsSettings);
         }
 
-        void ParamSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput, bool readKeys)
+        void ParamSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
         {
             IsDefaultScreen = false;
             Sprites spt = new Sprites(ic);
             int row = 1;
 
-            if (readKeys)
-            {
-                if (SelectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed, pi, lockInput);
-                else if (SelectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed, pi, lockInput);
-                else if (SelectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude, pi, lockInput);
-                else if (SelectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS, pi, lockInput);
-                else if (SelectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel, pi, lockInput);
-            }
+            if (SelectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed, pi, lockInput);
+            else if (SelectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed, pi, lockInput);
+            else if (SelectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude, pi, lockInput);
+            else if (SelectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS, pi, lockInput);
+            else if (SelectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel, pi, lockInput);
 
             row = 1;
             spt.Add($"{IniContext.ParamsSection}");
@@ -290,7 +259,6 @@ namespace IngameScript
             spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(closeRow, ic.SpriteBackgroundColor), RowColor(closeRow, ic.SpriteFontColor));
 
             spt.DrawTo(gc.LcdsSettings);
         }

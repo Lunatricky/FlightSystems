@@ -147,8 +147,6 @@ namespace IngameScript
                     {
                         pi.OcupiedController(gc.Controllers);
                         pi.PrepareController();
-                        if (settingsHud.SelectedRow < 1)
-                            settingsHud.SelectedRow = 1;
                     }
                     else pi.ResetControllers(gc.Controllers);
                 }
@@ -180,10 +178,10 @@ namespace IngameScript
                 if (dockWarning)
                     DrawDockWarning();
             }
-            else if (settingsToggle && gc.LcdsSettings.Count > 0)
+            else if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
             {
-                settingsHud.SyncCloseRow(gc);
-                if (!settingsIsLocked && settingsHud.ShouldClose(pi))
+                RefreshHudLines();
+                if (settingsHud.ShouldClose(pi))
                 {
                     settingsToggle = false;
                     pi.ResetControllers(gc.Controllers);
@@ -192,8 +190,6 @@ namespace IngameScript
                     return;
                 }
 
-                // A locked tick still has to draw. Skipping the draw left the flight list on the panel.
-                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, true, hudStack1, hudStack2, settingsStack);
                 settingsHud.Handle(
                     pi, gc, ic, sb, command, settingsToggle,
                     () => AbortShipContext(gc),
@@ -203,8 +199,7 @@ namespace IngameScript
                         settingsToggle = false;
                         pi.ResetControllers(gc.Controllers);
                     },
-                    LockInput,
-                    !settingsIsLocked);
+                    LockInput);
             }
 
             if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
@@ -1361,10 +1356,7 @@ namespace IngameScript
                 .ReloadBatteries();
 
             if (gc.ErrorMessage.Length > 0)
-            {
-                RelockSettingsSeat();
                 return;
-            }
 
             pc = new PhysicsContext(gc, stt, timeSinceLastRun);
 
@@ -1391,17 +1383,6 @@ namespace IngameScript
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
-
-            RelockSettingsSeat();
-        }
-
-        void RelockSettingsSeat()
-        {
-            if (!settingsToggle || !CockpitOccupied())
-                return;
-            // Setup turns thrust control on for every cockpit. The open menu still has to hold this seat.
-            pi.OcupiedController(gc.Controllers);
-            pi.PrepareController();
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command

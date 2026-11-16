@@ -20,7 +20,6 @@ namespace IngameScript
     {
         public bool IsOpen;
 
-        bool readKeys = true;
         GpsView view;
         int row = 1;
         int selectedIndex;
@@ -58,10 +57,8 @@ namespace IngameScript
             Command command,
             Action lockInput,
             Action close,
-            Action softAbort,
-            bool keys)
+            Action softAbort)
         {
-            readKeys = keys;
             GpsStore store = ic.Gps;
             MoveRow(pi, lockInput);
 
@@ -87,9 +84,6 @@ namespace IngameScript
 
         void MoveRow(PlayerInput pi, Action lockInput)
         {
-            if (!readKeys)
-                return;
-
             if (pi.W())
             {
                 lockInput();
@@ -112,7 +106,7 @@ namespace IngameScript
             int total = ListTotal(store);
             Clamp(1, total);
 
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 lockInput();
                 if (row == total)
@@ -167,7 +161,7 @@ namespace IngameScript
 
             Clamp(1, 4);
 
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 lockInput();
                 if (row == 1)
@@ -213,14 +207,14 @@ namespace IngameScript
         {
             Clamp(1, 2);
 
-            if (readKeys && (pi.A() || pi.D()))
+            if (pi.A() || pi.D())
             {
                 lockInput();
                 if (row == 1)
                     draft.Location = CycleEnum(draft.Location, pi.D());
             }
 
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 lockInput();
                 if (row == 2)
@@ -250,13 +244,13 @@ namespace IngameScript
             int total = fieldCount + extra;
             Clamp(1, total);
 
-            if (readKeys && (pi.A() || pi.D()))
+            if (pi.A() || pi.D())
             {
                 lockInput();
                 CycleField(draft, row, pi.D());
             }
 
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 lockInput();
                 if (row == total)
@@ -291,7 +285,7 @@ namespace IngameScript
             }
 
             Clamp(1, 2);
-            if (readKeys && pi.Space())
+            if (pi.Space())
             {
                 lockInput();
                 if (row == 1)

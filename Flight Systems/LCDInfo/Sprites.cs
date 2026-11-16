@@ -151,13 +151,13 @@ namespace IngameScript
                 painted.Add(panel);
 
                 bool onSettings = Contains(flightSettings, panel);
-                // The open menu is the only painter on a settings surface. A HUD pass was swapping the page.
-                if (onSettings && flightSettingsOpen)
-                    continue;
-
                 bool wantSettings = onSettings && flightMenu != null && flightMenu.LineCount > 0;
                 int cols = CountColumns(panel, flightHud1, flightHud2, wantSettings ? flightMenu : null, wantSettings);
                 bool showSettings = wantSettings && cols >= 3;
+
+                // Not wide enough for three columns: the open menu keeps the whole panel.
+                if (onSettings && flightSettingsOpen && !showSettings)
+                    continue;
 
                 bool in1 = Contains(flight1, panel);
                 PaintPanel(panel, cols, showSettings, in1, flightHud1, flightHud2, flightMenu);
@@ -166,9 +166,6 @@ namespace IngameScript
 
         bool TryDrawAsThirdColumn(IMyTextSurface panel)
         {
-            // An open menu owns the whole settings surface, including a wide one.
-            if (flightSettingsOpen)
-                return false;
             if (flightHud1 == null || flightHud2 == null)
                 return false;
             if (!Contains(flight1, panel) && !Contains(flight2, panel))
