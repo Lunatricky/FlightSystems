@@ -39,7 +39,8 @@ namespace IngameScript
         bool lastDockMode;
         bool anyConnected;
         int connectorSafePasses;
-        bool mothershipPortWarning;
+        int connectorSafeMisses;
+        bool knownGridStatic;
         bool dockWarning;
         int dockWarningTicks;
         int dockWarningRow = 1;
@@ -51,6 +52,10 @@ namespace IngameScript
         bool suppressSawUnsafe;
         readonly List<IMyLandingGear> constructGears = new List<IMyLandingGear>();
         readonly List<IMyLandingGear> dockTriggerGroup = new List<IMyLandingGear>();
+        readonly List<IMyShipConnector> constructConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> dockTriggerConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> landingPadConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> ownGridConnectors = new List<IMyShipConnector>();
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -210,21 +215,42 @@ namespace IngameScript
             tickCount++;
             if (tickCount % 50 == 1)
             {
+                // Station and ship write different connector ini. Do not wait for the 500-tick parse.
+                bool gridStatic = GridIsStatic();
+                if (gridStatic != knownGridStatic)
+                {
+                    ic.ParseIni();
+                    ReloadGridContext(gc, ic);
+                    gridStatic = GridIsStatic();
+                }
 
                 anyConnected = gc.IsAnyConnectorConnected();
-                // Two connector passes to enter. The failing pass clears on the next tick.
+                // Two connector passes to enter. One failed read does not dock and does not undock.
                 // A locked gear whose line matches Dock Trigger Tag joins connectorOpen as one hold.
                 bool connectorOpen = ConnectorSafeToDock();
                 bool gearDock = GearDocking();
                 bool held = connectorOpen || gearDock;
-                bool connectorSafe = ic.AllowDockMode && connectorOpen;
+                bool connectorSafe = ic.AllowDockMode && !gridStatic && connectorOpen;
                 if (connectorSafe)
                 {
+                    connectorSafeMisses = 0;
                     if (connectorSafePasses < 2)
                         connectorSafePasses++;
                 }
+                else if (connectorSafePasses >= 2)
+                {
+                    connectorSafeMisses++;
+                    if (connectorSafeMisses >= 2)
+                    {
+                        connectorSafePasses = 0;
+                        connectorSafeMisses = 0;
+                    }
+                }
                 else
+                {
                     connectorSafePasses = 0;
+                    connectorSafeMisses = 0;
+                }
 
                 if (autoDockSuppress)
                 {
@@ -236,7 +262,7 @@ namespace IngameScript
 
                 if (dockLatch)
                     isDocked = true;
-                else if (autoDockSuppress)
+                else if (autoDockSuppress || gridStatic)
                     isDocked = false;
                 else
                     isDocked = connectorSafePasses >= 2 || gearDock;
@@ -470,13 +496,6 @@ namespace IngameScript
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
-            if (mothershipPortWarning)
-            {
-                if (ic != null && ic.Mothership && string.IsNullOrEmpty(ic.DockPort))
-                    report = report + "\nMothership is on but no dock port is assigned.";
-                else
-                    mothershipPortWarning = false;
-            }
             return report;
         }
 
@@ -491,6 +510,16 @@ namespace IngameScript
                     var firstValid = gc.Antennas.FirstOrDefault(b => b != null && !b.Closed);
                     if (firstValid != null) firstValid.Enabled = true;
                 }
+            }
+
+            // The toggle is forced off while static. Low fuel must not start a landing from Idle before the next parse.
+            if (GridIsStatic())
+            {
+                if (command.State == MainState.Reload)
+                    ReloadGridContext(gc, ic);
+                else if (command.State == MainState.Abort)
+                    AbortShipContext(gc);
+                return;
             }
 
             var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
@@ -1349,40 +1378,41 @@ namespace IngameScript
         {
             gc.Setup(ic);
             SyncDockTriggerGears();
-            StaticConnectorStamp.Apply(gc.GridTS, gc.Me.CubeGrid);
+            SyncDockConnectors();
+            ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
                 .ReloadBatteries();
 
             if (gc.ErrorMessage.Length > 0)
+            {
+                knownGridStatic = GridIsStatic();
                 return;
+            }
 
             pc = new PhysicsContext(gc, stt, timeSinceLastRun);
 
-            // Flight cached blocks
-            if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
+            // Flight cached blocks. A static grid skips this even when low-fuel land is on.
+            if (!GridIsStatic() && (ic.AllowFlightSystems || ic.AllowLowFuelLand))
             {
                 SoftAbort(gc);
 
                 sb.LastCheckIsOnNatGrav = pc.Gravity > 0;
             }
 
-            // Dock cached blocks
+            // Dock cached blocks. Tag sync above already ran with Dock Mode off.
             if (ic.AllowDockMode)
                 gc.ReloadConnectors()
                     .ReloadTanks()
                     .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
-            else if (!string.IsNullOrEmpty(ic.DockPort))
-                gc.GetSameConstructBlocks(gc.Connectors, ic.IgnoreTag);
-
-            StaticConnectorStamp.ApplyDockPort(gc.Connectors, ic.DockPort);
-            mothershipPortWarning = ic.Mothership && string.IsNullOrEmpty(ic.DockPort);
 
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
+
+            knownGridStatic = GridIsStatic();
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command
@@ -1779,8 +1809,109 @@ namespace IngameScript
                 else if (!inGroup && current.Length > 0)
                     RemoveExactLine(gear, current);
             }
+        }
 
-            ic.SetDockTriggerRestore(current);
+        // Previous tag is still the Restore value. ReloadGridContext writes Restore once after gears and connectors.
+        void SyncDockConnectors()
+        {
+            if (gc == null || gc.GridTS == null || ic == null)
+                return;
+
+            string current = ic.DockTriggerTag ?? "";
+            string previous = ic.DockTriggerRestore ?? "";
+            bool stripPrevious = previous.Length > 0 && previous != current;
+
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
+            gc.GetSameConstructBlocks(constructConnectors, "");
+
+            for (int i = 0; i < constructConnectors.Count; i++)
+            {
+                IMyShipConnector connector = constructConnectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+
+                if (stripPrevious)
+                    RemoveExactLine(connector, previous);
+                StaticConnectorStamp.StripLegacyLines(connector);
+                if (ConnectorIgnored(connector))
+                    continue;
+
+                bool inTrigger = ConnectorInList(dockTriggerConnectors, connector.EntityId);
+                bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
+                if (inPad)
+                {
+                    // Pad wins. Remove the trigger line first so a tag equal to [FS_pad] is not deleted after the append.
+                    if (current.Length > 0 && current != StaticConnectorStamp.PadLine)
+                        RemoveExactLine(connector, current);
+                    AppendExactLine(connector, StaticConnectorStamp.PadLine);
+                }
+                else
+                {
+                    RemoveExactLine(connector, StaticConnectorStamp.PadLine);
+                    if (inTrigger && current.Length > 0)
+                        AppendExactLine(connector, current);
+                    else if (current.Length > 0)
+                        RemoveExactLine(connector, current);
+                }
+            }
+
+            WriteOwnConnectorStatic();
+        }
+
+        void FillConnectorGroup(List<IMyShipConnector> dest, string groupName)
+        {
+            dest.Clear();
+            if (string.IsNullOrEmpty(groupName))
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(dest);
+        }
+
+        static bool ConnectorInList(List<IMyShipConnector> list, long entityId)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                IMyShipConnector member = list[i];
+                if (member != null && !member.Closed && member.EntityId == entityId)
+                    return true;
+            }
+            return false;
+        }
+
+        bool ConnectorIgnored(IMyShipConnector connector)
+        {
+            string tag = ic.IgnoreTag;
+            if (string.IsNullOrEmpty(tag))
+                return false;
+            if (connector.CustomName != null && connector.CustomName.Contains(tag))
+                return true;
+            string data = connector.CustomData;
+            return data != null && data.Contains(tag);
+        }
+
+        // Own grid only. A rotor or hinge arm is not this grid, so it keeps whatever the player wrote.
+        void WriteOwnConnectorStatic()
+        {
+            if (gc.Me == null || gc.Me.CubeGrid == null || gc.Me.CubeGrid.Closed)
+                return;
+
+            bool on = gc.Me.CubeGrid.IsStatic;
+            gc.GetOwnGridBlocks(ownGridConnectors, "");
+            for (int i = 0; i < ownGridConnectors.Count; i++)
+            {
+                IMyShipConnector connector = ownGridConnectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                StaticConnectorStamp.WriteStatic(connector, on);
+            }
+        }
+
+        bool GridIsStatic()
+        {
+            return gc != null && gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
         }
 
         static void AppendExactLine(IMyTerminalBlock block, string line)
@@ -1817,9 +1948,10 @@ namespace IngameScript
         }
 
         // Dock Mode off still writes the line. An empty tag cannot lock the ship into dock mode.
+        // A static grid does not auto-dock from its own gears.
         bool GearDocking()
         {
-            if (ic == null || !ic.AllowDockMode || gc == null)
+            if (ic == null || !ic.AllowDockMode || gc == null || GridIsStatic())
                 return false;
             string line = ic.DockTriggerTag;
             if (string.IsNullOrEmpty(line))
@@ -1836,13 +1968,14 @@ namespace IngameScript
             return false;
         }
 
-        // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
-        // Mothership skips its own connectors. Never reads the other grid's IsStatic.
+        // Connected trigger tag without [FS_pad], or the other connector is a pad or Static=true.
+        // AllowDockMode and the static-grid gate are applied by the caller. This is also the suppress cause.
         bool ConnectorSafeToDock()
         {
             if (gc == null || ic == null)
                 return false;
 
+            string trigger = ic.DockTriggerTag ?? "";
             for (int i = 0; i < gc.Connectors.Count; i++)
             {
                 IMyShipConnector connector = gc.Connectors[i];
@@ -1851,7 +1984,9 @@ namespace IngameScript
                 if (connector.Status != MyShipConnectorStatus.Connected)
                     continue;
 
-                if (!ic.Mothership && StaticConnectorStamp.HasExactLine(connector.CustomData, StaticConnectorStamp.DockMe))
+                string ownData = connector.CustomData;
+                bool ownPad = StaticConnectorStamp.HasExactLine(ownData, StaticConnectorStamp.PadLine);
+                if (!ownPad && trigger.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, trigger))
                     return true;
 
                 IMyShipConnector other = connector.OtherConnector;
@@ -1859,9 +1994,9 @@ namespace IngameScript
                     continue;
 
                 string otherData = other.CustomData;
-                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.DockOther))
+                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.PadLine))
                     return true;
-                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.Line))
+                if (StaticConnectorStamp.ReadsStatic(otherData))
                     return true;
             }
             return false;

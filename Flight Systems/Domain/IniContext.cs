@@ -20,7 +20,6 @@ namespace IngameScript.Domain
         public const string ANALOG_THROTLE = "Analog Throtle";
         public const string LOW_FUEL_LAND = "Low Fuel Auto Land";
         public const string DOCK_MODE = "Dock Mode";
-        public const string MOTHERSHIP = "Mothership";
         public const string CONTROL_ANTENNAS = "Control Antennas";
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
@@ -30,8 +29,9 @@ namespace IngameScript.Domain
         bool analogThrotle = false;
         bool allowLowFuelLand = false;
         bool allowDockMode = false;
-        bool mothership = false;
         bool controlAntennas = false;
+        bool flightRestoreSet;
+        bool flightRestoreValue;
         bool renameSubgrids = false;
         bool paintSurfaces = false;
         bool transparentLCD = true;
@@ -50,8 +50,8 @@ namespace IngameScript.Domain
         const string INI_COCKPIT_TAG = "Cockpit";
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
-        public const string DOCK_PORT = "Dock Port";
         const string INI_DOCK_TRIGGER_GROUP = "Dock Trigger Group";
+        const string INI_LANDING_PAD_GROUP = "Landing Pad Group";
         const string INI_DOCK_TRIGGER_TAG = "Dock Trigger Tag";
         const string RestoreSection = "Restore";
 
@@ -65,8 +65,8 @@ namespace IngameScript.Domain
         string cockpitTag = "[FS_COCKPIT]";
         string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
-        string dockPort = "[FS_dock]";
         string dockTriggerGroup = "Dock trigger";
+        string landingPadGroup = "Landing pad";
         string dockTriggerTag = "[FS_trigger]";
         string dockTriggerRestore = "";
 
@@ -120,6 +120,7 @@ namespace IngameScript.Domain
         public string OverrideBlockTag => overrideBlockTag;
         public string IgnoreTag => ignoreTag;
         public string DockTriggerGroup => dockTriggerGroup;
+        public string LandingPadGroup => landingPadGroup;
         public string DockTriggerTag => dockTriggerTag;
         public string DockTriggerRestore => dockTriggerRestore;
         public string Lcd1Tag => lcd1Tag;
@@ -214,26 +215,6 @@ namespace IngameScript.Domain
             }
         }
 
-        public bool Mothership
-        {
-            get { return mothership; }
-            set
-            {
-                mothership = value;
-                UpdateIni(ToggleSection, MOTHERSHIP, mothership);
-            }
-        }
-
-        public string DockPort
-        {
-            get { return dockPort; }
-            set
-            {
-                dockPort = value ?? "";
-                UpdateIni(NamesTagsSection, DOCK_PORT, dockPort);
-            }
-        }
-
         public bool ControlAntennas
         {
             get { return controlAntennas; }
@@ -312,7 +293,6 @@ namespace IngameScript.Domain
             analogThrotle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
             allowLowFuelLand = ini.Get(ToggleSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
             allowDockMode = ini.Get(ToggleSection, DOCK_MODE).ToBoolean(AllowDockMode);
-            mothership = ini.Get(ToggleSection, MOTHERSHIP).ToBoolean(Mothership);
             controlAntennas = ini.Get(ToggleSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
             renameSubgrids = ini.Get(ToggleSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
             paintSurfaces = ini.Get(ToggleSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
@@ -332,11 +312,16 @@ namespace IngameScript.Domain
             cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(CockpitTag);
             rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(RayCameraTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
-            dockPort = ini.Get(NamesTagsSection, DOCK_PORT).ToString(DockPort);
             dockTriggerGroup = ini.Get(NamesTagsSection, INI_DOCK_TRIGGER_GROUP).ToString(DockTriggerGroup);
+            landingPadGroup = ini.Get(NamesTagsSection, INI_LANDING_PAD_GROUP).ToString(LandingPadGroup);
             dockTriggerTag = ini.Get(NamesTagsSection, INI_DOCK_TRIGGER_TAG).ToString("[FS_trigger]");
             // Missing Restore is empty. The in-memory field is wiped by a recompile, so it is not the default.
             dockTriggerRestore = ini.Get(RestoreSection, INI_DOCK_TRIGGER_TAG).ToString("");
+            // Same key name as the visible toggle. Read it here so a static grid does not store false over the saved value.
+            flightRestoreSet = ini.ContainsKey(RestoreSection, FLIGHT_SYSTEMS);
+            if (flightRestoreSet)
+                flightRestoreValue = ini.Get(RestoreSection, FLIGHT_SYSTEMS).ToBoolean(false);
+            ApplyFlightSystemsStaticHold();
 
             //ParamsSection
             string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
@@ -375,7 +360,6 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, ANALOG_THROTLE, AnalogThrotle);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, LOW_FUEL_LAND, AllowLowFuelLand);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, DOCK_MODE, AllowDockMode);
-            iniChanged |= ReadAndDetectChange(ini, ToggleSection, MOTHERSHIP, Mothership);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, CONTROL_ANTENNAS, ControlAntennas);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, RENAME_SUBGRIDS, RenameSubgrids);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
@@ -393,11 +377,13 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_COCKPIT_TAG, CockpitTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
-            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, DOCK_PORT, DockPort);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag);
             // Snapshot keys are the ini key alone. Restore uses the same key name, so it must not go through that map.
             ini.Set(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore ?? "");
+            if (flightRestoreSet)
+                ini.Set(RestoreSection, FLIGHT_SYSTEMS, flightRestoreValue ? "true" : "false");
 
             //ParamsSection
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MAX_SPEED, MaxSpeed);
@@ -426,6 +412,25 @@ namespace IngameScript.Domain
         {
             gps.Save(ini);
             WriteCustomData();
+        }
+
+        void ApplyFlightSystemsStaticHold()
+        {
+            bool gridStatic = gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
+            if (gridStatic)
+            {
+                if (!flightRestoreSet)
+                {
+                    flightRestoreValue = allowFlightSystems;
+                    flightRestoreSet = true;
+                }
+                allowFlightSystems = false;
+            }
+            else if (flightRestoreSet)
+            {
+                allowFlightSystems = flightRestoreValue;
+                flightRestoreSet = false;
+            }
         }
 
         public void SetDockTriggerRestore(string current)

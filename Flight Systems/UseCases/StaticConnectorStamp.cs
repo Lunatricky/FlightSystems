@@ -1,158 +1,209 @@
 using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
-using System.Collections.Generic;
-using VRage.Game.ModAPI.Ingame;
+using System.Text;
+using VRage.Game.ModAPI.Ingame.Utilities;
 
 namespace IngameScript
 {
-    // Stamps FS_STATIC=1 on connectors that share a rotor, hinge, or piston
-    // with a static grid. Wheels, connectors, and landing gear are not links.
+    // Exact custom-data lines, plus the [Connector] Static flag visitors read.
     class StaticConnectorStamp
     {
-        public const string Line = "FS_STATIC=1";
-        public const string DockMe = "FS_DOCK=Me";
-        public const string DockOther = "FS_DOCK=Other";
+        public const string PadLine = "[FS_pad]";
+        const string FlightSection = "Flight Systems";
+        const string ConnectorSection = "Connector";
+        const string StaticKey = "Static";
+        const string LegacyDockMe = "FS_DOCK=Me";
+        const string LegacyDockOther = "FS_DOCK=Other";
+        const string LegacyStatic = "FS_STATIC=1";
 
-        static readonly List<IMyMotorStator> motors = new List<IMyMotorStator>();
-        static readonly List<IMyPistonBase> pistons = new List<IMyPistonBase>();
-        static readonly List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-        static readonly List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
-        static readonly HashSet<long> seen = new HashSet<long>();
+        static readonly MyIni parsed = new MyIni();
+        static readonly StringBuilder built = new StringBuilder();
 
-        public static void Apply(IMyGridTerminalSystem gts, IMyCubeGrid start)
+        public static void StripLegacyLines(IMyTerminalBlock block)
         {
-            if (gts == null || start == null || start.Closed)
+            if (block == null || block.Closed)
+                return;
+            RemoveExactLineFrom(block, LegacyDockMe);
+            RemoveExactLineFrom(block, LegacyDockOther);
+            RemoveExactLineFrom(block, LegacyStatic);
+        }
+
+        // Own-grid connectors only. An arm on a rotor is left alone.
+        public static void WriteStatic(IMyTerminalBlock block, bool on)
+        {
+            if (block == null || block.Closed)
                 return;
 
-            motors.Clear();
-            pistons.Clear();
-            connectors.Clear();
-            grids.Clear();
-            seen.Clear();
+            string data = block.CustomData ?? "";
+            string next = TryWriteIni(data, on);
+            if (next == null)
+                next = WriteStaticInPlace(data, on);
+            if (next != data)
+                block.CustomData = next;
+        }
 
-            gts.GetBlocksOfType(motors);
-            gts.GetBlocksOfType(pistons);
-            gts.GetBlocksOfType(connectors);
+        public static bool ReadsStatic(string data)
+        {
+            if (string.IsNullOrEmpty(data))
+                return false;
 
-            grids.Add(start);
-            seen.Add(start.EntityId);
+            parsed.Clear();
+            if (parsed.TryParse(data) && parsed.ContainsKey(ConnectorSection, StaticKey))
+                return parsed.Get(ConnectorSection, StaticKey).ToBoolean(false);
 
-            for (int q = 0; q < grids.Count; q++)
+            return ManualStatic(data);
+        }
+
+        static string TryWriteIni(string data, bool on)
+        {
+            parsed.Clear();
+            if (!parsed.TryParse(data))
+                return null;
+
+            if (!parsed.ContainsSection(FlightSection))
+                parsed.AddSection(FlightSection);
+            parsed.Set(ConnectorSection, StaticKey, on ? "true" : "false");
+            string written = parsed.ToString();
+            // ToString drops lines that are not ini keys. [FS_pad] and the trigger line have to stay.
+            if (DropsKeptLines(data, written))
+                return null;
+            return written;
+        }
+
+        static bool DropsKeptLines(string before, string after)
+        {
+            int i = 0;
+            while (i <= before.Length)
             {
-                IMyCubeGrid current = grids[q];
-                if (current == null || current.Closed)
-                    continue;
-
-                for (int i = 0; i < motors.Count; i++)
+                int nl = before.IndexOf('\n', i);
+                int end = nl < 0 ? before.Length : nl;
+                int contentEnd = end;
+                if (contentEnd > i && before[contentEnd - 1] == '\r')
+                    contentEnd--;
+                if (contentEnd > i)
                 {
-                    IMyMotorStator motor = motors[i];
-                    if (motor is IMyMotorSuspension)
-                        continue;
-                    EnqueueLinked(motor, current);
+                    string line = before.Substring(i, contentEnd - i);
+                    if (!IsStaticAssignment(line) && !HasExactLine(after, line))
+                        return true;
                 }
-
-                for (int i = 0; i < pistons.Count; i++)
-                    EnqueueLinked(pistons[i], current);
-            }
-
-            bool anyStatic = false;
-            for (int i = 0; i < grids.Count; i++)
-            {
-                IMyCubeGrid grid = grids[i];
-                if (grid != null && !grid.Closed && grid.IsStatic)
-                {
-                    anyStatic = true;
+                if (nl < 0)
                     break;
-                }
+                i = nl + 1;
             }
-
-            for (int i = 0; i < connectors.Count; i++)
-            {
-                IMyShipConnector connector = connectors[i];
-                if (connector == null || connector.Closed || connector.CubeGrid == null)
-                    continue;
-                if (!seen.Contains(connector.CubeGrid.EntityId))
-                    continue;
-                SetLine(connector, Line, anyStatic);
-            }
+            return false;
         }
 
-        // One managed connector keeps FS_DOCK=Other. Other lines on that block stay.
-        public static void ApplyDockPort(List<IMyShipConnector> connectors, string portName)
+        static string WriteStaticInPlace(string data, bool on)
         {
-            if (connectors == null || string.IsNullOrEmpty(portName))
-                return;
-
-            bool matched = false;
-            for (int i = 0; i < connectors.Count; i++)
+            string assignment = on ? "Static=true" : "Static=false";
+            built.Clear();
+            bool started = false;
+            bool inConnector = false;
+            bool sawConnector = false;
+            bool wroteStatic = false;
+            int i = 0;
+            while (i <= data.Length)
             {
-                IMyShipConnector connector = connectors[i];
-                if (connector == null || connector.Closed)
-                    continue;
-                if (connector.CustomName == portName)
-                {
-                    matched = true;
+                int nl = data.IndexOf('\n', i);
+                int end = nl < 0 ? data.Length : nl;
+                int contentEnd = end;
+                if (contentEnd > i && data[contentEnd - 1] == '\r')
+                    contentEnd--;
+                // No trailing newline. Do not invent a blank line past the last one.
+                if (contentEnd == i && nl < 0)
                     break;
+
+                string line = data.Substring(i, contentEnd - i);
+                string trimmed = line.Trim();
+                bool section = trimmed.Length > 1 && trimmed[0] == '[' && trimmed[trimmed.Length - 1] == ']';
+                if (section)
+                {
+                    if (inConnector && !wroteStatic)
+                    {
+                        AppendBuilt(assignment, ref started);
+                        wroteStatic = true;
+                    }
+                    inConnector = trimmed == "[Connector]";
+                    if (inConnector)
+                        sawConnector = true;
+                    AppendBuilt(line, ref started);
                 }
-            }
-            if (!matched)
-                return;
+                else if (inConnector && IsStaticAssignment(trimmed))
+                {
+                    AppendBuilt(assignment, ref started);
+                    wroteStatic = true;
+                }
+                else
+                    AppendBuilt(line, ref started);
 
-            for (int i = 0; i < connectors.Count; i++)
-            {
-                IMyShipConnector connector = connectors[i];
-                if (connector == null || connector.Closed)
-                    continue;
-                SetLine(connector, DockOther, connector.CustomName == portName);
+                if (nl < 0)
+                    break;
+                i = nl + 1;
             }
+
+            if (sawConnector && !wroteStatic)
+                AppendBuilt(assignment, ref started);
+            if (!sawConnector)
+            {
+                if (started)
+                    built.Append('\n');
+                built.Append("[Flight Systems]\n\n[Connector]\n");
+                built.Append(assignment);
+            }
+            return built.ToString();
         }
 
-        static void EnqueueLinked(IMyMechanicalConnectionBlock block, IMyCubeGrid current)
+        static void AppendBuilt(string line, ref bool started)
         {
-            if (block == null || block.Closed || current == null)
-                return;
-
-            IMyCubeGrid next = null;
-            if (SameGrid(block.CubeGrid, current))
-            {
-                IMyCubeGrid top = block.TopGrid;
-                if (top == null || top.Closed)
-                    return;
-                next = top;
-            }
-            else if (SameGrid(block.TopGrid, current))
-            {
-                IMyCubeGrid host = block.CubeGrid;
-                if (host == null || host.Closed)
-                    return;
-                next = host;
-            }
-
-            if (next == null || next.Closed)
-                return;
-            if (!seen.Add(next.EntityId))
-                return;
-            grids.Add(next);
+            if (started)
+                built.Append('\n');
+            started = true;
+            built.Append(line);
         }
 
-        static bool SameGrid(IMyCubeGrid a, IMyCubeGrid b)
+        static bool ManualStatic(string data)
         {
-            return a != null && b != null && !a.Closed && !b.Closed && a.EntityId == b.EntityId;
+            bool inConnector = false;
+            int i = 0;
+            while (i <= data.Length)
+            {
+                int nl = data.IndexOf('\n', i);
+                int end = nl < 0 ? data.Length : nl;
+                int contentEnd = end;
+                if (contentEnd > i && data[contentEnd - 1] == '\r')
+                    contentEnd--;
+                string line = contentEnd > i ? data.Substring(i, contentEnd - i).Trim() : "";
+                if (line.Length > 1 && line[0] == '[' && line[line.Length - 1] == ']')
+                    inConnector = line == "[Connector]";
+                else if (inConnector && IsStaticAssignment(line))
+                    return StaticValueTrue(line);
+                if (nl < 0)
+                    break;
+                i = nl + 1;
+            }
+            return false;
         }
 
-        static void SetLine(IMyTerminalBlock block, string line, bool shouldHave)
+        static bool IsStaticAssignment(string line)
+        {
+            if (string.IsNullOrEmpty(line) || line.Length < 7)
+                return false;
+            return line.StartsWith("Static=") || line.StartsWith("static=") || line.StartsWith("STATIC=");
+        }
+
+        static bool StaticValueTrue(string line)
+        {
+            int eq = line.IndexOf('=');
+            if (eq < 0 || eq + 1 >= line.Length)
+                return false;
+            string value = line.Substring(eq + 1).Trim();
+            return value == "true" || value == "True" || value == "TRUE";
+        }
+
+        static void RemoveExactLineFrom(IMyTerminalBlock block, string line)
         {
             string data = block.CustomData ?? "";
-            bool has = HasExactLine(data, line);
-            if (shouldHave == has)
+            if (!HasExactLine(data, line))
                 return;
-
-            if (shouldHave)
-            {
-                block.CustomData = AppendExactLine(data, line);
-                return;
-            }
-
             string stripped = data;
             while (HasExactLine(stripped, line))
                 stripped = RemoveExactLine(stripped, line);
