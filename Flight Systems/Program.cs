@@ -51,7 +51,6 @@ namespace IngameScript
         bool suppressSawUnsafe;
         readonly List<IMyLandingGear> constructGears = new List<IMyLandingGear>();
         readonly List<IMyLandingGear> dockTriggerGroup = new List<IMyLandingGear>();
-        const string DockTriggerGroupName = "Dock trigger";
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -1738,9 +1737,6 @@ namespace IngameScript
 
         string gearLockNote;
 
-        const double GearPadLarge = 4;
-        const double GearPadSmall = 1.5;
-
         void SyncDockTriggerGears()
         {
             if (gc == null || gc.GridTS == null || ic == null)
@@ -1751,7 +1747,9 @@ namespace IngameScript
             bool stripPrevious = previous.Length > 0 && previous != current;
 
             dockTriggerGroup.Clear();
-            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(DockTriggerGroupName);
+            // Group name is not stamped on the gear. The next reload uses whatever the ini says now.
+            string groupName = ic.DockTriggerGroup ?? "";
+            IMyBlockGroup group = groupName.Length == 0 ? null : gc.GridTS.GetBlockGroupWithName(groupName);
             if (group != null)
                 group.GetBlocksOfType(dockTriggerGroup);
 
@@ -1864,42 +1862,6 @@ namespace IngameScript
                 if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.DockOther))
                     return true;
                 if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.Line))
-                    return true;
-            }
-            return false;
-        }
-
-        // Surface test for a locked gear. Not a dock enter: a tug lock near the ground stays in flight.
-        bool GearOnGround()
-        {
-            if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
-                return false;
-            if (pc.NaturalGravity.LengthSquared() == 0)
-                return false;
-            double ground = pc.GroundLevel;
-            if (double.IsNaN(ground) || double.IsInfinity(ground))
-                return false;
-
-            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
-            Vector3D controllerPos = gc.Controller.GetPosition();
-
-            for (int i = 0; i < gc.Gears.Count; i++)
-            {
-                IMyLandingGear gear = gc.Gears[i];
-                if (gear == null || gear.Closed || !gear.IsLocked)
-                    continue;
-
-                Vector3D gearPos = gear.GetPosition();
-                Vector3D toGear = gearPos - controllerPos;
-                double drop = (controllerPos - gearPos).Dot(-down);
-                double along = toGear.Dot(down);
-                Vector3D lateral = toGear - down * along;
-                double horiz = lateral.Length();
-                double pad = GearPadSmall;
-                if (gear.CubeGrid != null && !gear.CubeGrid.Closed && gear.CubeGrid.GridSize > 1f)
-                    pad = GearPadLarge;
-                double limit = drop + horiz + pad;
-                if (ground < limit)
                     return true;
             }
             return false;

@@ -51,6 +51,7 @@ namespace IngameScript.Domain
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
         public const string DOCK_PORT = "Dock Port";
+        const string INI_DOCK_TRIGGER_GROUP = "Dock Trigger Group";
         const string INI_DOCK_TRIGGER_TAG = "Dock Trigger Tag";
         const string RestoreSection = "Restore";
 
@@ -65,6 +66,7 @@ namespace IngameScript.Domain
         string rayCameraTag = "[FS_RAY]";
         string backupBatteryTag = "[FS_backup]";
         string dockPort = "[FS_dock]";
+        string dockTriggerGroup = "Dock trigger";
         string dockTriggerTag = "[FS_trigger]";
         string dockTriggerRestore = "";
 
@@ -117,6 +119,7 @@ namespace IngameScript.Domain
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
         public string IgnoreTag => ignoreTag;
+        public string DockTriggerGroup => dockTriggerGroup;
         public string DockTriggerTag => dockTriggerTag;
         public string DockTriggerRestore => dockTriggerRestore;
         public string Lcd1Tag => lcd1Tag;
@@ -330,6 +333,7 @@ namespace IngameScript.Domain
             rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(RayCameraTag);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
             dockPort = ini.Get(NamesTagsSection, DOCK_PORT).ToString(DockPort);
+            dockTriggerGroup = ini.Get(NamesTagsSection, INI_DOCK_TRIGGER_GROUP).ToString(DockTriggerGroup);
             dockTriggerTag = ini.Get(NamesTagsSection, INI_DOCK_TRIGGER_TAG).ToString("[FS_trigger]");
             // Missing Restore is empty. The in-memory field is wiped by a recompile, so it is not the default.
             dockTriggerRestore = ini.Get(RestoreSection, INI_DOCK_TRIGGER_TAG).ToString("");
@@ -390,6 +394,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, DOCK_PORT, DockPort);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag);
             // Snapshot keys are the ini key alone. Restore uses the same key name, so it must not go through that map.
             ini.Set(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore ?? "");
