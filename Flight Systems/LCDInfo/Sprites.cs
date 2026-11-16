@@ -254,7 +254,7 @@ namespace IngameScript
             string panelName = panel.Name ?? "";
             bool transparent = ic.TransparentLCD && panelName.ToLower().Contains("transparent");
             if (!transparent)
-                spriteBuf.Add(MakeRectSprite(new Vector2(0, 0), 2 * textureSize, ic.SpriteMenuColor));
+                spriteBuf.Add(MakeRectSprite(textureSize * 0.5f, textureSize, ic.SpriteMenuColor));
 
             if (cols < 1)
                 cols = 1;
@@ -265,7 +265,7 @@ namespace IngameScript
             }
 
             float pad = Pad(surfaceSize);
-            float textPad = pad * 1.5f;
+            float textPad = TextPad(surfaceSize, pad);
             float originX = (textureSize.X - surfaceSize.X) * 0.5f;
             float originY = (textureSize.Y - surfaceSize.Y) * 0.5f;
             float colW = surfaceSize.X / cols;
@@ -308,7 +308,8 @@ namespace IngameScript
                 for (int i = 0; i < rows; i++)
                 {
                     float centerY = originY + i * rowPitch + rowPitch * 0.5f;
-                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[i]));
+                    float barCenterX = barX + barW * 0.5f;
+                    spriteBuf.Add(MakeRectSprite(new Vector2(barCenterX, centerY), new Vector2(barW, barH), stack.BackgroundColors[i]));
 
                     string line = stack.texts[i] ?? "";
                     float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
@@ -363,7 +364,7 @@ namespace IngameScript
                 return 1;
 
             float pad = Pad(surfaceSize);
-            float textPad = pad * 1.5f;
+            float textPad = TextPad(surfaceSize, pad);
             float chrome = 2f * pad + 2f * textPad;
 
             float measureScale = 1.3f;
@@ -467,7 +468,8 @@ namespace IngameScript
                 Position = center,
                 Size = size,
                 Color = backgroundColor,
-                Alignment = TextAlignment.LEFT
+                // Texture LEFT is the top-left, so a centered position left the LCD background showing around the bar.
+                Alignment = TextAlignment.CENTER
             };
         }
 
@@ -565,6 +567,21 @@ namespace IngameScript
         {
             float minDim = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
             return Clamp(minDim * 0.01f, 2f, 6f);
+        }
+
+        // A wide short panel otherwise pads from its height, so the line sits on the side edge.
+        static float TextPad(Vector2 surfaceSize, float pad)
+        {
+            float textPad = pad * 1.5f;
+            if (surfaceSize.Y > 0f && surfaceSize.X > surfaceSize.Y * 1.5f)
+            {
+                float side = surfaceSize.X * 0.015f;
+                if (side > textPad)
+                    textPad = side;
+                if (textPad > 36f)
+                    textPad = 36f;
+            }
+            return textPad;
         }
 
         static float Max(float a, float b)
