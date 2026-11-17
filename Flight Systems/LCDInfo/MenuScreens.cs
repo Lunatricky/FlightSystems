@@ -7,18 +7,37 @@ using VRageMath;
 
 namespace IngameScript
 {
+    enum MenuView
+    {
+        Home,
+        Flight,
+        Toggles,
+        Numbers
+    }
+
     class MenuScreens
     {
-        public int SelectedRow;
-        public int SelectedPage = 1;
+        public int SelectedRow = 1;
         public bool IsDefaultScreen;
         readonly GpsMenu gpsMenu = new GpsMenu();
+        MenuView view = MenuView.Home;
+
+        const int HomeRows = 4;
+        const int ToggleValueRows = 8;
+        const int NumberValueRows = 5;
+
+        public void ShowHome()
+        {
+            view = MenuView.Home;
+            SelectedRow = 1;
+            gpsMenu.Close();
+        }
 
         public bool ShouldClose(PlayerInput pi)
         {
-            if (gpsMenu.IsOpen)
+            if (gpsMenu.IsOpen || view != MenuView.Home)
                 return false;
-            return SelectedRow == 0 && pi.Space();
+            return SelectedRow == HomeRows && pi.Space();
         }
 
         public void Handle(
@@ -33,32 +52,77 @@ namespace IngameScript
             Action close,
             Action lockInput)
         {
-            Navigate(pi, lockInput);
-
-            if (gpsMenu.IsOpen)
+            // Closed surfaces are the flight-command list. Handle is the open menu.
+            if (!menuToggle)
             {
-                gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort);
+                FlightSystemIdle(ic, gc, sb);
                 return;
             }
 
-            switch (SelectedPage)
+            if (gpsMenu.IsOpen)
             {
-                case 1:
-                    ClampRow(1, 7);
-                    if (menuToggle)
-                        FlightSystemSectionEdit(ic, gc, sb, pi, command, abort, softAbort, close);
-                    else
-                        FlightSystemIdle(ic, gc, sb);
-                    break;
-                case 2:
-                    ClampRow(1, 8);
-                    ToggleSectionEdit(ic, gc, pi, lockInput);
-                    break;
-                case 3:
-                    ClampRow(1, 5);
-                    ParamSectionEdit(ic, gc, pi, lockInput);
-                    break;
+                if (pi.Q())
+                {
+                    lockInput();
+                    gpsMenu.Back();
+                    // The book is the GPS list. Closing it returns to Flight, not home.
+                    if (!gpsMenu.IsOpen)
+                        view = MenuView.Flight;
+                }
+
+                if (gpsMenu.IsOpen)
+                {
+                    gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort);
+                    return;
+                }
+
+                ClampFor(gc);
+                PaintFlight(ic, gc, true);
+                return;
             }
+
+            if (pi.W())
+            {
+                lockInput();
+                SelectedRow--;
+            }
+
+            if (pi.S())
+            {
+                lockInput();
+                SelectedRow++;
+            }
+
+            // Q on the home list is not a page key.
+            bool backed = false;
+            if (pi.Q() && view != MenuView.Home)
+            {
+                lockInput();
+                ReturnHome();
+                backed = true;
+            }
+
+            ClampFor(gc);
+
+            bool acted = false;
+            bool closed = false;
+            if (!backed && pi.Space())
+                acted = Activate(gc, sb, command, abort, softAbort, close, ref closed);
+
+            if (closed)
+            {
+                FlightSystemIdle(ic, gc, sb);
+                return;
+            }
+
+            if (gpsMenu.IsOpen)
+                return;
+
+            if (!backed && !acted)
+                AdjustValue(ic, pi, lockInput);
+
+            ClampFor(gc);
+            Paint(ic, gc);
         }
 
         public void FlightSystemIdle(IniContext ic, GridContext gc, SystemBools sb)
@@ -84,107 +148,176 @@ namespace IngameScript
             else if (sb.SBurnToggle) SelectedRow = row++;
             else SelectedRow = 0;
 
-            AddFlightRows(spt, ic, gc);
+            AddFlightRows(spt, ic, gc, false);
             spt.DrawTo(gc.LcdsMenu);
         }
 
-        void Navigate(PlayerInput pi, Action lockInput)
-        {
-            if (gpsMenu.IsOpen)
-            {
-                if (pi.Q())
-                {
-                    lockInput();
-                    gpsMenu.Back();
-                }
-                return;
-            }
-
-            if (pi.W())
-            {
-                lockInput();
-                SelectedRow--;
-            }
-
-            if (pi.S())
-            {
-                lockInput();
-                SelectedRow++;
-            }
-
-            if (pi.Q())
-            {
-                lockInput();
-                SelectedPage--;
-            }
-
-            if (pi.E())
-            {
-                lockInput();
-                SelectedPage++;
-            }
-
-            if (SelectedPage < 1) SelectedPage = 3;
-            else if (SelectedPage > 3) SelectedPage = 1;
-        }
-
-        void ClampRow(int min, int max)
-        {
-            if (SelectedRow < 0) SelectedRow = max;
-            else if (SelectedRow > max) SelectedRow = min;
-        }
-
-        void FlightSystemSectionEdit(
-            IniContext ic,
+        bool Activate(
             GridContext gc,
             SystemBools sb,
-            PlayerInput pi,
             Command command,
             Action abort,
             Action softAbort,
-            Action close)
+            Action close,
+            ref bool closed)
         {
-            Sprites spt = new Sprites(ic);
-
-            if (pi.Space())
+            if (view == MenuView.Home)
             {
-                int gpsRow = gc.ShipType != ShipType.Atmo ? 7 : 6;
-                if (SelectedRow == gpsRow)
+                if (SelectedRow == 1)
                 {
-                    gpsMenu.Open();
-                    return;
+                    view = MenuView.Flight;
+                    SelectedRow = 1;
+                    return true;
                 }
-
-                close();
-                MainState ms = MainState.Idle;
-                int pick = 1;
-
-                if (SelectedRow == pick++) ms = MainState.Cruise;
-                else if (gc.ShipType != ShipType.Atmo && SelectedRow == pick++) ms = MainState.Orbit;
-                else if (SelectedRow == pick++) ms = MainState.CNav;
-                else if (SelectedRow == pick++) ms = MainState.Land;
-                else if (SelectedRow == pick++) ms = MainState.Glide;
-                else if (SelectedRow == pick++) ms = MainState.SBurn;
-
-                if (ms != MainState.Idle)
+                if (SelectedRow == 2)
                 {
-                    if (sb.GetModeState(ms))
-                    {
-                        abort();
-                        FlightSystemIdle(ic, gc, sb);
-                        return;
-                    }
-
-                    softAbort();
-                    command.Empty(ms);
+                    view = MenuView.Toggles;
+                    SelectedRow = 1;
+                    return true;
                 }
+                if (SelectedRow == 3)
+                {
+                    view = MenuView.Numbers;
+                    SelectedRow = 1;
+                    return true;
+                }
+                return false;
             }
 
-            AddFlightRows(spt, ic, gc);
+            if (view == MenuView.Flight)
+                return ActivateFlight(gc, sb, command, abort, softAbort, close, ref closed);
+
+            if (view == MenuView.Toggles && SelectedRow == ToggleValueRows + 1)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            if (view == MenuView.Numbers && SelectedRow == NumberValueRows + 1)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            return false;
+        }
+
+        bool ActivateFlight(
+            GridContext gc,
+            SystemBools sb,
+            Command command,
+            Action abort,
+            Action softAbort,
+            Action close,
+            ref bool closed)
+        {
+            int gpsRow = FlightGpsRow(gc);
+            if (SelectedRow == gpsRow + 1)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            if (SelectedRow == gpsRow)
+            {
+                gpsMenu.Open();
+                return true;
+            }
+
+            MainState ms = MainState.Idle;
+            int pick = 1;
+
+            if (SelectedRow == pick++) ms = MainState.Cruise;
+            else if (gc.ShipType != ShipType.Atmo && SelectedRow == pick++) ms = MainState.Orbit;
+            else if (SelectedRow == pick++) ms = MainState.CNav;
+            else if (SelectedRow == pick++) ms = MainState.Land;
+            else if (SelectedRow == pick++) ms = MainState.Glide;
+            else if (SelectedRow == pick++) ms = MainState.SBurn;
+
+            if (ms == MainState.Idle)
+                return false;
+
+            close();
+            closed = true;
+            if (sb.GetModeState(ms))
+                abort();
+            else
+            {
+                softAbort();
+                command.Empty(ms);
+            }
+            return true;
+        }
+
+        void AdjustValue(IniContext ic, PlayerInput pi, Action lockInput)
+        {
+            if (view == MenuView.Toggles)
+                AdjustToggles(ic, pi, lockInput);
+            else if (view == MenuView.Numbers)
+                AdjustNumbers(ic, pi, lockInput);
+        }
+
+        void AdjustToggles(IniContext ic, PlayerInput pi, Action lockInput)
+        {
+            if (!pi.A() && !pi.D())
+                return;
+            if (SelectedRow < 1 || SelectedRow > ToggleValueRows)
+                return;
+
+            lockInput();
+            int row = 1;
+            if (SelectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
+            else if (SelectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
+            else if (SelectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
+            else if (SelectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
+            else if (SelectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
+            else if (SelectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
+            else if (SelectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
+            else if (SelectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
+        }
+
+        void AdjustNumbers(IniContext ic, PlayerInput pi, Action lockInput)
+        {
+            int row = 1;
+            if (SelectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed, pi, lockInput);
+            else if (SelectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed, pi, lockInput);
+            else if (SelectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude, pi, lockInput);
+            else if (SelectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS, pi, lockInput);
+            else if (SelectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel, pi, lockInput);
+        }
+
+        void Paint(IniContext ic, GridContext gc)
+        {
+            if (view == MenuView.Home)
+                PaintHome(ic, gc);
+            else if (view == MenuView.Flight)
+                PaintFlight(ic, gc, true);
+            else if (view == MenuView.Toggles)
+                PaintToggles(ic, gc);
+            else
+                PaintNumbers(ic, gc);
+        }
+
+        void PaintHome(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            spt.Add("Menu");
+            int row = 1;
+            spt.Add("Flight", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Toggles", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Numbers", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
-        void AddFlightRows(Sprites spt, IniContext ic, GridContext gc)
+        void PaintFlight(IniContext ic, GridContext gc, bool includeClose)
+        {
+            Sprites spt = new Sprites(ic);
+            AddFlightRows(spt, ic, gc, includeClose);
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void AddFlightRows(Sprites spt, IniContext ic, GridContext gc, bool includeClose)
         {
             int row = 1;
             spt.Add("Flight Systems");
@@ -196,62 +329,79 @@ namespace IngameScript
             spt.Add("Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            if (includeClose)
+                spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
         }
 
-        void ToggleSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
+        void PaintToggles(IniContext ic, GridContext gc)
         {
             IsDefaultScreen = false;
             Sprites spt = new Sprites(ic);
             int row = 1;
-
-            if (pi.A() || pi.D())
-            {
-                lockInput();
-                if (SelectedRow == row++) ic.AllowFlightSystems = !ic.AllowFlightSystems;
-                else if (SelectedRow == row++) ic.AnalogThrotle = !ic.AnalogThrotle;
-                else if (SelectedRow == row++) ic.AllowLowFuelLand = !ic.AllowLowFuelLand;
-                else if (SelectedRow == row++) ic.AllowDockMode = !ic.AllowDockMode;
-                else if (SelectedRow == row++) ic.ControlAntennas = !ic.ControlAntennas;
-                else if (SelectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
-                else if (SelectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
-                else if (SelectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
-            }
-
-            row = 1;
-            spt.Add($"{IniContext.ToggleSection}");
-            spt.Add($"{IniContext.FLIGHT_SYSTEMS}", BoolSpriteColor(SelectedRow == row++, ic.AllowFlightSystems), Color.Black);
-            spt.Add($"{IniContext.ANALOG_THROTLE}", BoolSpriteColor(SelectedRow == row++, ic.AnalogThrotle), Color.Black);
-            spt.Add($"{IniContext.LOW_FUEL_LAND}", BoolSpriteColor(SelectedRow == row++, ic.AllowLowFuelLand), Color.Black);
-            spt.Add($"{IniContext.DOCK_MODE}", BoolSpriteColor(SelectedRow == row++, ic.AllowDockMode), Color.Black);
-            spt.Add($"{IniContext.CONTROL_ANTENNAS}", BoolSpriteColor(SelectedRow == row++, ic.ControlAntennas), Color.Black);
-            spt.Add($"{IniContext.RENAME_SUBGRIDS}", BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
-            spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
-            spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
-
+            spt.Add(IniContext.ToggleSection);
+            spt.Add(IniContext.FLIGHT_SYSTEMS, BoolSpriteColor(SelectedRow == row++, ic.AllowFlightSystems), Color.Black);
+            spt.Add(IniContext.ANALOG_THROTLE, BoolSpriteColor(SelectedRow == row++, ic.AnalogThrotle), Color.Black);
+            spt.Add(IniContext.LOW_FUEL_LAND, BoolSpriteColor(SelectedRow == row++, ic.AllowLowFuelLand), Color.Black);
+            spt.Add(IniContext.DOCK_MODE, BoolSpriteColor(SelectedRow == row++, ic.AllowDockMode), Color.Black);
+            spt.Add(IniContext.CONTROL_ANTENNAS, BoolSpriteColor(SelectedRow == row++, ic.ControlAntennas), Color.Black);
+            spt.Add(IniContext.RENAME_SUBGRIDS, BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
+            spt.Add(IniContext.PAINT_SURFACES, BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
+            spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
-        void ParamSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
+        void PaintNumbers(IniContext ic, GridContext gc)
         {
             IsDefaultScreen = false;
             Sprites spt = new Sprites(ic);
             int row = 1;
-
-            if (SelectedRow == row++) ic.MaxSpeed = IncrementedValue(ic.MaxSpeed, pi, lockInput);
-            else if (SelectedRow == row++) ic.CruiseSpeed = IncrementedValue(ic.CruiseSpeed, pi, lockInput);
-            else if (SelectedRow == row++) ic.SafeAltitude = IncrementedValue(ic.SafeAltitude, pi, lockInput);
-            else if (SelectedRow == row++) ic.DistanceToGPS = IncrementedValue(ic.DistanceToGPS, pi, lockInput);
-            else if (SelectedRow == row++) ic.MinimumAcceptedFuel = IncrementedValue(ic.MinimumAcceptedFuel, pi, lockInput);
-
-            row = 1;
-            spt.Add($"{IniContext.ParamsSection}");
-            spt.Add($"{IniContext.MAX_SPEED}: {ic.MaxSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CRUISE_SPEED}: {ic.CruiseSpeed}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.CNAV_ALTITUDE}: {ic.SafeAltitude}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-
+            spt.Add(IniContext.ParamsSection);
+            spt.Add(IniContext.MAX_SPEED + ": " + ic.MaxSpeed, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(IniContext.CRUISE_SPEED + ": " + ic.CruiseSpeed, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(IniContext.CNAV_ALTITUDE + ": " + ic.SafeAltitude, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(IniContext.DISTANCE_TO_GPS + ": " + ic.DistanceToGPS, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(IniContext.MINIMUM_ACCEPTED_FUEL + ": " + ic.MinimumAcceptedFuel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void ReturnHome()
+        {
+            if (view == MenuView.Flight)
+                SelectedRow = 1;
+            else if (view == MenuView.Toggles)
+                SelectedRow = 2;
+            else if (view == MenuView.Numbers)
+                SelectedRow = 3;
+            else
+                SelectedRow = 1;
+            view = MenuView.Home;
+        }
+
+        void ClampFor(GridContext gc)
+        {
+            int max = HomeRows;
+            if (view == MenuView.Flight)
+                max = FlightGpsRow(gc) + 1;
+            else if (view == MenuView.Toggles)
+                max = ToggleValueRows + 1;
+            else if (view == MenuView.Numbers)
+                max = NumberValueRows + 1;
+            ClampRow(1, max);
+        }
+
+        static int FlightGpsRow(GridContext gc)
+        {
+            if (gc.ShipType != ShipType.Atmo)
+                return 7;
+            return 6;
+        }
+
+        void ClampRow(int min, int max)
+        {
+            if (SelectedRow < min) SelectedRow = max;
+            else if (SelectedRow > max) SelectedRow = min;
         }
 
         Color RowColor(int row, Color color)

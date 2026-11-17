@@ -157,8 +157,8 @@ namespace IngameScript
 
                     if (menuToggle)
                     {
-                        pi.OcupiedController(gc.Controllers);
-                        pi.PrepareController();
+                        menuHud.ShowHome();
+                        HoldMenuSeat();
                     }
                     else pi.ResetControllers(gc.Controllers);
                 }
@@ -197,6 +197,7 @@ namespace IngameScript
                 {
                     menuToggle = false;
                     pi.ResetControllers(gc.Controllers);
+                    menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
                     task = Task.ResetControllers;
                     Echo(GetRuntimeInfo());
                     return;
@@ -1390,6 +1391,10 @@ namespace IngameScript
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             gc.Setup(ic);
+            // Setup turns thrust on for every cockpit. The occupied seat is the menu keyboard.
+            // The remote in gc.Controller keeps its thrust.
+            if (menuToggle)
+                HoldMenuSeat();
             SyncDockTriggerGears();
             SyncDockConnectors();
             ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
@@ -1536,6 +1541,12 @@ namespace IngameScript
         {
             menuIsLocked = true;
             inputLock = 0;
+        }
+
+        void HoldMenuSeat()
+        {
+            pi.OcupiedController(gc.Controllers);
+            pi.PrepareController();
         }
 
         void AbortShipContext(GridContext gc)
