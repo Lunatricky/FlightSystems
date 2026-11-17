@@ -56,6 +56,13 @@ namespace IngameScript
         readonly List<IMyShipConnector> dockTriggerConnectors = new List<IMyShipConnector>();
         readonly List<IMyShipConnector> landingPadConnectors = new List<IMyShipConnector>();
         readonly List<IMyShipConnector> ownGridConnectors = new List<IMyShipConnector>();
+        readonly List<long> lastTriggerGearIds = new List<long>();
+        readonly List<long> lastTriggerConnectorIds = new List<long>();
+        readonly List<long> lastPadConnectorIds = new List<long>();
+        readonly List<long> sampleTriggerGearIds = new List<long>();
+        readonly List<long> sampleTriggerConnectorIds = new List<long>();
+        readonly List<long> samplePadConnectorIds = new List<long>();
+        int groupSyncTicks;
         bool settingsToggle;
         bool settingsIsLocked;
 
@@ -213,6 +220,12 @@ namespace IngameScript
             }
 
             tickCount++;
+            groupSyncTicks++;
+            if (groupSyncTicks >= 100)
+            {
+                groupSyncTicks = 0;
+                SyncDockGroupsIfChanged();
+            }
             if (tickCount % 50 == 1)
             {
                 // Station and ship write different connector ini. Do not wait for the 500-tick parse.
@@ -1381,6 +1394,7 @@ namespace IngameScript
             SyncDockConnectors();
             ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
             ic.SetLandingPadRestore(ic.LandingPadTag ?? "");
+            RememberSyncedGroupIds();
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
@@ -1780,12 +1794,8 @@ namespace IngameScript
             string pad = ic.LandingPadTag ?? "";
             bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
 
-            dockTriggerGroup.Clear();
             // Group name is not stamped on the gear. The next reload uses whatever the ini says now.
-            string groupName = ic.DockTriggerGroup ?? "";
-            IMyBlockGroup group = groupName.Length == 0 ? null : gc.GridTS.GetBlockGroupWithName(groupName);
-            if (group != null)
-                group.GetBlocksOfType(dockTriggerGroup);
+            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
 
             gc.GetSameConstructBlocks(constructGears, "");
             for (int i = 0; i < constructGears.Count; i++)
@@ -1871,6 +1881,81 @@ namespace IngameScript
             }
 
             WriteOwnConnectorStatic();
+        }
+
+        // Group ids only. Custom data is read later, and only when a list changed.
+        void SyncDockGroupsIfChanged()
+        {
+            if (gc == null || gc.GridTS == null || ic == null)
+                return;
+
+            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
+            CopyBlockIds(sampleTriggerGearIds, dockTriggerGroup);
+            CopyBlockIds(sampleTriggerConnectorIds, dockTriggerConnectors);
+            CopyBlockIds(samplePadConnectorIds, landingPadConnectors);
+
+            if (SameIds(lastTriggerGearIds, sampleTriggerGearIds)
+                && SameIds(lastTriggerConnectorIds, sampleTriggerConnectorIds)
+                && SameIds(lastPadConnectorIds, samplePadConnectorIds))
+                return;
+
+            SyncDockTriggerGears();
+            SyncDockConnectors();
+            RememberSyncedGroupIds();
+        }
+
+        void RememberSyncedGroupIds()
+        {
+            CopyBlockIds(lastTriggerGearIds, dockTriggerGroup);
+            CopyBlockIds(lastTriggerConnectorIds, dockTriggerConnectors);
+            CopyBlockIds(lastPadConnectorIds, landingPadConnectors);
+        }
+
+        void FillGearGroup(List<IMyLandingGear> dest, string groupName)
+        {
+            dest.Clear();
+            if (string.IsNullOrEmpty(groupName) || gc.GridTS == null)
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(dest);
+        }
+
+        static void CopyBlockIds<T>(List<long> dest, List<T> blocks) where T : class, IMyTerminalBlock
+        {
+            dest.Clear();
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                T block = blocks[i];
+                if (block == null || block.Closed)
+                    continue;
+                dest.Add(block.EntityId);
+            }
+        }
+
+        static bool SameIds(List<long> last, List<long> current)
+        {
+            if (last.Count != current.Count)
+                return false;
+            for (int i = 0; i < current.Count; i++)
+            {
+                long id = current[i];
+                bool found = false;
+                for (int j = 0; j < last.Count; j++)
+                {
+                    if (last[j] == id)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+            }
+            return true;
         }
 
         void FillConnectorGroup(List<IMyShipConnector> dest, string groupName)
