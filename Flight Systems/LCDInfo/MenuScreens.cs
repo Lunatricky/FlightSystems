@@ -7,7 +7,7 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class SettingsScreens
+    class MenuScreens
     {
         public int SelectedRow;
         public int SelectedPage = 1;
@@ -27,7 +27,7 @@ namespace IngameScript
             IniContext ic,
             SystemBools sb,
             Command command,
-            bool settingsToggle,
+            bool menuToggle,
             Action abort,
             Action softAbort,
             Action close,
@@ -45,7 +45,7 @@ namespace IngameScript
             {
                 case 1:
                     ClampRow(1, 7);
-                    if (settingsToggle)
+                    if (menuToggle)
                         FlightSystemSectionEdit(ic, gc, sb, pi, command, abort, softAbort, close);
                     else
                         FlightSystemIdle(ic, gc, sb);
@@ -85,7 +85,7 @@ namespace IngameScript
             else SelectedRow = 0;
 
             AddFlightRows(spt, ic, gc);
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void Navigate(PlayerInput pi, Action lockInput)
@@ -181,7 +181,7 @@ namespace IngameScript
             }
 
             AddFlightRows(spt, ic, gc);
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void AddFlightRows(Sprites spt, IniContext ic, GridContext gc)
@@ -228,7 +228,7 @@ namespace IngameScript
             spt.Add($"{IniContext.PAINT_SURFACES}", BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add($"{IniContext.TRANSPARENTLCD}", BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
 
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void ParamSectionEdit(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
@@ -251,7 +251,7 @@ namespace IngameScript
             spt.Add($"{IniContext.DISTANCE_TO_GPS}: {ic.DistanceToGPS}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add($"{IniContext.MINIMUM_ACCEPTED_FUEL}: {ic.MinimumAcceptedFuel}", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         Color RowColor(int row, Color color)

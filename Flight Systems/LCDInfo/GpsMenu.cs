@@ -147,7 +147,7 @@ namespace IngameScript
                 spt.Add(label, RowColor(displayRow, ic.SpriteBackgroundColor), RowColor(displayRow, ic.SpriteFontColor));
             }
 
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawActions(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Command command, Action lockInput, Action close, Action softAbort)
@@ -200,7 +200,7 @@ namespace IngameScript
             spt.Add("Edit", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawAddKind(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
@@ -234,7 +234,7 @@ namespace IngameScript
             int r = 1;
             spt.Add("Type: " + draft.KindLabel(), RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawAddFields(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Action lockInput)
@@ -272,7 +272,7 @@ namespace IngameScript
             if (editing)
                 spt.Add("Save tags", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawConfirmDelete(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Action lockInput)
@@ -307,7 +307,7 @@ namespace IngameScript
             int r = 1;
             spt.Add("Yes", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("No", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void StartAdd()

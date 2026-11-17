@@ -47,7 +47,7 @@ namespace IngameScript.Domain
         const string INI_LCD1_TAG = "LCD 1";
         const string INI_LCD2_TAG = "LCD 2";
         const string INI_MENU_TAG = "Menu";
-        const string INI_LCD_SETTINGS_TAG = "LCD Settings";
+        const string INI_LCD_MENU_TAG = "LCD Menu";
         const string INI_COCKPIT_TAG = "Cockpit";
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
@@ -76,7 +76,7 @@ namespace IngameScript.Domain
         string ignoreTag = "[FS_ignore]";
         string lcd1Tag = "[FS_lcd1]";
         string lcd2Tag = "[FS_lcd2]";
-        string lcdSettingsTag = "[FS_menu]";
+        string lcdMenuTag = "[FS_menu]";
         string cockpitTag = "[FS_cockpit]";
         string rayCameraTag = "[FS_ray]";
         string backupBatteryTag = "[FS_backup]";
@@ -146,7 +146,7 @@ namespace IngameScript.Domain
         public string LandingPadRestore => landingPadRestore;
         public string Lcd1Tag => lcd1Tag;
         public string Lcd2Tag => lcd2Tag;
-        public string LcdSettingsTag => lcdSettingsTag;
+        public string LcdMenuTag => lcdMenuTag;
         public string CockpitTag => cockpitTag;
         public string RayCameraTag => rayCameraTag;
         public string BackupBatteryTag => backupBatteryTag;
@@ -331,7 +331,7 @@ namespace IngameScript.Domain
             ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
             lcd1Tag = MigrateDefault(ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(NewLcd1), OldLcd1, NewLcd1);
             lcd2Tag = MigrateDefault(ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(NewLcd2), OldLcd2, NewLcd2);
-            lcdSettingsTag = MigrateDefault(ReadMenuTag(), OldMenu, NewMenu);
+            lcdMenuTag = MigrateDefault(ReadMenuTag(), OldMenu, NewMenu);
             cockpitTag = MigrateDefault(ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(NewCockpit), OldCockpit, NewCockpit);
             rayCameraTag = MigrateDefault(ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(NewRay), OldRay, NewRay);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
@@ -390,14 +390,14 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, TRANSPARENTLCD, TransparentLCD);
 
-            //NamesTagsSection. LCD Settings is not written, so the next parse drops that key.
+            //NamesTagsSection. LCD Menu is not written, so the next parse drops that key.
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_IGNORE_TAG, IgnoreTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD1_TAG, Lcd1Tag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_LCD2_TAG, Lcd2Tag);
-            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_MENU_TAG, LcdSettingsTag);
+            iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_MENU_TAG, LcdMenuTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_COCKPIT_TAG, CockpitTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag);
@@ -445,8 +445,8 @@ namespace IngameScript.Domain
         {
             if (ini.ContainsKey(NamesTagsSection, INI_MENU_TAG))
                 return ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(NewMenu);
-            if (ini.ContainsKey(NamesTagsSection, INI_LCD_SETTINGS_TAG))
-                return ini.Get(NamesTagsSection, INI_LCD_SETTINGS_TAG).ToString(OldMenu);
+            if (ini.ContainsKey(NamesTagsSection, INI_LCD_MENU_TAG))
+                return ini.Get(NamesTagsSection, INI_LCD_MENU_TAG).ToString(OldMenu);
             return NewMenu;
         }
 

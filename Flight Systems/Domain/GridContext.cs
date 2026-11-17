@@ -19,7 +19,7 @@ namespace IngameScript.Domain
         string ignoreTag;
         string lcd1Tag;
         string lcd2Tag;
-        string lcdSettingsTag;
+        string lcdMenuTag;
         string cockpitTag;
         string backupTag;
 
@@ -68,7 +68,7 @@ namespace IngameScript.Domain
 
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
-        List<IMyTextSurface> lcdsSettings = new List<IMyTextSurface>();
+        List<IMyTextSurface> lcdsMenu = new List<IMyTextSurface>();
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -104,7 +104,7 @@ namespace IngameScript.Domain
             ignoreTag = ic.IgnoreTag;
             lcd1Tag = ic.Lcd1Tag;
             lcd2Tag = ic.Lcd2Tag;
-            lcdSettingsTag = ic.LcdSettingsTag;
+            lcdMenuTag = ic.LcdMenuTag;
             cockpitTag = ic.CockpitTag;
             backupTag = ic.BackupBatteryTag;
 
@@ -375,7 +375,7 @@ namespace IngameScript.Domain
         {
             Lcds1.Clear();
             Lcds2.Clear();
-            lcdsSettings.Clear();
+            lcdsMenu.Clear();
             cockpitIniChanged = false;
 
             FetchLcdProviders();
@@ -400,23 +400,23 @@ namespace IngameScript.Domain
 
                 bool tagged1 = !string.IsNullOrEmpty(lcd1Tag) && name.Contains(lcd1Tag);
                 bool tagged2 = !string.IsNullOrEmpty(lcd2Tag) && name.Contains(lcd2Tag);
-                bool taggedS = !string.IsNullOrEmpty(lcdSettingsTag) && name.Contains(lcdSettingsTag);
+                bool taggedS = !string.IsNullOrEmpty(lcdMenuTag) && name.Contains(lcdMenuTag);
 
                 if (tagged1 || tagged2 || taggedS)
                 {
                     if (tagged1) AddAllSurfaces(provider, Lcds1, true);
                     if (tagged2) AddAllSurfaces(provider, Lcds2, true);
-                    if (taggedS) AddAllSurfaces(provider, lcdsSettings, true);
+                    if (taggedS) AddAllSurfaces(provider, lcdsMenu, true);
                 }
             }
 
             PruneCockpitSpriteInis(seenCockpits);
 
-            lcdsSettings.Add(Me.GetSurface(0));
+            lcdsMenu.Add(Me.GetSurface(0));
 
             CleanSurfaces(Lcds1);
             CleanSurfaces(Lcds2);
-            CleanSurfaces(lcdsSettings);
+            CleanSurfaces(lcdsMenu);
             return this;
         }
 
@@ -442,8 +442,8 @@ namespace IngameScript.Domain
                 AddSurface(cockpit, index, Lcds1, true);
             if (CockpitSpriteIni.TryParseSlot(cfg.Lcd2, surfaceCount, out index))
                 AddSurface(cockpit, index, Lcds2, true);
-            if (CockpitSpriteIni.TryParseSlot(cfg.LcdSettings, surfaceCount, out index))
-                AddSurface(cockpit, index, lcdsSettings, true);
+            if (CockpitSpriteIni.TryParseSlot(cfg.LcdMenu, surfaceCount, out index))
+                AddSurface(cockpit, index, lcdsMenu, true);
         }
 
         void PruneCockpitSpriteInis(List<long> seen)
@@ -664,7 +664,7 @@ namespace IngameScript.Domain
                 tempBlock.IsSameConstructAs(Me) &&
                 !tempBlock.CustomName.Contains(ignoreTag) &&
                 !tempBlock.CustomData.Contains(ignoreTag) &&
-                !tempBlock.CustomName.Contains(lcdSettingsTag)
+                !tempBlock.CustomName.Contains(lcdMenuTag)
             );
 
             foreach (var block in tempList)
@@ -804,7 +804,7 @@ namespace IngameScript.Domain
         public IMyCameraBlock RayCamera => rayCamera;
         public List<IMyTextSurface> Lcds1 => lcds1;
         public List<IMyTextSurface> Lcds2 => lcds2;
-        public List<IMyTextSurface> LcdsSettings => lcdsSettings;
+        public List<IMyTextSurface> LcdsMenu => lcdsMenu;
 
         public List<IMyTextSurface> Surfaces => surfaces;
         public StringBuilder ErrorMessage => errorMessage;

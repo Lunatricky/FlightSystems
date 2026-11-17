@@ -22,10 +22,10 @@ namespace IngameScript
         PlayerInput pi;
 
         Command command;
-        SettingsScreens settingsHud;
+        MenuScreens menuHud;
         Sprites hudStack1;
         Sprites hudStack2;
-        Sprites settingsStack;
+        Sprites menuStack;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -63,8 +63,8 @@ namespace IngameScript
         readonly List<long> sampleTriggerConnectorIds = new List<long>();
         readonly List<long> samplePadConnectorIds = new List<long>();
         int groupSyncTicks;
-        bool settingsToggle;
-        bool settingsIsLocked;
+        bool menuToggle;
+        bool menuIsLocked;
 
         double planetRadius = 0;
         PlanetType planet = PlanetType.Unknown;
@@ -83,14 +83,14 @@ namespace IngameScript
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
             command = new Command();
-            settingsHud = new SettingsScreens();
+            menuHud = new MenuScreens();
             hudStack1 = new Sprites(ic);
             hudStack2 = new Sprites(ic);
-            settingsStack = new Sprites(ic);
+            menuStack = new Sprites(ic);
 
             CheckIni();
 
-            if (gc.LcdsSettings.Count > 0) settingsHud.FlightSystemIdle(ic, gc, sb);
+            if (gc.LcdsMenu.Count > 0) menuHud.FlightSystemIdle(ic, gc, sb);
         }
 
         public void Main(string argument)
@@ -151,11 +151,11 @@ namespace IngameScript
                     else
                         CancelDockWarning();
                 }
-                else if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
+                else if ((argument.ToLowerInvariant() == "menu" || argument.ToLowerInvariant() == "settings") && (gc.Cockpits.Count > 1 || isDocked))
                 {
-                    settingsToggle = !settingsToggle;
+                    menuToggle = !menuToggle;
 
-                    if (settingsToggle)
+                    if (menuToggle)
                     {
                         pi.OcupiedController(gc.Controllers);
                         pi.PrepareController();
@@ -169,7 +169,7 @@ namespace IngameScript
             if (inputLock > 10)
             {
                 inputLock = 0;
-                settingsIsLocked = false;
+                menuIsLocked = false;
             }
 
             if (dockWarning)
@@ -190,31 +190,31 @@ namespace IngameScript
                 if (dockWarning)
                     DrawDockWarning();
             }
-            else if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
+            else if (menuToggle && !menuIsLocked && gc.LcdsMenu.Count > 0)
             {
                 RefreshHudLines();
-                if (settingsHud.ShouldClose(pi))
+                if (menuHud.ShouldClose(pi))
                 {
-                    settingsToggle = false;
+                    menuToggle = false;
                     pi.ResetControllers(gc.Controllers);
                     task = Task.ResetControllers;
                     Echo(GetRuntimeInfo());
                     return;
                 }
 
-                settingsHud.Handle(
-                    pi, gc, ic, sb, command, settingsToggle,
+                menuHud.Handle(
+                    pi, gc, ic, sb, command, menuToggle,
                     () => AbortShipContext(gc),
                     () => SoftAbort(gc),
                     () =>
                     {
-                        settingsToggle = false;
+                        menuToggle = false;
                         pi.ResetControllers(gc.Controllers);
                     },
                     LockInput);
             }
 
-            if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
+            if (!menuToggle && ic.AnalogThrotle && command.State == MainState.Idle)
             {
                 AnalogThrust();
             }
@@ -415,13 +415,13 @@ namespace IngameScript
             {
                 hudStack1.Clear();
                 hudStack2.Clear();
-                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, null, null, settingsStack);
+                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, null, null, menuStack);
                 return;
             }
 
             Lcd1Display.Fill(hudStack1, ic, gc, pc, command, planet, planetRadius);
             Lcd2Display.Fill(hudStack2, pc, command, sb);
-            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, hudStack1, hudStack2, settingsStack);
+            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
 
         void DrawFlightLcds()
@@ -433,14 +433,14 @@ namespace IngameScript
             }
 
             RefreshHudLines();
-            if (!settingsToggle)
-                settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
+            if (!menuToggle)
+                menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
             Sprites.PaintHud();
         }
 
         void RedrawSpriteLcds()
         {
-            settingsHud.IsDefaultScreen = false;
+            menuHud.IsDefaultScreen = false;
             DrawFlightLcds();
         }
 
@@ -693,8 +693,8 @@ namespace IngameScript
             if (!dockSeatsHeld)
                 return;
             dockSeatsHeld = false;
-            // Settings still owns the seat lock. Resetting here would turn thrust back on under that menu.
-            if (settingsToggle)
+            // Menu still owns the seat lock. Resetting here would turn thrust back on under that menu.
+            if (menuToggle)
                 return;
             pi.ResetControllers(gc.Controllers);
         }
@@ -732,7 +732,7 @@ namespace IngameScript
 
         void HandleDockWarningInput()
         {
-            if (settingsIsLocked || !CockpitOccupied())
+            if (menuIsLocked || !CockpitOccupied())
                 return;
 
             // The only seat still flies. Leave W, S, Space, and Q on the thrusters.
@@ -741,7 +741,7 @@ namespace IngameScript
 
             pi.OcupiedController(gc.Controllers);
             HoldDockSeats();
-            if (settingsToggle && settingsHud.ShouldClose(pi))
+            if (menuToggle && menuHud.ShouldClose(pi))
             {
                 LockInput();
                 CancelDockWarning();
@@ -802,19 +802,19 @@ namespace IngameScript
             hudStack1.DrawTo(gc.Lcds1);
             hudStack1.DrawTo(gc.Lcds2);
 
-            settingsStack.Clear();
-            settingsStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
-            settingsStack.Add("Thrusters and tools will turn off");
-            settingsStack.Add("No safe connector");
-            settingsStack.Add("Send dock confirm");
+            menuStack.Clear();
+            menuStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            menuStack.Add("Thrusters and tools will turn off");
+            menuStack.Add("No safe connector");
+            menuStack.Add("Send dock confirm");
             if (gc.Cockpits.Count <= 1)
-                AddDockPressCount(settingsStack);
+                AddDockPressCount(menuStack);
             else
             {
-                settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
-                settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
+                menuStack.Add("Confirm", WarningRowColor(1), Color.White);
+                menuStack.Add("Cancel", WarningRowColor(2), Color.White);
             }
-            settingsStack.DrawTo(gc.LcdsSettings);
+            menuStack.DrawTo(gc.LcdsMenu);
         }
 
         void AddDockPressCount(Sprites stack)
@@ -1534,7 +1534,7 @@ namespace IngameScript
 
         private void LockInput()
         {
-            settingsIsLocked = true;
+            menuIsLocked = true;
             inputLock = 0;
         }
 
