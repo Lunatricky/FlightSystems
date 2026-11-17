@@ -12,7 +12,8 @@ namespace IngameScript
         Home,
         Flight,
         Toggles,
-        Numbers
+        Numbers,
+        Colors
     }
 
     class MenuScreens
@@ -24,9 +25,10 @@ namespace IngameScript
         bool spaceWasDown;
         bool spaceEdge;
 
-        const int HomeRows = 4;
+        const int HomeRows = 5;
         const int ToggleValueRows = 8;
         const int NumberValueRows = 5;
+        const int ColorValueRows = 5;
 
         public void ShowHome()
         {
@@ -193,6 +195,12 @@ namespace IngameScript
                     SelectedRow = 1;
                     return true;
                 }
+                if (SelectedRow == 4)
+                {
+                    view = MenuView.Colors;
+                    SelectedRow = 1;
+                    return true;
+                }
                 return false;
             }
 
@@ -206,6 +214,12 @@ namespace IngameScript
             }
 
             if (view == MenuView.Numbers && SelectedRow == NumberValueRows + 1)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            if (view == MenuView.Colors && SelectedRow == ColorValueRows + 1)
             {
                 ReturnHome();
                 return true;
@@ -267,6 +281,29 @@ namespace IngameScript
                 AdjustToggles(ic, pi, lockInput);
             else if (view == MenuView.Numbers)
                 AdjustNumbers(ic, pi, lockInput);
+            else if (view == MenuView.Colors)
+                AdjustColors(ic, pi, lockInput);
+        }
+
+        void AdjustColors(IniContext ic, PlayerInput pi, Action lockInput)
+        {
+            if (!pi.A() && !pi.D())
+                return;
+            if (SelectedRow < 1 || SelectedRow > ColorValueRows)
+                return;
+
+            lockInput();
+            bool next = pi.D();
+            if (SelectedRow == 1)
+                ic.LcdBackgroundColor = ic.CycleAvailableColor(ic.LcdBackgroundColor, next);
+            else if (SelectedRow == 2)
+                ic.LcdFontColor = ic.CycleAvailableColor(ic.LcdFontColor, next);
+            else if (SelectedRow == 3)
+                ic.SetSpriteMenuColor(ic.CycleAvailableColor(ic.SpriteMenuColorName, next));
+            else if (SelectedRow == 4)
+                ic.SetSpriteBackgroundColor(ic.CycleAvailableColor(ic.SpriteBackgroundColorName, next));
+            else if (SelectedRow == 5)
+                ic.SetSpriteFontColor(ic.CycleAvailableColor(ic.SpriteFontColorName, next));
         }
 
         void AdjustToggles(IniContext ic, PlayerInput pi, Action lockInput)
@@ -306,8 +343,10 @@ namespace IngameScript
                 PaintFlight(ic, gc, true);
             else if (view == MenuView.Toggles)
                 PaintToggles(ic, gc);
-            else
+            else if (view == MenuView.Numbers)
                 PaintNumbers(ic, gc);
+            else
+                PaintColors(ic, gc);
         }
 
         void PaintHome(IniContext ic, GridContext gc)
@@ -318,6 +357,7 @@ namespace IngameScript
             spt.Add("Flight", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Toggles", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Numbers", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
@@ -378,6 +418,26 @@ namespace IngameScript
             spt.DrawTo(gc.LcdsMenu);
         }
 
+        void PaintColors(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+            spt.Add(IniContext.SurfaceColorsSection);
+            AddColorRow(spt, ic, ref row, IniContext.LCDBACKGROUNDCOLOR, ic.LcdBackgroundColor);
+            AddColorRow(spt, ic, ref row, IniContext.LCDFONTCOLOR, ic.LcdFontColor);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEMENUCOLOR, ic.SpriteMenuColorName);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEBACKGROUNDCOLOR, ic.SpriteBackgroundColorName);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEFONTCOLOR, ic.SpriteFontColorName);
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void AddColorRow(Sprites spt, IniContext ic, ref int row, string key, string name)
+        {
+            spt.Add(key + ": " + name, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            row++;
+        }
+
         void ReturnHome()
         {
             if (view == MenuView.Flight)
@@ -386,6 +446,8 @@ namespace IngameScript
                 SelectedRow = 2;
             else if (view == MenuView.Numbers)
                 SelectedRow = 3;
+            else if (view == MenuView.Colors)
+                SelectedRow = 4;
             else
                 SelectedRow = 1;
             view = MenuView.Home;
@@ -400,6 +462,8 @@ namespace IngameScript
                 max = ToggleValueRows + 1;
             else if (view == MenuView.Numbers)
                 max = NumberValueRows + 1;
+            else if (view == MenuView.Colors)
+                max = ColorValueRows + 1;
             ClampRow(1, max);
         }
 

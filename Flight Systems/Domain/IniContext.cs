@@ -109,11 +109,11 @@ namespace IngameScript.Domain
         //SurfaceColorsSection
         public const string SurfaceColorsSection = "Screen Colors";
 
-        const string LCDBACKGROUNDCOLOR = "LCD Background Color";
-        const string LCDFONTCOLOR = "LCD Font Color";
-        const string SPRITEMENUCOLOR = "Sprite Menu Color";
-        const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
-        const string SPRITEFONTCOLOR = "Sprite Font Color";
+        public const string LCDBACKGROUNDCOLOR = "LCD Background Color";
+        public const string LCDFONTCOLOR = "LCD Font Color";
+        public const string SPRITEMENUCOLOR = "Sprite Menu Color";
+        public const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
+        public const string SPRITEFONTCOLOR = "Sprite Font Color";
 
         string lcdBackgroundColor = "Black";
         string lcdFontColor = "White";
@@ -126,11 +126,13 @@ namespace IngameScript.Domain
         const string COLORS = "Available Colors";
 
         string colors = ColorMap.All.ToString();
+        readonly List<string> colorNames = new List<string>();
 
 
         public IniContext(GridContext gc)
         {
             this.gc = gc;
+            FillColorNames();
         }
 
         public bool IniChanged => iniChanged;
@@ -276,11 +278,82 @@ namespace IngameScript.Domain
             }
         }
 
-        public string LcdBackgroundColor => lcdBackgroundColor;
-        public string LcdFontColor => lcdFontColor;
+        public string LcdBackgroundColor
+        {
+            get { return lcdBackgroundColor; }
+            set
+            {
+                lcdBackgroundColor = value ?? "";
+                UpdateIni(SurfaceColorsSection, LCDBACKGROUNDCOLOR, lcdBackgroundColor);
+            }
+        }
+        public string LcdFontColor
+        {
+            get { return lcdFontColor; }
+            set
+            {
+                lcdFontColor = value ?? "";
+                UpdateIni(SurfaceColorsSection, LCDFONTCOLOR, lcdFontColor);
+            }
+        }
         public Color SpriteMenuColor => ColorMap.GetColorFromString(spriteMenuColor);
         public Color SpriteBackgroundColor => ColorMap.GetColorFromString(spriteBackgroundColor);
         public Color SpriteFontColor => ColorMap.GetColorFromString(spriteFontColor);
+        public string SpriteMenuColorName => spriteMenuColor;
+        public string SpriteBackgroundColorName => spriteBackgroundColor;
+        public string SpriteFontColorName => spriteFontColor;
+
+        public void SetSpriteMenuColor(string name)
+        {
+            spriteMenuColor = name ?? "";
+            UpdateIni(SurfaceColorsSection, SPRITEMENUCOLOR, spriteMenuColor);
+        }
+
+        public void SetSpriteBackgroundColor(string name)
+        {
+            spriteBackgroundColor = name ?? "";
+            UpdateIni(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, spriteBackgroundColor);
+        }
+
+        public void SetSpriteFontColor(string name)
+        {
+            spriteFontColor = name ?? "";
+            UpdateIni(SurfaceColorsSection, SPRITEFONTCOLOR, spriteFontColor);
+        }
+
+        public string CycleAvailableColor(string current, bool next)
+        {
+            int count = colorNames.Count;
+            if (count == 0)
+                return current ?? "";
+
+            int index = -1;
+            for (int i = 0; i < count; i++)
+            {
+                if (colorNames[i] == current)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (next)
+            {
+                index++;
+                if (index >= count)
+                    index = 0;
+            }
+            else
+            {
+                if (index < 0)
+                    index = 0;
+                index--;
+                if (index < 0)
+                    index = count - 1;
+            }
+
+            return colorNames[index];
+        }
 
 
         // ───────────────────────────────────────
@@ -366,6 +439,8 @@ namespace IngameScript.Domain
             spriteMenuColor = ini.Get(SurfaceColorsSection, SPRITEMENUCOLOR).ToString(ColorMap.GetStringFromColor(SpriteMenuColor));
             spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(ColorMap.GetStringFromColor(SpriteBackgroundColor));
             spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(ColorMap.GetStringFromColor(SpriteFontColor));
+            colors = ini.Get(AvailableColorsSection, COLORS).ToString(ColorMap.All);
+            FillColorNames();
 
             gps.Load(ini, rawCustomData);
 
@@ -517,6 +592,29 @@ namespace IngameScript.Domain
             if (!ini.ContainsSection(NamesTagsSection))
                 return;
             UpdateIni(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore);
+        }
+
+        void FillColorNames()
+        {
+            colorNames.Clear();
+            if (string.IsNullOrEmpty(colors))
+                return;
+
+            int start = 0;
+            for (int i = 0; i <= colors.Length; i++)
+            {
+                if (i < colors.Length && colors[i] != ',')
+                    continue;
+
+                int length = i - start;
+                if (length > 0)
+                {
+                    string name = colors.Substring(start, length).Trim();
+                    if (name.Length > 0)
+                        colorNames.Add(name);
+                }
+                start = i + 1;
+            }
         }
 
         void UpdateIni(string section, string key, object newVal)
