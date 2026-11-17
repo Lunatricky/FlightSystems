@@ -21,6 +21,7 @@ namespace IngameScript
         public bool IsOpen;
 
         GpsView view;
+        bool spacePressed;
         int row = 1;
         int selectedIndex;
         bool editing;
@@ -57,8 +58,11 @@ namespace IngameScript
             Command command,
             Action lockInput,
             Action close,
-            Action softAbort)
+            Action softAbort,
+            bool spaceEdge)
         {
+            // Same rising edge as the home list. The press that opened this screen does not fire here.
+            spacePressed = spaceEdge;
             GpsStore store = ic.Gps;
             MoveRow(pi, lockInput);
 
@@ -106,7 +110,7 @@ namespace IngameScript
             int total = ListTotal(store);
             Clamp(1, total);
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == total)
@@ -161,7 +165,7 @@ namespace IngameScript
 
             Clamp(1, 4);
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 1)
@@ -214,7 +218,7 @@ namespace IngameScript
                     draft.Location = CycleEnum(draft.Location, pi.D());
             }
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 2)
@@ -250,7 +254,7 @@ namespace IngameScript
                 CycleField(draft, row, pi.D());
             }
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == total)
@@ -285,7 +289,7 @@ namespace IngameScript
             }
 
             Clamp(1, 2);
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 1)

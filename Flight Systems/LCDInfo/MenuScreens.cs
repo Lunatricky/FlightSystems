@@ -21,6 +21,8 @@ namespace IngameScript
         public bool IsDefaultScreen;
         readonly GpsMenu gpsMenu = new GpsMenu();
         MenuView view = MenuView.Home;
+        bool spaceWasDown;
+        bool spaceEdge;
 
         const int HomeRows = 4;
         const int ToggleValueRows = 8;
@@ -31,13 +33,23 @@ namespace IngameScript
             view = MenuView.Home;
             SelectedRow = 1;
             gpsMenu.Close();
+            // A new open has not seen Space down, so the first press counts.
+            spaceWasDown = false;
+            spaceEdge = false;
         }
 
-        public bool ShouldClose(PlayerInput pi)
+        public void NoteSpace(PlayerInput pi)
+        {
+            bool down = pi.Space();
+            spaceEdge = down && !spaceWasDown;
+            spaceWasDown = down;
+        }
+
+        public bool ShouldClose()
         {
             if (gpsMenu.IsOpen || view != MenuView.Home)
                 return false;
-            return SelectedRow == HomeRows && pi.Space();
+            return SelectedRow == HomeRows && spaceEdge;
         }
 
         public void Handle(
@@ -72,7 +84,7 @@ namespace IngameScript
 
                 if (gpsMenu.IsOpen)
                 {
-                    gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort);
+                    gpsMenu.Tick(pi, gc, ic, command, lockInput, close, softAbort, spaceEdge);
                     return;
                 }
 
@@ -106,7 +118,7 @@ namespace IngameScript
 
             bool acted = false;
             bool closed = false;
-            if (!backed && pi.Space())
+            if (!backed && spaceEdge)
                 acted = Activate(gc, sb, command, abort, softAbort, close, ref closed);
 
             if (closed)

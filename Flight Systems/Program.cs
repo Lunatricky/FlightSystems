@@ -190,29 +190,34 @@ namespace IngameScript
                 if (dockWarning)
                     DrawDockWarning();
             }
-            else if (menuToggle && !menuIsLocked && gc.LcdsMenu.Count > 0)
+            else if (menuToggle && gc.LcdsMenu.Count > 0)
             {
-                RefreshHudLines();
-                if (menuHud.ShouldClose(pi))
+                // Sample Space while the menu is open, including a locked tick that does not read keys.
+                menuHud.NoteSpace(pi);
+                if (!menuIsLocked)
                 {
-                    menuToggle = false;
-                    pi.ResetControllers(gc.Controllers);
-                    menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
-                    task = Task.ResetControllers;
-                    Echo(GetRuntimeInfo());
-                    return;
-                }
-
-                menuHud.Handle(
-                    pi, gc, ic, sb, command, menuToggle,
-                    () => AbortShipContext(gc),
-                    () => SoftAbort(gc),
-                    () =>
+                    RefreshHudLines();
+                    if (menuHud.ShouldClose())
                     {
                         menuToggle = false;
                         pi.ResetControllers(gc.Controllers);
-                    },
-                    LockInput);
+                        menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
+                        task = Task.ResetControllers;
+                        Echo(GetRuntimeInfo());
+                        return;
+                    }
+
+                    menuHud.Handle(
+                        pi, gc, ic, sb, command, menuToggle,
+                        () => AbortShipContext(gc),
+                        () => SoftAbort(gc),
+                        () =>
+                        {
+                            menuToggle = false;
+                            pi.ResetControllers(gc.Controllers);
+                        },
+                        LockInput);
+                }
             }
 
             if (!menuToggle && ic.AnalogThrotle && command.State == MainState.Idle)
@@ -742,7 +747,9 @@ namespace IngameScript
 
             pi.OcupiedController(gc.Controllers);
             HoldDockSeats();
-            if (menuToggle && menuHud.ShouldClose(pi))
+            if (menuToggle)
+                menuHud.NoteSpace(pi);
+            if (menuToggle && menuHud.ShouldClose())
             {
                 LockInput();
                 CancelDockWarning();
