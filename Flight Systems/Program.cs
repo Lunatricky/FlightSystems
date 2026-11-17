@@ -65,6 +65,7 @@ namespace IngameScript
         int groupSyncTicks;
         bool menuToggle;
         bool menuIsLocked;
+        bool menuSeatHold;
 
         double planetRadius = 0;
         PlanetType planet = PlanetType.Unknown;
@@ -157,10 +158,15 @@ namespace IngameScript
 
                     if (menuToggle)
                     {
+                        menuSeatHold = false;
                         menuHud.ShowHome();
                         HoldMenuSeat();
                     }
-                    else pi.ResetControllers(gc.Controllers);
+                    else
+                    {
+                        menuSeatHold = false;
+                        pi.ResetControllers(gc.Controllers);
+                    }
                 }
                 else command = new Command(argument);
             }
@@ -171,6 +177,8 @@ namespace IngameScript
                 inputLock = 0;
                 menuIsLocked = false;
             }
+
+            ReleaseMenuSeatHold();
 
             if (dockWarning)
             {
@@ -199,8 +207,7 @@ namespace IngameScript
                     RefreshHudLines();
                     if (menuHud.ShouldClose())
                     {
-                        menuToggle = false;
-                        pi.ResetControllers(gc.Controllers);
+                        CloseMenuFromSpace();
                         menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
                         task = Task.ResetControllers;
                         Echo(GetRuntimeInfo());
@@ -211,11 +218,7 @@ namespace IngameScript
                         pi, gc, ic, sb, command, menuToggle,
                         () => AbortShipContext(gc),
                         () => SoftAbort(gc),
-                        () =>
-                        {
-                            menuToggle = false;
-                            pi.ResetControllers(gc.Controllers);
-                        },
+                        CloseMenuFromSpace,
                         LockInput);
                 }
             }
@@ -699,8 +702,8 @@ namespace IngameScript
             if (!dockSeatsHeld)
                 return;
             dockSeatsHeld = false;
-            // Menu still owns the seat lock. Resetting here would turn thrust back on under that menu.
-            if (menuToggle)
+            // Menu or a Space close still owns the seat. Resetting here would thrust up.
+            if (menuToggle || menuSeatHold)
                 return;
             pi.ResetControllers(gc.Controllers);
         }
@@ -1400,7 +1403,7 @@ namespace IngameScript
             gc.Setup(ic);
             // Setup turns thrust on for every cockpit. The occupied seat is the menu keyboard.
             // The remote in gc.Controller keeps its thrust.
-            if (menuToggle)
+            if (menuToggle || menuSeatHold)
                 HoldMenuSeat();
             SyncDockTriggerGears();
             SyncDockConnectors();
@@ -1554,6 +1557,34 @@ namespace IngameScript
         {
             pi.OcupiedController(gc.Controllers);
             pi.PrepareController();
+        }
+
+        void CloseMenuFromSpace()
+        {
+            menuToggle = false;
+            if (pi.Space())
+            {
+                menuSeatHold = true;
+                HoldMenuSeat();
+                return;
+            }
+
+            menuSeatHold = false;
+            pi.ResetControllers(gc.Controllers);
+        }
+
+        void ReleaseMenuSeatHold()
+        {
+            if (!menuSeatHold)
+                return;
+            if (pi.Space())
+            {
+                HoldMenuSeat();
+                return;
+            }
+
+            menuSeatHold = false;
+            pi.ResetControllers(gc.Controllers);
         }
 
         void AbortShipContext(GridContext gc)

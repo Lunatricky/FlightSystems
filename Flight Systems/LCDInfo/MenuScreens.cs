@@ -342,7 +342,7 @@ namespace IngameScript
             spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             if (includeClose)
-                spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+                spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
         }
 
         void PaintToggles(IniContext ic, GridContext gc)
@@ -359,7 +359,7 @@ namespace IngameScript
             spt.Add(IniContext.RENAME_SUBGRIDS, BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add(IniContext.PAINT_SURFACES, BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -374,7 +374,7 @@ namespace IngameScript
             spt.Add(IniContext.CNAV_ALTITUDE + ": " + ic.SafeAltitude, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.DISTANCE_TO_GPS + ": " + ic.DistanceToGPS, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.MINIMUM_ACCEPTED_FUEL + ": " + ic.MinimumAcceptedFuel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
