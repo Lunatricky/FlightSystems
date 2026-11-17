@@ -209,6 +209,9 @@ namespace IngameScript
                     {
                         CloseMenuFromSpace();
                         menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
+                        // menuToggle is false now. Rebind so the shared panel is the flight HUD, not the idle list.
+                        RefreshHudLines();
+                        Sprites.PaintHud();
                         task = Task.ResetControllers;
                         Echo(GetRuntimeInfo());
                         return;
@@ -220,6 +223,11 @@ namespace IngameScript
                         () => SoftAbort(gc),
                         CloseMenuFromSpace,
                         LockInput);
+                    if (!menuToggle)
+                    {
+                        RefreshHudLines();
+                        Sprites.PaintHud();
+                    }
                 }
             }
 

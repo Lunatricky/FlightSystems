@@ -162,7 +162,7 @@ namespace IngameScript
             SelectedRow = RunningFlightRow(gc, sb);
 
             AddFlightRows(spt, ic, gc, false);
-            spt.DrawTo(gc.LcdsMenu);
+            spt.DrawIdleTo(gc.LcdsMenu);
         }
 
         bool Activate(

@@ -9,8 +9,9 @@ namespace IngameScript
 {
     class Sprites
     {
-        // Menu pages copy into flightMenu. A shared surface keeps that stack as column 3
-        // whenever the panel is wide enough, including the idle list while the menu is closed.
+        // A surface in the menu list and in LCD 1 or LCD 2 stays in both.
+        // Closed, that panel is the flight HUD. Open, the menu fills the whole panel.
+        // Menu-only surfaces still get the idle flight-command list.
         static List<IMyTextSurface> flight1;
         static List<IMyTextSurface> flight2;
         static List<IMyTextSurface> flightSettings;
@@ -111,6 +112,16 @@ namespace IngameScript
 
         public void DrawTo(List<IMyTextSurface> surfaces)
         {
+            DrawSurfaces(surfaces, false);
+        }
+
+        public void DrawIdleTo(List<IMyTextSurface> surfaces)
+        {
+            DrawSurfaces(surfaces, true);
+        }
+
+        void DrawSurfaces(List<IMyTextSurface> surfaces, bool idleList)
+        {
             if (surfaces == null)
                 return;
 
@@ -122,6 +133,16 @@ namespace IngameScript
                 IMyTextSurface panel = surfaces[i];
                 if (panel == null)
                     continue;
+
+                // Same panel as LCD 1 or LCD 2. Idle and a closed menu do not paint it.
+                if (SharedWithFlight(panel))
+                {
+                    if (idleList || !flightSettingsOpen)
+                        continue;
+                    DrawInfoPanel(panel);
+                    continue;
+                }
+
                 if (TryDrawAsThirdColumn(panel))
                     continue;
                 DrawInfoPanel(panel);
@@ -151,16 +172,15 @@ namespace IngameScript
                 painted.Add(panel);
 
                 bool onSettings = Contains(flightSettings, panel);
-                bool wantSettings = onSettings && flightMenu != null && flightMenu.LineCount > 0;
-                int cols = CountColumns(panel, flightHud1, flightHud2, wantSettings ? flightMenu : null, wantSettings);
-                bool showSettings = wantSettings && cols >= 3;
-
-                // Not wide enough for three columns: the open menu keeps the whole panel.
-                if (onSettings && flightSettingsOpen && !showSettings)
+                // Open menu already filled this shared panel, wide or narrow.
+                if (onSettings && flightSettingsOpen)
                     continue;
 
+                int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
                 bool in1 = Contains(flight1, panel);
-                PaintPanel(panel, cols, showSettings, in1, flightHud1, flightHud2, flightMenu);
+                // A shared panel does not fall back to the idle list when the HUD stacks are empty.
+                Sprites settings = onSettings ? null : flightMenu;
+                PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
             }
         }
 
@@ -579,6 +599,13 @@ namespace IngameScript
             if (v > max)
                 return max;
             return v;
+        }
+
+        static bool SharedWithFlight(IMyTextSurface panel)
+        {
+            if (!Contains(flightSettings, panel))
+                return false;
+            return Contains(flight1, panel) || Contains(flight2, panel);
         }
 
         static bool Contains(List<IMyTextSurface> list, IMyTextSurface panel)
