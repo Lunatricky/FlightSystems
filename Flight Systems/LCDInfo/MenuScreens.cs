@@ -160,14 +160,24 @@ namespace IngameScript
                 spt.Clear();
 
             int row = 1;
+            SelectedRow = 0;
 
-            if (sb.CruiseToggle) SelectedRow = row++;
-            else if (gc.ShipType != ShipType.Atmo && sb.OrbitToggle) SelectedRow = row++;
-            else if (sb.CNavToggle) SelectedRow = row++;
-            else if (sb.LandToggle) SelectedRow = row++;
-            else if (sb.GlideToggle) SelectedRow = row++;
-            else if (sb.SBurnToggle) SelectedRow = row++;
-            else SelectedRow = 0;
+            if (sb.CruiseToggle) SelectedRow = row;
+            row++;
+            if (gc.ShipType != ShipType.Atmo)
+            {
+                if (SelectedRow == 0 && sb.OrbitToggle) SelectedRow = row;
+                row++;
+            }
+            if (SelectedRow == 0 && sb.CNavToggle) SelectedRow = row;
+            row++;
+            if (SelectedRow == 0 && sb.LandToggle) SelectedRow = row;
+            row++;
+            if (SelectedRow == 0 && sb.GlideToggle) SelectedRow = row;
+            row++;
+            if (SelectedRow == 0 && sb.SBurnToggle) SelectedRow = row;
+            row++;
+            if (SelectedRow == 0 && sb.GpsToggle) SelectedRow = row;
 
             AddFlightRows(spt, ic, gc, false);
             spt.DrawTo(gc.LcdsMenu);
