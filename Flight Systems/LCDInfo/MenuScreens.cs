@@ -2,7 +2,10 @@ using IngameScript.Domain;
 using IngameScript.Enums;
 using IngameScript.UseCases;
 using IngameScript.Utils;
+using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
+using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript
@@ -13,7 +16,16 @@ namespace IngameScript
         Flight,
         Toggles,
         Numbers,
-        Colors
+        Colors,
+        DockKinds,
+        DockBlocks
+    }
+
+    enum DockBlockKind
+    {
+        TriggerGears,
+        TriggerConnectors,
+        PadConnectors
     }
 
     class MenuScreens
@@ -25,10 +37,18 @@ namespace IngameScript
         bool spaceWasDown;
         bool spaceEdge;
 
-        const int HomeRows = 5;
+        const int HomeRows = 6;
         const int ToggleValueRows = 8;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
+        const int DockKindRows = 3;
+        DockBlockKind dockKind = DockBlockKind.TriggerGears;
+        int dockKindRow = 1;
+        readonly List<IMyTerminalBlock> shownBlocks = new List<IMyTerminalBlock>();
+        readonly List<IMyLandingGear> gearScan = new List<IMyLandingGear>();
+        readonly List<IMyShipConnector> connectorScan = new List<IMyShipConnector>();
+        readonly List<IMyLandingGear> gearGroup = new List<IMyLandingGear>();
+        readonly List<IMyShipConnector> connectorGroup = new List<IMyShipConnector>();
         string savedLcdBackground;
         string savedLcdFont;
         string savedSpriteMenu;
@@ -95,7 +115,7 @@ namespace IngameScript
                     return;
                 }
 
-                ClampFor(gc);
+                ClampFor(gc, ic);
                 PaintFlight(ic, gc, true);
                 return;
             }
@@ -117,13 +137,18 @@ namespace IngameScript
             if (pi.Q() && view != MenuView.Home)
             {
                 lockInput();
-                if (view == MenuView.Colors)
-                    RestoreColors(ic);
-                ReturnHome();
+                if (view == MenuView.DockBlocks)
+                    BackToDockKinds();
+                else
+                {
+                    if (view == MenuView.Colors)
+                        RestoreColors(ic);
+                    ReturnHome();
+                }
                 backed = true;
             }
 
-            ClampFor(gc);
+            ClampFor(gc, ic);
 
             bool acted = false;
             bool closed = false;
@@ -142,7 +167,7 @@ namespace IngameScript
             if (!backed && !acted)
                 AdjustValue(ic, pi, lockInput);
 
-            ClampFor(gc);
+            ClampFor(gc, ic);
             Paint(ic, gc);
         }
 
@@ -203,8 +228,20 @@ namespace IngameScript
                     SelectedRow = 1;
                     return true;
                 }
+                if (SelectedRow == 5)
+                {
+                    view = MenuView.DockKinds;
+                    SelectedRow = 1;
+                    return true;
+                }
                 return false;
             }
+
+            if (view == MenuView.DockKinds)
+                return ActivateDockKinds();
+
+            if (view == MenuView.DockBlocks)
+                return ActivateDockBlock(ic, gc);
 
             if (view == MenuView.Flight)
                 return ActivateFlight(gc, sb, command, abort, softAbort, close, ref closed);
@@ -354,8 +391,12 @@ namespace IngameScript
                 PaintToggles(ic, gc);
             else if (view == MenuView.Numbers)
                 PaintNumbers(ic, gc);
-            else
+            else if (view == MenuView.Colors)
                 PaintColors(ic, gc);
+            else if (view == MenuView.DockKinds)
+                PaintDockKinds(ic, gc);
+            else if (view == MenuView.DockBlocks)
+                PaintDockBlocks(ic, gc);
         }
 
         void PaintHome(IniContext ic, GridContext gc)
@@ -367,6 +408,7 @@ namespace IngameScript
             spt.Add("Toggles", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Numbers", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Dock blocks", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
@@ -476,12 +518,14 @@ namespace IngameScript
                 SelectedRow = 3;
             else if (view == MenuView.Colors)
                 SelectedRow = 4;
+            else if (view == MenuView.DockKinds)
+                SelectedRow = 5;
             else
                 SelectedRow = 1;
             view = MenuView.Home;
         }
 
-        void ClampFor(GridContext gc)
+        void ClampFor(GridContext gc, IniContext ic)
         {
             int max = HomeRows;
             if (view == MenuView.Flight)
@@ -492,6 +536,13 @@ namespace IngameScript
                 max = NumberValueRows + 1;
             else if (view == MenuView.Colors)
                 max = ColorValueRows + 2;
+            else if (view == MenuView.DockKinds)
+                max = DockKindRows + 1;
+            else if (view == MenuView.DockBlocks)
+            {
+                FillShown(gc, ic);
+                max = shownBlocks.Count + 1;
+            }
             ClampRow(1, max);
         }
 
@@ -570,6 +621,242 @@ namespace IngameScript
             return (isSelected ?
                 toggle ? Color.Green : Color.Red :
                 toggle ? Color.LightGreen : Color.OrangeRed);
+        }
+
+        bool ActivateDockKinds()
+        {
+            if (SelectedRow == DockKindRows + 1)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            if (SelectedRow == 1)
+                dockKind = DockBlockKind.TriggerGears;
+            else if (SelectedRow == 2)
+                dockKind = DockBlockKind.TriggerConnectors;
+            else if (SelectedRow == 3)
+                dockKind = DockBlockKind.PadConnectors;
+            else
+                return false;
+
+            dockKindRow = SelectedRow;
+            view = MenuView.DockBlocks;
+            SelectedRow = 1;
+            return true;
+        }
+
+        bool ActivateDockBlock(IniContext ic, GridContext gc)
+        {
+            FillShown(gc, ic);
+            int index = SelectedRow - 1;
+            if (index < 0 || index >= shownBlocks.Count)
+            {
+                BackToDockKinds();
+                return true;
+            }
+
+            ToggleShown(shownBlocks[index], ic, gc);
+            return true;
+        }
+
+        void BackToDockKinds()
+        {
+            view = MenuView.DockKinds;
+            SelectedRow = dockKindRow < 1 ? 1 : dockKindRow;
+        }
+
+        void PaintDockKinds(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            spt.Add("Dock blocks");
+            int row = 1;
+            spt.Add("Dock trigger gears", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Dock trigger connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Landing pad connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void PaintDockBlocks(IniContext ic, GridContext gc)
+        {
+            FillShown(gc, ic);
+            Sprites spt = new Sprites(ic);
+            spt.Add(DockKindTitle(dockKind));
+            int row = 1;
+            for (int i = 0; i < shownBlocks.Count; i++)
+            {
+                IMyTerminalBlock block = shownBlocks[i];
+                string name = block == null || block.CustomName == null ? "" : block.CustomName;
+                bool marked = block != null && BlockMarked(block, ic);
+                spt.Add(name, BoolSpriteColor(SelectedRow == row, marked), Color.Black);
+                row++;
+            }
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        static string DockKindTitle(DockBlockKind kind)
+        {
+            if (kind == DockBlockKind.TriggerConnectors)
+                return "Dock trigger connectors";
+            if (kind == DockBlockKind.PadConnectors)
+                return "Landing pad connectors";
+            return "Dock trigger gears";
+        }
+
+        void ToggleShown(IMyTerminalBlock block, IniContext ic, GridContext gc)
+        {
+            if (block == null || block.Closed)
+                return;
+
+            if (dockKind == DockBlockKind.PadConnectors)
+            {
+                TogglePad(block, ic, gc);
+                return;
+            }
+
+            string line = ic.DockTriggerTag ?? "";
+            if (line.Length == 0)
+                return;
+            if (StaticConnectorStamp.HasExactLine(block.CustomData ?? "", line))
+                StaticConnectorStamp.RemoveLine(block, line);
+            else
+                StaticConnectorStamp.AppendLine(block, line);
+        }
+
+        void TogglePad(IMyTerminalBlock block, IniContext ic, GridContext gc)
+        {
+            string pad = ic.LandingPadTag ?? "";
+            string trigger = ic.DockTriggerTag ?? "";
+            if (pad.Length == 0)
+                return;
+
+            bool hasPad = StaticConnectorStamp.HasExactLine(block.CustomData ?? "", pad);
+            if (!hasPad)
+            {
+                StaticConnectorStamp.AppendLine(block, pad);
+                if (trigger.Length > 0 && trigger != pad)
+                    StaticConnectorStamp.RemoveLine(block, trigger);
+                return;
+            }
+
+            StaticConnectorStamp.RemoveLine(block, pad);
+            if (trigger.Length > 0 && ConnectorInTriggerGroup(gc, ic, block.EntityId))
+                StaticConnectorStamp.AppendLine(block, trigger);
+        }
+
+        bool BlockMarked(IMyTerminalBlock block, IniContext ic)
+        {
+            if (dockKind == DockBlockKind.PadConnectors)
+                return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
+            if (dockKind == DockBlockKind.TriggerGears)
+                return InGearGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
+            return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
+        }
+
+        void FillShown(GridContext gc, IniContext ic)
+        {
+            shownBlocks.Clear();
+            if (gc == null || gc.GridTS == null || gc.Me == null || ic == null)
+                return;
+
+            string ignore = ic.IgnoreTag ?? "";
+            if (dockKind == DockBlockKind.TriggerGears)
+            {
+                gearScan.Clear();
+                gc.GridTS.GetBlocksOfType(gearScan);
+                FillGearGroup(gc, ic.DockTriggerGroup);
+                for (int i = 0; i < gearScan.Count; i++)
+                {
+                    IMyLandingGear gear = gearScan[i];
+                    if (!TakeBlock(gear, gc, ignore))
+                        continue;
+                    shownBlocks.Add(gear);
+                }
+                return;
+            }
+
+            connectorScan.Clear();
+            gc.GridTS.GetBlocksOfType(connectorScan);
+            string groupName = dockKind == DockBlockKind.PadConnectors ? ic.LandingPadGroup : ic.DockTriggerGroup;
+            FillConnectorGroup(gc, groupName);
+            for (int i = 0; i < connectorScan.Count; i++)
+            {
+                IMyShipConnector connector = connectorScan[i];
+                if (!TakeBlock(connector, gc, ignore))
+                    continue;
+                shownBlocks.Add(connector);
+            }
+        }
+
+        bool TakeBlock(IMyTerminalBlock block, GridContext gc, string ignore)
+        {
+            if (block == null || block.Closed || gc.Me == null)
+                return false;
+            if (!block.IsSameConstructAs(gc.Me))
+                return false;
+            return !BlockIgnored(block, ignore);
+        }
+
+        static bool BlockIgnored(IMyTerminalBlock block, string tag)
+        {
+            if (string.IsNullOrEmpty(tag))
+                return false;
+            if (block.CustomName != null && block.CustomName.Contains(tag))
+                return true;
+            string data = block.CustomData;
+            return data != null && data.Contains(tag);
+        }
+
+        void FillGearGroup(GridContext gc, string groupName)
+        {
+            gearGroup.Clear();
+            if (gc.GridTS == null || string.IsNullOrEmpty(groupName))
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(gearGroup);
+        }
+
+        void FillConnectorGroup(GridContext gc, string groupName)
+        {
+            connectorGroup.Clear();
+            if (gc.GridTS == null || string.IsNullOrEmpty(groupName))
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(connectorGroup);
+        }
+
+        bool InGearGroup(long entityId)
+        {
+            for (int i = 0; i < gearGroup.Count; i++)
+            {
+                IMyLandingGear member = gearGroup[i];
+                if (member != null && !member.Closed && member.EntityId == entityId)
+                    return true;
+            }
+            return false;
+        }
+
+        bool InConnectorGroup(long entityId)
+        {
+            for (int i = 0; i < connectorGroup.Count; i++)
+            {
+                IMyShipConnector member = connectorGroup[i];
+                if (member != null && !member.Closed && member.EntityId == entityId)
+                    return true;
+            }
+            return false;
+        }
+
+        bool ConnectorInTriggerGroup(GridContext gc, IniContext ic, long entityId)
+        {
+            FillConnectorGroup(gc, ic.DockTriggerGroup);
+            return InConnectorGroup(entityId);
         }
     }
 }

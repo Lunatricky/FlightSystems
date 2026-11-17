@@ -1878,9 +1878,10 @@ namespace IngameScript
                     }
                 }
 
+                bool wasInGroup = IdInList(lastTriggerGearIds, gear.EntityId);
                 if (inGroup && !GearIgnored(gear) && current.Length > 0)
                     AppendExactLine(gear, current);
-                else if (!inGroup && current.Length > 0)
+                else if (!inGroup && wasInGroup && current.Length > 0)
                     RemoveExactLine(gear, current);
             }
         }
@@ -1918,6 +1919,8 @@ namespace IngameScript
 
                 bool inTrigger = ConnectorInList(dockTriggerConnectors, connector.EntityId);
                 bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
+                bool wasInTrigger = IdInList(lastTriggerConnectorIds, connector.EntityId);
+                bool wasInPad = IdInList(lastPadConnectorIds, connector.EntityId);
                 if (inPad)
                 {
                     // Pad wins. Equal spellings are one line, so the trigger line is not written as well.
@@ -1928,11 +1931,13 @@ namespace IngameScript
                 }
                 else
                 {
-                    if (pad.Length > 0)
+                    // Menu lines stay on a block that was never in the group. Leaving the group still clears the line.
+                    if (wasInPad && pad.Length > 0)
                         RemoveExactLine(connector, pad);
-                    if (inTrigger && current.Length > 0)
+                    bool hasPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(connector.CustomData, pad);
+                    if (inTrigger && current.Length > 0 && !hasPad)
                         AppendExactLine(connector, current);
-                    else if (current.Length > 0)
+                    else if (!inTrigger && wasInTrigger && current.Length > 0)
                         RemoveExactLine(connector, current);
                 }
             }
@@ -1991,6 +1996,16 @@ namespace IngameScript
                     continue;
                 dest.Add(block.EntityId);
             }
+        }
+
+        static bool IdInList(List<long> ids, long id)
+        {
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (ids[i] == id)
+                    return true;
+            }
+            return false;
         }
 
         static bool SameIds(List<long> last, List<long> current)

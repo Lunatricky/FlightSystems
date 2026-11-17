@@ -223,13 +223,40 @@ namespace IngameScript
                 int contentEnd = end;
                 if (contentEnd > i && data[contentEnd - 1] == '\r')
                     contentEnd--;
-                if (contentEnd - i == line.Length && data.Substring(i, line.Length) == line)
+                if (contentEnd - i == line.Length && LineEquals(data, i, line))
                     return true;
                 if (nl < 0)
                     break;
                 i = nl + 1;
             }
             return false;
+        }
+
+        public static void AppendLine(IMyTerminalBlock block, string line)
+        {
+            if (block == null || block.Closed || string.IsNullOrEmpty(line))
+                return;
+            string data = block.CustomData ?? "";
+            if (HasExactLine(data, line))
+                return;
+            block.CustomData = AppendExactLine(data, line);
+        }
+
+        public static void RemoveLine(IMyTerminalBlock block, string line)
+        {
+            if (block == null || block.Closed)
+                return;
+            RemoveExactLineFrom(block, line);
+        }
+
+        static bool LineEquals(string data, int start, string line)
+        {
+            for (int c = 0; c < line.Length; c++)
+            {
+                if (data[start + c] != line[c])
+                    return false;
+            }
+            return true;
         }
 
         public static string AppendExactLine(string data, string line)
