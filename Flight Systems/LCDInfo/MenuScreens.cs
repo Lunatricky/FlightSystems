@@ -159,25 +159,7 @@ namespace IngameScript
             else
                 spt.Clear();
 
-            int row = 1;
-            SelectedRow = 0;
-
-            if (sb.CruiseToggle) SelectedRow = row;
-            row++;
-            if (gc.ShipType != ShipType.Atmo)
-            {
-                if (SelectedRow == 0 && sb.OrbitToggle) SelectedRow = row;
-                row++;
-            }
-            if (SelectedRow == 0 && sb.CNavToggle) SelectedRow = row;
-            row++;
-            if (SelectedRow == 0 && sb.LandToggle) SelectedRow = row;
-            row++;
-            if (SelectedRow == 0 && sb.GlideToggle) SelectedRow = row;
-            row++;
-            if (SelectedRow == 0 && sb.SBurnToggle) SelectedRow = row;
-            row++;
-            if (SelectedRow == 0 && sb.GpsToggle) SelectedRow = row;
+            SelectedRow = RunningFlightRow(gc, sb);
 
             AddFlightRows(spt, ic, gc, false);
             spt.DrawTo(gc.LcdsMenu);
@@ -198,7 +180,8 @@ namespace IngameScript
                 if (SelectedRow == 1)
                 {
                     view = MenuView.Flight;
-                    SelectedRow = 1;
+                    int running = RunningFlightRow(gc, sb);
+                    SelectedRow = running == 0 ? 1 : running;
                     return true;
                 }
                 if (SelectedRow == 2)
@@ -510,6 +493,30 @@ namespace IngameScript
             else if (view == MenuView.Colors)
                 max = ColorValueRows + 2;
             ClampRow(1, max);
+        }
+
+        static int RunningFlightRow(GridContext gc, SystemBools sb)
+        {
+            int row = 1;
+            int selected = 0;
+
+            if (sb.CruiseToggle) selected = row;
+            row++;
+            if (gc.ShipType != ShipType.Atmo)
+            {
+                if (selected == 0 && sb.OrbitToggle) selected = row;
+                row++;
+            }
+            if (selected == 0 && sb.CNavToggle) selected = row;
+            row++;
+            if (selected == 0 && sb.LandToggle) selected = row;
+            row++;
+            if (selected == 0 && sb.GlideToggle) selected = row;
+            row++;
+            if (selected == 0 && sb.SBurnToggle) selected = row;
+            row++;
+            if (selected == 0 && sb.GpsToggle) selected = row;
+            return selected;
         }
 
         static int FlightGpsRow(GridContext gc)
