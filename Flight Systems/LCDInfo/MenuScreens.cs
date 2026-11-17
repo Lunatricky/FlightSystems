@@ -29,6 +29,11 @@ namespace IngameScript
         const int ToggleValueRows = 8;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
+        string savedLcdBackground;
+        string savedLcdFont;
+        string savedSpriteMenu;
+        string savedSpriteBackground;
+        string savedSpriteFont;
 
         public void ShowHome()
         {
@@ -112,6 +117,8 @@ namespace IngameScript
             if (pi.Q() && view != MenuView.Home)
             {
                 lockInput();
+                if (view == MenuView.Colors)
+                    RestoreColors(ic);
                 ReturnHome();
                 backed = true;
             }
@@ -121,7 +128,7 @@ namespace IngameScript
             bool acted = false;
             bool closed = false;
             if (!backed && spaceEdge)
-                acted = Activate(gc, sb, command, abort, softAbort, close, ref closed);
+                acted = Activate(ic, gc, sb, command, abort, softAbort, close, ref closed);
 
             if (closed)
             {
@@ -167,6 +174,7 @@ namespace IngameScript
         }
 
         bool Activate(
+            IniContext ic,
             GridContext gc,
             SystemBools sb,
             Command command,
@@ -197,6 +205,7 @@ namespace IngameScript
                 }
                 if (SelectedRow == 4)
                 {
+                    CopyColors(ic);
                     view = MenuView.Colors;
                     SelectedRow = 1;
                     return true;
@@ -221,6 +230,13 @@ namespace IngameScript
 
             if (view == MenuView.Colors && SelectedRow == ColorValueRows + 1)
             {
+                ReturnHome();
+                return true;
+            }
+
+            if (view == MenuView.Colors && SelectedRow == ColorValueRows + 2)
+            {
+                RestoreColors(ic);
                 ReturnHome();
                 return true;
             }
@@ -428,8 +444,27 @@ namespace IngameScript
             AddColorRow(spt, ic, ref row, IniContext.SPRITEMENUCOLOR, ic.SpriteMenuColorName);
             AddColorRow(spt, ic, ref row, IniContext.SPRITEBACKGROUNDCOLOR, ic.SpriteBackgroundColorName);
             AddColorRow(spt, ic, ref row, IniContext.SPRITEFONTCOLOR, ic.SpriteFontColorName);
-            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Confirm", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Cancel", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void CopyColors(IniContext ic)
+        {
+            savedLcdBackground = ic.LcdBackgroundColor;
+            savedLcdFont = ic.LcdFontColor;
+            savedSpriteMenu = ic.SpriteMenuColorName;
+            savedSpriteBackground = ic.SpriteBackgroundColorName;
+            savedSpriteFont = ic.SpriteFontColorName;
+        }
+
+        void RestoreColors(IniContext ic)
+        {
+            ic.LcdBackgroundColor = savedLcdBackground;
+            ic.LcdFontColor = savedLcdFont;
+            ic.SetSpriteMenuColor(savedSpriteMenu);
+            ic.SetSpriteBackgroundColor(savedSpriteBackground);
+            ic.SetSpriteFontColor(savedSpriteFont);
         }
 
         void AddColorRow(Sprites spt, IniContext ic, ref int row, string key, string name)
@@ -463,7 +498,7 @@ namespace IngameScript
             else if (view == MenuView.Numbers)
                 max = NumberValueRows + 1;
             else if (view == MenuView.Colors)
-                max = ColorValueRows + 1;
+                max = ColorValueRows + 2;
             ClampRow(1, max);
         }
 
