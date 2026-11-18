@@ -9,8 +9,9 @@ namespace IngameScript
 {
     class Sprites
     {
-        // Settings pages copy into flightMenu. A shared surface keeps that stack as column 3
-        // whenever the panel is wide enough, including the idle list while the menu is closed.
+        // A surface in the menu list and in LCD 1 or LCD 2 stays in both.
+        // Closed, that panel is the flight HUD. Open, the menu fills the whole panel.
+        // Menu-only surfaces still get the idle flight-command list.
         static List<IMyTextSurface> flight1;
         static List<IMyTextSurface> flight2;
         static List<IMyTextSurface> flightSettings;
@@ -86,19 +87,19 @@ namespace IngameScript
         public static void BindFlight(
             List<IMyTextSurface> lcds1,
             List<IMyTextSurface> lcds2,
-            List<IMyTextSurface> settings,
-            bool settingsOpen,
+            List<IMyTextSurface> menu,
+            bool menuOpen,
             Sprites hud1,
             Sprites hud2,
-            Sprites menu)
+            Sprites menuHud)
         {
             flight1 = lcds1;
             flight2 = lcds2;
-            flightSettings = settings;
-            flightSettingsOpen = settingsOpen;
+            flightSettings = menu;
+            flightSettingsOpen = menuOpen;
             flightHud1 = hud1;
             flightHud2 = hud2;
-            flightMenu = menu;
+            flightMenu = menuHud;
         }
 
         public static void PaintHud()
@@ -111,6 +112,16 @@ namespace IngameScript
 
         public void DrawTo(List<IMyTextSurface> surfaces)
         {
+            DrawSurfaces(surfaces, false);
+        }
+
+        public void DrawIdleTo(List<IMyTextSurface> surfaces)
+        {
+            DrawSurfaces(surfaces, true);
+        }
+
+        void DrawSurfaces(List<IMyTextSurface> surfaces, bool idleList)
+        {
             if (surfaces == null)
                 return;
 
@@ -122,6 +133,16 @@ namespace IngameScript
                 IMyTextSurface panel = surfaces[i];
                 if (panel == null)
                     continue;
+
+                // Same panel as LCD 1 or LCD 2. Idle and a closed menu do not paint it.
+                if (SharedWithFlight(panel))
+                {
+                    if (idleList || !flightSettingsOpen)
+                        continue;
+                    DrawInfoPanel(panel);
+                    continue;
+                }
+
                 if (TryDrawAsThirdColumn(panel))
                     continue;
                 DrawInfoPanel(panel);
@@ -151,16 +172,15 @@ namespace IngameScript
                 painted.Add(panel);
 
                 bool onSettings = Contains(flightSettings, panel);
-                bool wantSettings = onSettings && flightMenu != null && flightMenu.LineCount > 0;
-                int cols = CountColumns(panel, flightHud1, flightHud2, wantSettings ? flightMenu : null, wantSettings);
-                bool showSettings = wantSettings && cols >= 3;
-
-                // Not wide enough for three columns: the open menu keeps the whole panel.
-                if (onSettings && flightSettingsOpen && !showSettings)
+                // Open menu already filled this shared panel, wide or narrow.
+                if (onSettings && flightSettingsOpen)
                     continue;
 
+                int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
                 bool in1 = Contains(flight1, panel);
-                PaintPanel(panel, cols, showSettings, in1, flightHud1, flightHud2, flightMenu);
+                // A shared panel does not fall back to the idle list when the HUD stacks are empty.
+                Sprites settings = onSettings ? null : flightMenu;
+                PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
             }
         }
 
@@ -232,6 +252,47 @@ namespace IngameScript
             else if (settings != null && settings.LineCount > 0)
                 shown[n++] = settings;
             return n;
+        }
+
+        public void DrawPlainMarker(IMyTextSurface panel)
+        {
+            if (panel == null)
+                return;
+
+            panel.ContentType = ContentType.SCRIPT;
+            panel.Script = "";
+            spriteBuf.Clear();
+
+            Vector2 surfaceSize = panel.SurfaceSize;
+            Vector2 textureSize = panel.TextureSize;
+            if (surfaceSize.X < 1f || surfaceSize.Y < 1f)
+            {
+                Flush(panel);
+                return;
+            }
+
+            // TEXTURE LEFT is the top-left. One square in the visible area, nothing else.
+            float originX = (textureSize.X - surfaceSize.X) * 0.5f;
+            float originY = (textureSize.Y - surfaceSize.Y) * 0.5f;
+            float side = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
+            side = side * 0.45f;
+            if (side < 1f)
+                side = 1f;
+            float x = originX + (surfaceSize.X - side) * 0.5f;
+            float y = originY + (surfaceSize.Y - side) * 0.5f;
+            spriteBuf.Add(MakeRectSprite(new Vector2(x, y), new Vector2(side, side), ic.SpriteMenuColor));
+            Flush(panel);
+        }
+
+        public static void ClearFrame(IMyTextSurface panel)
+        {
+            if (panel == null)
+                return;
+            panel.ContentType = ContentType.SCRIPT;
+            panel.Script = "";
+            using (var frame = panel.DrawFrame())
+            {
+            }
         }
 
         void Blank(IMyTextSurface panel)
@@ -343,7 +404,7 @@ namespace IngameScript
             }
         }
 
-        int CountColumns(IMyTextSurface panel, Sprites s1, Sprites s2, Sprites settings, bool settingsOnThis)
+        int CountColumns(IMyTextSurface panel, Sprites s1, Sprites s2, Sprites menu, bool menuOnThis)
         {
             Vector2 surfaceSize = panel.SurfaceSize;
             if (surfaceSize.X < 1f)
@@ -351,13 +412,13 @@ namespace IngameScript
 
             bool has1 = s1 != null && s1.LineCount > 0;
             bool has2 = s2 != null && s2.LineCount > 0;
-            bool showSettings = settingsOnThis && settings != null && settings.LineCount > 0;
+            bool showMenu = menuOnThis && menu != null && menu.LineCount > 0;
             int stackCount = 0;
             if (has1)
                 stackCount++;
             if (has2)
                 stackCount++;
-            if (showSettings)
+            if (showMenu)
                 stackCount++;
             if (stackCount <= 1)
                 return 1;
@@ -379,9 +440,9 @@ namespace IngameScript
                 if (hs < measureScale)
                     measureScale = hs;
             }
-            if (showSettings)
+            if (showMenu)
             {
-                float hs = HeightScale(surfaceSize.Y, settings.LineCount, pad);
+                float hs = HeightScale(surfaceSize.Y, menu.LineCount, pad);
                 if (hs < measureScale)
                     measureScale = hs;
             }
@@ -391,8 +452,8 @@ namespace IngameScript
                 longest = Max(longest, Longest(panel, s1, measureScale));
             if (has2)
                 longest = Max(longest, Longest(panel, s2, measureScale));
-            if (showSettings)
-                longest = Max(longest, Longest(panel, settings, measureScale));
+            if (showMenu)
+                longest = Max(longest, Longest(panel, menu, measureScale));
 
             // Insets around the line are part of the column, otherwise the text runs into the next stack.
             float needW = longest + chrome;
@@ -402,12 +463,12 @@ namespace IngameScript
             int cols = 1;
             if (stackCount >= 2 && surfaceSize.X >= 2f * needW)
                 cols = 2;
-            if (stackCount >= 3 && showSettings && surfaceSize.X >= 3f * needW)
+            if (stackCount >= 3 && showMenu && surfaceSize.X >= 3f * needW)
                 cols = 3;
             if (cols > stackCount)
                 cols = stackCount;
 
-            while (cols > 1 && !LinesFit(panel, cols, measureScale, chrome, s1, s2, settings, showSettings))
+            while (cols > 1 && !LinesFit(panel, cols, measureScale, chrome, s1, s2, menu, showMenu))
                 cols--;
 
             return cols;
@@ -579,6 +640,13 @@ namespace IngameScript
             if (v > max)
                 return max;
             return v;
+        }
+
+        static bool SharedWithFlight(IMyTextSurface panel)
+        {
+            if (!Contains(flightSettings, panel))
+                return false;
+            return Contains(flight1, panel) || Contains(flight2, panel);
         }
 
         static bool Contains(List<IMyTextSurface> list, IMyTextSurface panel)

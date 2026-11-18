@@ -22,10 +22,10 @@ namespace IngameScript
         PlayerInput pi;
 
         Command command;
-        SettingsScreens settingsHud;
+        MenuScreens menuHud;
         Sprites hudStack1;
         Sprites hudStack2;
-        Sprites settingsStack;
+        Sprites menuStack;
 
         int inputLock = 0;
         int tickSplit = 3;
@@ -39,7 +39,8 @@ namespace IngameScript
         bool lastDockMode;
         bool anyConnected;
         int connectorSafePasses;
-        bool mothershipPortWarning;
+        int connectorSafeMisses;
+        bool knownGridStatic;
         bool dockWarning;
         int dockWarningTicks;
         int dockWarningRow = 1;
@@ -49,8 +50,22 @@ namespace IngameScript
         bool dockLatch;
         bool autoDockSuppress;
         bool suppressSawUnsafe;
-        bool settingsToggle;
-        bool settingsIsLocked;
+        readonly List<IMyLandingGear> constructGears = new List<IMyLandingGear>();
+        readonly List<IMyLandingGear> dockTriggerGroup = new List<IMyLandingGear>();
+        readonly List<IMyShipConnector> constructConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> dockTriggerConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> landingPadConnectors = new List<IMyShipConnector>();
+        readonly List<IMyShipConnector> ownGridConnectors = new List<IMyShipConnector>();
+        readonly List<long> lastTriggerGearIds = new List<long>();
+        readonly List<long> lastTriggerConnectorIds = new List<long>();
+        readonly List<long> lastPadConnectorIds = new List<long>();
+        readonly List<long> sampleTriggerGearIds = new List<long>();
+        readonly List<long> sampleTriggerConnectorIds = new List<long>();
+        readonly List<long> samplePadConnectorIds = new List<long>();
+        int groupSyncTicks;
+        bool menuToggle;
+        bool menuIsLocked;
+        bool menuSeatHold;
 
         double planetRadius = 0;
         PlanetType planet = PlanetType.Unknown;
@@ -69,14 +84,14 @@ namespace IngameScript
             stt = new SpeedTimeTracker();
             pi = new PlayerInput(gc.Controllers);
             command = new Command();
-            settingsHud = new SettingsScreens();
+            menuHud = new MenuScreens();
             hudStack1 = new Sprites(ic);
             hudStack2 = new Sprites(ic);
-            settingsStack = new Sprites(ic);
+            menuStack = new Sprites(ic);
 
             CheckIni();
 
-            if (gc.LcdsSettings.Count > 0) settingsHud.FlightSystemIdle(ic, gc, sb);
+            if (gc.LcdsMenu.Count > 0) menuHud.FlightSystemIdle(ic, gc, sb);
         }
 
         public void Main(string argument)
@@ -137,16 +152,22 @@ namespace IngameScript
                     else
                         CancelDockWarning();
                 }
-                else if (argument.ToLowerInvariant() == "settings" && (gc.Cockpits.Count > 1 || isDocked))
+                else if ((argument.ToLowerInvariant() == "menu" || argument.ToLowerInvariant() == "settings") && (gc.Cockpits.Count > 1 || isDocked))
                 {
-                    settingsToggle = !settingsToggle;
+                    menuToggle = !menuToggle;
 
-                    if (settingsToggle)
+                    if (menuToggle)
                     {
-                        pi.OcupiedController(gc.Controllers);
-                        pi.PrepareController();
+                        menuSeatHold = false;
+                        menuHud.ShowHome();
+                        HoldMenuSeat();
                     }
-                    else pi.ResetControllers(gc.Controllers);
+                    else
+                    {
+                        menuHud.ReleaseScreenMarker();
+                        menuSeatHold = false;
+                        pi.ResetControllers(gc.Controllers);
+                    }
                 }
                 else command = new Command(argument);
             }
@@ -155,8 +176,10 @@ namespace IngameScript
             if (inputLock > 10)
             {
                 inputLock = 0;
-                settingsIsLocked = false;
+                menuIsLocked = false;
             }
+
+            ReleaseMenuSeatHold();
 
             if (dockWarning)
             {
@@ -176,55 +199,93 @@ namespace IngameScript
                 if (dockWarning)
                     DrawDockWarning();
             }
-            else if (settingsToggle && !settingsIsLocked && gc.LcdsSettings.Count > 0)
+            else if (menuToggle && gc.LcdsMenu.Count > 0)
             {
-                RefreshHudLines();
-                if (settingsHud.ShouldClose(pi))
+                // Sample Space while the menu is open, including a locked tick that does not read keys.
+                menuHud.NoteSpace(pi);
+                if (!menuIsLocked)
                 {
-                    settingsToggle = false;
-                    pi.ResetControllers(gc.Controllers);
-                    task = Task.ResetControllers;
-                    Echo(GetRuntimeInfo());
-                    return;
-                }
-
-                settingsHud.Handle(
-                    pi, gc, ic, sb, command, settingsToggle,
-                    () => AbortShipContext(gc),
-                    () => SoftAbort(gc),
-                    () =>
+                    RefreshHudLines();
+                    if (menuHud.ShouldClose())
                     {
-                        settingsToggle = false;
-                        pi.ResetControllers(gc.Controllers);
-                    },
-                    LockInput);
+                        CloseMenuFromSpace();
+                        menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
+                        // menuToggle is false now. Rebind so the shared panel is the flight HUD, not the idle list.
+                        RefreshHudLines();
+                        Sprites.PaintHud();
+                        task = Task.ResetControllers;
+                        Echo(GetRuntimeInfo());
+                        return;
+                    }
+
+                    menuHud.Handle(
+                        pi, gc, ic, sb, command, menuToggle,
+                        () => AbortShipContext(gc),
+                        () => SoftAbort(gc),
+                        CloseMenuFromSpace,
+                        LockInput);
+                    if (!menuToggle)
+                    {
+                        RefreshHudLines();
+                        Sprites.PaintHud();
+                    }
+                }
             }
 
-            if (!settingsToggle && ic.AnalogThrotle && command.State == MainState.Idle)
+            if (!menuToggle && ic.AnalogThrotle && command.State == MainState.Idle)
             {
                 AnalogThrust();
             }
 
             tickCount++;
+            groupSyncTicks++;
+            if (groupSyncTicks >= 100)
+            {
+                groupSyncTicks = 0;
+                SyncDockGroupsIfChanged();
+            }
             if (tickCount % 50 == 1)
             {
+                // Station and ship write different connector ini. Do not wait for the 500-tick parse.
+                bool gridStatic = GridIsStatic();
+                if (gridStatic != knownGridStatic)
+                {
+                    ic.ParseIni();
+                    ReloadGridContext(gc, ic);
+                    gridStatic = GridIsStatic();
+                }
 
                 anyConnected = gc.IsAnyConnectorConnected();
-                // Two passes to enter. The failing pass clears on the next tick.
-                // A locked mag plate is a tug, not a dock. Near the ground it must not enter dock mode.
+                // Two connector passes to enter. One failed read does not dock and does not undock.
+                // A locked gear whose line matches Dock Trigger Tag joins connectorOpen as one hold.
                 bool connectorOpen = ConnectorSafeToDock();
-                bool connectorSafe = ic.AllowDockMode && connectorOpen;
+                bool gearDock = GearDocking();
+                bool held = connectorOpen || gearDock;
+                bool connectorSafe = ic.AllowDockMode && !gridStatic && connectorOpen;
                 if (connectorSafe)
                 {
+                    connectorSafeMisses = 0;
                     if (connectorSafePasses < 2)
                         connectorSafePasses++;
                 }
+                else if (connectorSafePasses >= 2)
+                {
+                    connectorSafeMisses++;
+                    if (connectorSafeMisses >= 2)
+                    {
+                        connectorSafePasses = 0;
+                        connectorSafeMisses = 0;
+                    }
+                }
                 else
+                {
                     connectorSafePasses = 0;
+                    connectorSafeMisses = 0;
+                }
 
                 if (autoDockSuppress)
                 {
-                    if (!connectorOpen)
+                    if (!held)
                         suppressSawUnsafe = true;
                     else if (suppressSawUnsafe)
                         autoDockSuppress = false;
@@ -232,10 +293,10 @@ namespace IngameScript
 
                 if (dockLatch)
                     isDocked = true;
-                else if (autoDockSuppress)
+                else if (autoDockSuppress || gridStatic)
                     isDocked = false;
                 else
-                    isDocked = connectorSafePasses >= 2;
+                    isDocked = connectorSafePasses >= 2 || gearDock;
                 task = Task.IsDocked;
                 Echo(GetRuntimeInfo());
                 return;
@@ -372,13 +433,13 @@ namespace IngameScript
             {
                 hudStack1.Clear();
                 hudStack2.Clear();
-                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, null, null, settingsStack);
+                Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, null, null, menuStack);
                 return;
             }
 
             Lcd1Display.Fill(hudStack1, ic, gc, pc, command, planet, planetRadius);
             Lcd2Display.Fill(hudStack2, pc, command, sb);
-            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsSettings, settingsToggle, hudStack1, hudStack2, settingsStack);
+            Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
 
         void DrawFlightLcds()
@@ -390,14 +451,14 @@ namespace IngameScript
             }
 
             RefreshHudLines();
-            if (!settingsToggle)
-                settingsHud.FlightSystemIdle(ic, gc, sb, settingsStack);
+            if (!menuToggle)
+                menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
             Sprites.PaintHud();
         }
 
         void RedrawSpriteLcds()
         {
-            settingsHud.IsDefaultScreen = false;
+            menuHud.IsDefaultScreen = false;
             DrawFlightLcds();
         }
 
@@ -466,13 +527,6 @@ namespace IngameScript
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
-            if (mothershipPortWarning)
-            {
-                if (ic != null && ic.Mothership && string.IsNullOrEmpty(ic.DockPort))
-                    report = report + "\nMothership is on but no dock port is assigned.";
-                else
-                    mothershipPortWarning = false;
-            }
             return report;
         }
 
@@ -487,6 +541,16 @@ namespace IngameScript
                     var firstValid = gc.Antennas.FirstOrDefault(b => b != null && !b.Closed);
                     if (firstValid != null) firstValid.Enabled = true;
                 }
+            }
+
+            // The toggle is forced off while static. Low fuel must not start a landing from Idle before the next parse.
+            if (GridIsStatic())
+            {
+                if (command.State == MainState.Reload)
+                    ReloadGridContext(gc, ic);
+                else if (command.State == MainState.Abort)
+                    AbortShipContext(gc);
+                return;
             }
 
             var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
@@ -647,8 +711,8 @@ namespace IngameScript
             if (!dockSeatsHeld)
                 return;
             dockSeatsHeld = false;
-            // Settings still owns the seat lock. Resetting here would turn thrust back on under that menu.
-            if (settingsToggle)
+            // Menu or a Space close still owns the seat. Resetting here would thrust up.
+            if (menuToggle || menuSeatHold)
                 return;
             pi.ResetControllers(gc.Controllers);
         }
@@ -675,7 +739,8 @@ namespace IngameScript
             ClearDockWarning();
             dockLatch = false;
             autoDockSuppress = true;
-            suppressSawUnsafe = !ConnectorSafeToDock();
+            // Same hold as the 50-tick check. A gear that is still locked must not count as already clear.
+            suppressSawUnsafe = !(ConnectorSafeToDock() || GearDocking());
             isDocked = false;
             AbortShipContext(gc);
             DockToggle(gc, false);
@@ -685,12 +750,18 @@ namespace IngameScript
 
         void HandleDockWarningInput()
         {
-            if (settingsIsLocked || !CockpitOccupied())
+            if (menuIsLocked || !CockpitOccupied())
+                return;
+
+            // The only seat still flies. Leave W, S, Space, and Q on the thrusters.
+            if (gc.Cockpits.Count <= 1)
                 return;
 
             pi.OcupiedController(gc.Controllers);
             HoldDockSeats();
-            if (settingsToggle && settingsHud.ShouldClose(pi))
+            if (menuToggle)
+                menuHud.NoteSpace(pi);
+            if (menuToggle && menuHud.ShouldClose())
             {
                 LockInput();
                 CancelDockWarning();
@@ -746,17 +817,35 @@ namespace IngameScript
             hudStack1.Add("Thrusters and tools will turn off");
             hudStack1.Add("No safe connector");
             hudStack1.Add("Send dock confirm");
+            if (gc.Cockpits.Count <= 1)
+                AddDockPressCount(hudStack1);
             hudStack1.DrawTo(gc.Lcds1);
             hudStack1.DrawTo(gc.Lcds2);
 
-            settingsStack.Clear();
-            settingsStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
-            settingsStack.Add("Thrusters and tools will turn off");
-            settingsStack.Add("No safe connector");
-            settingsStack.Add("Send dock confirm");
-            settingsStack.Add("Confirm", WarningRowColor(1), Color.White);
-            settingsStack.Add("Cancel", WarningRowColor(2), Color.White);
-            settingsStack.DrawTo(gc.LcdsSettings);
+            menuStack.Clear();
+            menuStack.Add("DOCK UNSAFE", Color.DarkRed, Color.White);
+            menuStack.Add("Thrusters and tools will turn off");
+            menuStack.Add("No safe connector");
+            menuStack.Add("Send dock confirm");
+            if (gc.Cockpits.Count <= 1)
+                AddDockPressCount(menuStack);
+            else
+            {
+                menuStack.Add("Confirm", WarningRowColor(1), Color.White);
+                menuStack.Add("Cancel", WarningRowColor(2), Color.White);
+            }
+            menuStack.DrawTo(gc.LcdsMenu);
+        }
+
+        void AddDockPressCount(Sprites stack)
+        {
+            stack.Add("Press dock 3 times");
+            // Read on every draw. A saved "1/3" would stay up after the second press.
+            // Literals stay intact after MDK minify.
+            if (dockPressCount >= 2)
+                stack.Add("2/3");
+            else
+                stack.Add("1/3");
         }
 
         Color WarningRowColor(int row)
@@ -1321,40 +1410,48 @@ namespace IngameScript
         private void ReloadGridContext(GridContext gc, IniContext ic)
         {
             gc.Setup(ic);
-            StaticConnectorStamp.Apply(gc.GridTS, gc.Me.CubeGrid);
+            // Setup turns thrust on for every cockpit. The occupied seat is the menu keyboard.
+            // The remote in gc.Controller keeps its thrust.
+            if (menuToggle || menuSeatHold)
+                HoldMenuSeat();
+            SyncDockTriggerGears();
+            SyncDockConnectors();
+            ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
+            ic.SetLandingPadRestore(ic.LandingPadTag ?? "");
+            RememberSyncedGroupIds();
 
             gc.ReloadLCDs()
                 .ReloadH2Tanks()
                 .ReloadBatteries();
 
             if (gc.ErrorMessage.Length > 0)
+            {
+                knownGridStatic = GridIsStatic();
                 return;
+            }
 
             pc = new PhysicsContext(gc, stt, timeSinceLastRun);
 
-            // Flight cached blocks
-            if (ic.AllowFlightSystems || ic.AllowLowFuelLand)
+            // Flight cached blocks. A static grid skips this even when low-fuel land is on.
+            if (!GridIsStatic() && (ic.AllowFlightSystems || ic.AllowLowFuelLand))
             {
                 SoftAbort(gc);
 
                 sb.LastCheckIsOnNatGrav = pc.Gravity > 0;
             }
 
-            // Dock cached blocks
+            // Dock cached blocks. Tag sync above already ran with Dock Mode off.
             if (ic.AllowDockMode)
                 gc.ReloadConnectors()
                     .ReloadTanks()
                     .ReloadControlledBlocks(ic.DockGroupTag, ic.OverrideBlockTag);
-            else if (!string.IsNullOrEmpty(ic.DockPort))
-                gc.GetSameConstructBlocks(gc.Connectors, ic.IgnoreTag);
-
-            StaticConnectorStamp.ApplyDockPort(gc.Connectors, ic.DockPort);
-            mothershipPortWarning = ic.Mothership && string.IsNullOrEmpty(ic.DockPort);
 
             if (ic.RenameSubgrids) RenameSubgrids.GetSubgridsAndRename(gc.GridTS, gc.Me.CubeGrid);
 
             if (ic.PaintSurfaces)
                 gc.PaintAllScreens(ic);
+
+            knownGridStatic = GridIsStatic();
         }
 
         double currentOverride = 0.0;   // 0..1 forward thrust command
@@ -1461,8 +1558,43 @@ namespace IngameScript
 
         private void LockInput()
         {
-            settingsIsLocked = true;
+            menuIsLocked = true;
             inputLock = 0;
+        }
+
+        void HoldMenuSeat()
+        {
+            pi.OcupiedController(gc.Controllers);
+            pi.PrepareController();
+        }
+
+        void CloseMenuFromSpace()
+        {
+            menuHud.ReleaseScreenMarker();
+            menuToggle = false;
+            if (pi.Space())
+            {
+                menuSeatHold = true;
+                HoldMenuSeat();
+                return;
+            }
+
+            menuSeatHold = false;
+            pi.ResetControllers(gc.Controllers);
+        }
+
+        void ReleaseMenuSeatHold()
+        {
+            if (!menuSeatHold)
+                return;
+            if (pi.Space())
+            {
+                HoldMenuSeat();
+                return;
+            }
+
+            menuSeatHold = false;
+            pi.ResetControllers(gc.Controllers);
         }
 
         void AbortShipContext(GridContext gc)
@@ -1709,16 +1841,327 @@ namespace IngameScript
 
         string gearLockNote;
 
-        const double GearPadLarge = 4;
-        const double GearPadSmall = 1.5;
+        void SyncDockTriggerGears()
+        {
+            if (gc == null || gc.GridTS == null || ic == null)
+                return;
 
-        // Own FS_DOCK=Me, or the other connector's FS_DOCK=Other / FS_STATIC=1.
-        // Mothership skips its own connectors. Never reads the other grid's IsStatic.
+            string current = ic.DockTriggerTag ?? "";
+            string previous = ic.DockTriggerRestore ?? "";
+            bool stripPrevious = previous.Length > 0 && previous != current;
+            string padPrevious = ic.LandingPadRestore ?? "";
+            string pad = ic.LandingPadTag ?? "";
+            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
+
+            // Group name is not stamped on the gear. The next reload uses whatever the ini says now.
+            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
+
+            gc.GetSameConstructBlocks(constructGears, "");
+            for (int i = 0; i < constructGears.Count; i++)
+            {
+                IMyLandingGear gear = constructGears[i];
+                if (gear == null || gear.Closed)
+                    continue;
+
+                if (stripPrevious)
+                    RemoveExactLine(gear, previous);
+                // A gear is not in the landing-pad group, so a changed pad line is rewritten only where it already was.
+                if (stripPad)
+                    RetagExactLine(gear, padPrevious, pad);
+
+                bool inGroup = false;
+                for (int g = 0; g < dockTriggerGroup.Count; g++)
+                {
+                    IMyLandingGear member = dockTriggerGroup[g];
+                    if (member != null && !member.Closed && member.EntityId == gear.EntityId)
+                    {
+                        inGroup = true;
+                        break;
+                    }
+                }
+
+                bool wasInGroup = IdInList(lastTriggerGearIds, gear.EntityId);
+                if (inGroup && !GearIgnored(gear) && current.Length > 0)
+                    AppendExactLine(gear, current);
+                else if (!inGroup && wasInGroup && current.Length > 0)
+                    RemoveExactLine(gear, current);
+            }
+        }
+
+        // Previous tag is still the Restore value. ReloadGridContext writes Restore once after gears and connectors.
+        void SyncDockConnectors()
+        {
+            if (gc == null || gc.GridTS == null || ic == null)
+                return;
+
+            string current = ic.DockTriggerTag ?? "";
+            string previous = ic.DockTriggerRestore ?? "";
+            bool stripPrevious = previous.Length > 0 && previous != current;
+            string pad = ic.LandingPadTag ?? "";
+            string padPrevious = ic.LandingPadRestore ?? "";
+            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
+
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
+            gc.GetSameConstructBlocks(constructConnectors, "");
+
+            for (int i = 0; i < constructConnectors.Count; i++)
+            {
+                IMyShipConnector connector = constructConnectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+
+                if (stripPrevious)
+                    RemoveExactLine(connector, previous);
+                if (stripPad)
+                    RemoveExactLine(connector, padPrevious);
+                StaticConnectorStamp.StripLegacyLines(connector);
+                if (ConnectorIgnored(connector))
+                    continue;
+
+                bool inTrigger = ConnectorInList(dockTriggerConnectors, connector.EntityId);
+                bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
+                bool wasInTrigger = IdInList(lastTriggerConnectorIds, connector.EntityId);
+                bool wasInPad = IdInList(lastPadConnectorIds, connector.EntityId);
+                if (inPad)
+                {
+                    // Pad wins. Equal spellings are one line, so the trigger line is not written as well.
+                    if (current.Length > 0 && current != pad)
+                        RemoveExactLine(connector, current);
+                    if (pad.Length > 0)
+                        AppendExactLine(connector, pad);
+                }
+                else
+                {
+                    // Menu lines stay on a block that was never in the group. Leaving the group still clears the line.
+                    if (wasInPad && pad.Length > 0)
+                        RemoveExactLine(connector, pad);
+                    bool hasPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(connector.CustomData, pad);
+                    if (inTrigger && current.Length > 0 && !hasPad)
+                        AppendExactLine(connector, current);
+                    else if (!inTrigger && wasInTrigger && current.Length > 0)
+                        RemoveExactLine(connector, current);
+                }
+            }
+
+            WriteOwnConnectorStatic();
+        }
+
+        // Group ids only. Custom data is read later, and only when a list changed.
+        void SyncDockGroupsIfChanged()
+        {
+            if (gc == null || gc.GridTS == null || ic == null)
+                return;
+
+            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
+            CopyBlockIds(sampleTriggerGearIds, dockTriggerGroup);
+            CopyBlockIds(sampleTriggerConnectorIds, dockTriggerConnectors);
+            CopyBlockIds(samplePadConnectorIds, landingPadConnectors);
+
+            if (SameIds(lastTriggerGearIds, sampleTriggerGearIds)
+                && SameIds(lastTriggerConnectorIds, sampleTriggerConnectorIds)
+                && SameIds(lastPadConnectorIds, samplePadConnectorIds))
+                return;
+
+            SyncDockTriggerGears();
+            SyncDockConnectors();
+            RememberSyncedGroupIds();
+        }
+
+        void RememberSyncedGroupIds()
+        {
+            CopyBlockIds(lastTriggerGearIds, dockTriggerGroup);
+            CopyBlockIds(lastTriggerConnectorIds, dockTriggerConnectors);
+            CopyBlockIds(lastPadConnectorIds, landingPadConnectors);
+        }
+
+        void FillGearGroup(List<IMyLandingGear> dest, string groupName)
+        {
+            dest.Clear();
+            if (string.IsNullOrEmpty(groupName) || gc.GridTS == null)
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(dest);
+        }
+
+        static void CopyBlockIds<T>(List<long> dest, List<T> blocks) where T : class, IMyTerminalBlock
+        {
+            dest.Clear();
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                T block = blocks[i];
+                if (block == null || block.Closed)
+                    continue;
+                dest.Add(block.EntityId);
+            }
+        }
+
+        static bool IdInList(List<long> ids, long id)
+        {
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (ids[i] == id)
+                    return true;
+            }
+            return false;
+        }
+
+        static bool SameIds(List<long> last, List<long> current)
+        {
+            if (last.Count != current.Count)
+                return false;
+            for (int i = 0; i < current.Count; i++)
+            {
+                long id = current[i];
+                bool found = false;
+                for (int j = 0; j < last.Count; j++)
+                {
+                    if (last[j] == id)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+            }
+            return true;
+        }
+
+        void FillConnectorGroup(List<IMyShipConnector> dest, string groupName)
+        {
+            dest.Clear();
+            if (string.IsNullOrEmpty(groupName))
+                return;
+            IMyBlockGroup group = gc.GridTS.GetBlockGroupWithName(groupName);
+            if (group == null)
+                return;
+            group.GetBlocksOfType(dest);
+        }
+
+        static bool ConnectorInList(List<IMyShipConnector> list, long entityId)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                IMyShipConnector member = list[i];
+                if (member != null && !member.Closed && member.EntityId == entityId)
+                    return true;
+            }
+            return false;
+        }
+
+        bool ConnectorIgnored(IMyShipConnector connector)
+        {
+            string tag = ic.IgnoreTag;
+            if (string.IsNullOrEmpty(tag))
+                return false;
+            if (connector.CustomName != null && connector.CustomName.Contains(tag))
+                return true;
+            string data = connector.CustomData;
+            return data != null && data.Contains(tag);
+        }
+
+        // Own grid only. A rotor or hinge arm is not this grid, so it keeps whatever the player wrote.
+        void WriteOwnConnectorStatic()
+        {
+            if (gc.Me == null || gc.Me.CubeGrid == null || gc.Me.CubeGrid.Closed)
+                return;
+
+            bool on = gc.Me.CubeGrid.IsStatic;
+            gc.GetOwnGridBlocks(ownGridConnectors, "");
+            for (int i = 0; i < ownGridConnectors.Count; i++)
+            {
+                IMyShipConnector connector = ownGridConnectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                StaticConnectorStamp.WriteStatic(connector, on);
+            }
+        }
+
+        bool GridIsStatic()
+        {
+            return gc != null && gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
+        }
+
+        static void RetagExactLine(IMyTerminalBlock block, string previous, string current)
+        {
+            if (block == null || block.Closed || string.IsNullOrEmpty(previous) || previous == current)
+                return;
+            string data = block.CustomData ?? "";
+            if (!StaticConnectorStamp.HasExactLine(data, previous))
+                return;
+            RemoveExactLine(block, previous);
+            if (!string.IsNullOrEmpty(current))
+                AppendExactLine(block, current);
+        }
+
+        static void AppendExactLine(IMyTerminalBlock block, string line)
+        {
+            string data = block.CustomData ?? "";
+            if (StaticConnectorStamp.HasExactLine(data, line))
+                return;
+            block.CustomData = StaticConnectorStamp.AppendExactLine(data, line);
+        }
+
+        static void RemoveExactLine(IMyTerminalBlock block, string line)
+        {
+            if (string.IsNullOrEmpty(line))
+                return;
+            string data = block.CustomData ?? "";
+            if (!StaticConnectorStamp.HasExactLine(data, line))
+                return;
+            string stripped = data;
+            while (StaticConnectorStamp.HasExactLine(stripped, line))
+                stripped = StaticConnectorStamp.RemoveExactLine(stripped, line);
+            if (stripped != data)
+                block.CustomData = stripped;
+        }
+
+        bool GearIgnored(IMyLandingGear gear)
+        {
+            string tag = ic.IgnoreTag;
+            if (string.IsNullOrEmpty(tag))
+                return false;
+            if (gear.CustomName != null && gear.CustomName.Contains(tag))
+                return true;
+            string data = gear.CustomData;
+            return data != null && data.Contains(tag);
+        }
+
+        // Dock Mode off still writes the line. An empty tag cannot lock the ship into dock mode.
+        // A static grid does not auto-dock from its own gears.
+        bool GearDocking()
+        {
+            if (ic == null || !ic.AllowDockMode || gc == null || GridIsStatic())
+                return false;
+            string line = ic.DockTriggerTag;
+            if (string.IsNullOrEmpty(line))
+                return false;
+
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear gear = gc.Gears[i];
+                if (gear == null || gear.Closed || !gear.IsLocked || GearIgnored(gear))
+                    continue;
+                if (StaticConnectorStamp.HasExactLine(gear.CustomData, line))
+                    return true;
+            }
+            return false;
+        }
+
+        // Connected trigger tag without [FS_pad], or the other connector is a pad or Static=true.
+        // AllowDockMode and the static-grid gate are applied by the caller. This is also the suppress cause.
         bool ConnectorSafeToDock()
         {
             if (gc == null || ic == null)
                 return false;
 
+            string trigger = ic.DockTriggerTag ?? "";
+            string pad = ic.LandingPadTag ?? "";
             for (int i = 0; i < gc.Connectors.Count; i++)
             {
                 IMyShipConnector connector = gc.Connectors[i];
@@ -1727,7 +2170,9 @@ namespace IngameScript
                 if (connector.Status != MyShipConnectorStatus.Connected)
                     continue;
 
-                if (!ic.Mothership && StaticConnectorStamp.HasExactLine(connector.CustomData, StaticConnectorStamp.DockMe))
+                string ownData = connector.CustomData;
+                bool ownPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, pad);
+                if (!ownPad && trigger.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, trigger))
                     return true;
 
                 IMyShipConnector other = connector.OtherConnector;
@@ -1735,45 +2180,9 @@ namespace IngameScript
                     continue;
 
                 string otherData = other.CustomData;
-                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.DockOther))
+                if (pad.Length > 0 && StaticConnectorStamp.HasExactLine(otherData, pad))
                     return true;
-                if (StaticConnectorStamp.HasExactLine(otherData, StaticConnectorStamp.Line))
-                    return true;
-            }
-            return false;
-        }
-
-        // Surface test for a locked gear. Not a dock enter: a tug lock near the ground stays in flight.
-        bool GearOnGround()
-        {
-            if (pc == null || gc == null || gc.Controller == null || gc.Controller.Closed)
-                return false;
-            if (pc.NaturalGravity.LengthSquared() == 0)
-                return false;
-            double ground = pc.GroundLevel;
-            if (double.IsNaN(ground) || double.IsInfinity(ground))
-                return false;
-
-            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
-            Vector3D controllerPos = gc.Controller.GetPosition();
-
-            for (int i = 0; i < gc.Gears.Count; i++)
-            {
-                IMyLandingGear gear = gc.Gears[i];
-                if (gear == null || gear.Closed || !gear.IsLocked)
-                    continue;
-
-                Vector3D gearPos = gear.GetPosition();
-                Vector3D toGear = gearPos - controllerPos;
-                double drop = (controllerPos - gearPos).Dot(-down);
-                double along = toGear.Dot(down);
-                Vector3D lateral = toGear - down * along;
-                double horiz = lateral.Length();
-                double pad = GearPadSmall;
-                if (gear.CubeGrid != null && !gear.CubeGrid.Closed && gear.CubeGrid.GridSize > 1f)
-                    pad = GearPadLarge;
-                double limit = drop + horiz + pad;
-                if (ground < limit)
+                if (StaticConnectorStamp.ReadsStatic(otherData))
                     return true;
             }
             return false;

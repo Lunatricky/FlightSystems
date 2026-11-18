@@ -7,7 +7,7 @@ namespace IngameScript.Domain
     {
         string Lcd1 { get; }
         string Lcd2 { get; }
-        string LcdSettings { get; }
+        string LcdMenu { get; }
     }
 
     public interface IBlockIniSync
@@ -26,13 +26,14 @@ namespace IngameScript.Domain
         public const string LCD1 = "LCD1";
         public const string LCD2 = "LCD2";
         public const string LCDSETTINGS = "LCDSettings";
+        const string OldLcdMenuKey = "LCDMenu";
 
         readonly MyIni ini = new MyIni();
         readonly IniSnapshot snapshot = new IniSnapshot();
 
         public string Lcd1 { get; private set; }
         public string Lcd2 { get; private set; }
-        public string LcdSettings { get; private set; }
+        public string LcdMenu { get; private set; }
 
         public bool Sync(IMyTerminalBlock block)
         {
@@ -40,17 +41,51 @@ namespace IngameScript.Domain
             if (block == null || !ini.TryParse(block.CustomData ?? ""))
                 ini.Clear();
 
+            TakeMenuKey();
             Lcd1 = ini.Get(Section, LCD1).ToString("");
             Lcd2 = ini.Get(Section, LCD2).ToString("");
-            LcdSettings = ini.Get(Section, LCDSETTINGS).ToString("");
+            LcdMenu = ini.Get(Section, LCDSETTINGS).ToString("");
 
             bool changed = false;
             changed |= snapshot.ReadAndDetectChange(ini, Section, LCD1, Lcd1 ?? "");
             changed |= snapshot.ReadAndDetectChange(ini, Section, LCD2, Lcd2 ?? "");
-            changed |= snapshot.ReadAndDetectChange(ini, Section, LCDSETTINGS, LcdSettings ?? "");
+            changed |= snapshot.ReadAndDetectChange(ini, Section, LCDSETTINGS, LcdMenu ?? "");
 
             block.CustomData = ini.ToString();
             return changed;
+        }
+
+        public void WriteSlot(IMyTerminalBlock block, string key, int index)
+        {
+            if (block == null || block.Closed || string.IsNullOrEmpty(key))
+                return;
+
+            ini.Clear();
+            if (!ini.TryParse(block.CustomData ?? ""))
+                ini.Clear();
+
+            TakeMenuKey();
+            ini.Set(Section, key, index.ToString());
+            Lcd1 = ini.Get(Section, LCD1).ToString("");
+            Lcd2 = ini.Get(Section, LCD2).ToString("");
+            LcdMenu = ini.Get(Section, LCDSETTINGS).ToString("");
+            snapshot.ReadAndDetectChange(ini, Section, LCD1, Lcd1 ?? "");
+            snapshot.ReadAndDetectChange(ini, Section, LCD2, Lcd2 ?? "");
+            snapshot.ReadAndDetectChange(ini, Section, LCDSETTINGS, LcdMenu ?? "");
+            block.CustomData = ini.ToString();
+        }
+
+        // LCDMenu was the old menu key. LCDSettings is the one the screen picker writes.
+        void TakeMenuKey()
+        {
+            if (!ini.ContainsKey(Section, OldLcdMenuKey))
+                return;
+            if (!ini.ContainsKey(Section, LCDSETTINGS))
+            {
+                string oldMenu = ini.Get(Section, OldLcdMenuKey).ToString("");
+                ini.Set(Section, LCDSETTINGS, oldMenu ?? "");
+            }
+            ini.Delete(Section, OldLcdMenuKey);
         }
 
         public static bool TryParseSlot(string value, int surfaceCount, out int index)

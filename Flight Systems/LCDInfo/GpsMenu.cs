@@ -21,6 +21,7 @@ namespace IngameScript
         public bool IsOpen;
 
         GpsView view;
+        bool spacePressed;
         int row = 1;
         int selectedIndex;
         bool editing;
@@ -57,8 +58,11 @@ namespace IngameScript
             Command command,
             Action lockInput,
             Action close,
-            Action softAbort)
+            Action softAbort,
+            bool spaceEdge)
         {
+            // Same rising edge as the home list. The press that opened this screen does not fire here.
+            spacePressed = spaceEdge;
             GpsStore store = ic.Gps;
             MoveRow(pi, lockInput);
 
@@ -106,7 +110,7 @@ namespace IngameScript
             int total = ListTotal(store);
             Clamp(1, total);
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == total)
@@ -147,7 +151,7 @@ namespace IngameScript
                 spt.Add(label, RowColor(displayRow, ic.SpriteBackgroundColor), RowColor(displayRow, ic.SpriteFontColor));
             }
 
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawActions(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Command command, Action lockInput, Action close, Action softAbort)
@@ -161,7 +165,7 @@ namespace IngameScript
 
             Clamp(1, 4);
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 1)
@@ -200,7 +204,7 @@ namespace IngameScript
             spt.Add("Edit", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawAddKind(IniContext ic, GridContext gc, PlayerInput pi, Action lockInput)
@@ -214,7 +218,7 @@ namespace IngameScript
                     draft.Location = CycleEnum(draft.Location, pi.D());
             }
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 2)
@@ -234,7 +238,7 @@ namespace IngameScript
             int r = 1;
             spt.Add("Type: " + draft.KindLabel(), RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawAddFields(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Action lockInput)
@@ -250,7 +254,7 @@ namespace IngameScript
                 CycleField(draft, row, pi.D());
             }
 
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == total)
@@ -272,7 +276,7 @@ namespace IngameScript
             if (editing)
                 spt.Add("Save tags", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void DrawConfirmDelete(IniContext ic, GridContext gc, GpsStore store, PlayerInput pi, Action lockInput)
@@ -285,7 +289,7 @@ namespace IngameScript
             }
 
             Clamp(1, 2);
-            if (pi.Space())
+            if (spacePressed)
             {
                 lockInput();
                 if (row == 1)
@@ -307,7 +311,7 @@ namespace IngameScript
             int r = 1;
             spt.Add("Yes", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("No", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.DrawTo(gc.LcdsSettings);
+            spt.DrawTo(gc.LcdsMenu);
         }
 
         void StartAdd()

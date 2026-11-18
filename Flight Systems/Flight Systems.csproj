@@ -56,7 +56,7 @@
     <Compile Include="LCDInfo\Sprites.cs" />
     <Compile Include="LCDInfo\Lcd1Display.cs" />
     <Compile Include="LCDInfo\Lcd2Display.cs" />
-    <Compile Include="LCDInfo\SettingsScreens.cs" />
+    <Compile Include="LCDInfo\MenuScreens.cs" />
     <Compile Include="LCDInfo\GpsMenu.cs" />
     <Compile Include="Physics\PhysicsContext.cs" />
     <Compile Include="Physics\SpeedTimeTracker.cs" />
