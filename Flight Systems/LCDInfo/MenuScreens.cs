@@ -18,7 +18,9 @@ namespace IngameScript
         Numbers,
         Colors,
         DockKinds,
-        DockBlocks
+        DockBlocks,
+        ScreenSlots,
+        ScreenSurfaces
     }
 
     enum DockBlockKind
@@ -26,6 +28,13 @@ namespace IngameScript
         TriggerGears,
         TriggerConnectors,
         PadConnectors
+    }
+
+    enum ScreenSlot
+    {
+        Lcd1,
+        Lcd2,
+        Menu
     }
 
     class MenuScreens
@@ -37,7 +46,7 @@ namespace IngameScript
         bool spaceWasDown;
         bool spaceEdge;
 
-        const int HomeRows = 6;
+        const int HomeRows = 7;
         const int ToggleValueRows = 8;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
@@ -49,6 +58,15 @@ namespace IngameScript
         readonly List<IMyShipConnector> connectorScan = new List<IMyShipConnector>();
         readonly List<IMyLandingGear> gearGroup = new List<IMyLandingGear>();
         readonly List<IMyShipConnector> connectorGroup = new List<IMyShipConnector>();
+        readonly List<IMyTerminalBlock> providerScan = new List<IMyTerminalBlock>();
+        readonly List<IMyTerminalBlock> surfaceBlocks = new List<IMyTerminalBlock>();
+        readonly List<int> surfaceIndexes = new List<int>();
+        readonly List<IMyTerminalBlock> tagScan = new List<IMyTerminalBlock>();
+        ScreenSlot screenSlot = ScreenSlot.Lcd1;
+        int screenSlotRow = 1;
+        IMyTextSurface markedSurface;
+        long markedBlockId;
+        int markedIndex = -1;
         string savedLcdBackground;
         string savedLcdFont;
         string savedSpriteMenu;
@@ -57,6 +75,7 @@ namespace IngameScript
 
         public void ShowHome()
         {
+            ReleaseScreenMarker();
             view = MenuView.Home;
             SelectedRow = 1;
             gpsMenu.Close();
@@ -139,6 +158,8 @@ namespace IngameScript
                 lockInput();
                 if (view == MenuView.DockBlocks)
                     BackToDockKinds();
+                else if (view == MenuView.ScreenSurfaces)
+                    BackToScreenSlots();
                 else
                 {
                     if (view == MenuView.Colors)
@@ -234,8 +255,20 @@ namespace IngameScript
                     SelectedRow = 1;
                     return true;
                 }
+                if (SelectedRow == 6)
+                {
+                    view = MenuView.ScreenSlots;
+                    SelectedRow = 1;
+                    return true;
+                }
                 return false;
             }
+
+            if (view == MenuView.ScreenSlots)
+                return ActivateScreenSlots();
+
+            if (view == MenuView.ScreenSurfaces)
+                return ActivateScreenSurface(ic, gc);
 
             if (view == MenuView.DockKinds)
                 return ActivateDockKinds();
@@ -397,6 +430,10 @@ namespace IngameScript
                 PaintDockKinds(ic, gc);
             else if (view == MenuView.DockBlocks)
                 PaintDockBlocks(ic, gc);
+            else if (view == MenuView.ScreenSlots)
+                PaintScreenSlots(ic, gc);
+            else if (view == MenuView.ScreenSurfaces)
+                PaintScreenSurfaces(ic, gc);
         }
 
         void PaintHome(IniContext ic, GridContext gc)
@@ -409,6 +446,7 @@ namespace IngameScript
             spt.Add("Numbers", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock blocks", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Screens", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
@@ -520,6 +558,8 @@ namespace IngameScript
                 SelectedRow = 4;
             else if (view == MenuView.DockKinds)
                 SelectedRow = 5;
+            else if (view == MenuView.ScreenSlots)
+                SelectedRow = 6;
             else
                 SelectedRow = 1;
             view = MenuView.Home;
@@ -542,6 +582,13 @@ namespace IngameScript
             {
                 FillShown(gc, ic);
                 max = shownBlocks.Count + 1;
+            }
+            else if (view == MenuView.ScreenSlots)
+                max = 4;
+            else if (view == MenuView.ScreenSurfaces)
+            {
+                FillSurfaces(gc);
+                max = surfaceBlocks.Count + 1;
             }
             ClampRow(1, max);
         }
@@ -857,6 +904,266 @@ namespace IngameScript
         {
             FillConnectorGroup(gc, ic.DockTriggerGroup);
             return InConnectorGroup(entityId);
+        }
+
+        public void ReleaseScreenMarker()
+        {
+            IMyTextSurface previous = markedSurface;
+            markedSurface = null;
+            markedBlockId = 0;
+            markedIndex = -1;
+            if (previous == null)
+                return;
+            Sprites.ClearFrame(previous);
+            Sprites.PaintHud();
+        }
+
+        bool ActivateScreenSlots()
+        {
+            if (SelectedRow == 4)
+            {
+                ReturnHome();
+                return true;
+            }
+
+            if (SelectedRow == 1)
+                screenSlot = ScreenSlot.Lcd1;
+            else if (SelectedRow == 2)
+                screenSlot = ScreenSlot.Lcd2;
+            else if (SelectedRow == 3)
+                screenSlot = ScreenSlot.Menu;
+            else
+                return false;
+
+            screenSlotRow = SelectedRow;
+            view = MenuView.ScreenSurfaces;
+            SelectedRow = 1;
+            return true;
+        }
+
+        bool ActivateScreenSurface(IniContext ic, GridContext gc)
+        {
+            FillSurfaces(gc);
+            int index = SelectedRow - 1;
+            if (index < 0 || index >= surfaceBlocks.Count)
+            {
+                BackToScreenSlots();
+                return true;
+            }
+
+            AssignSurface(surfaceBlocks[index], surfaceIndexes[index], ic, gc);
+            return true;
+        }
+
+        void BackToScreenSlots()
+        {
+            ReleaseScreenMarker();
+            view = MenuView.ScreenSlots;
+            SelectedRow = screenSlotRow < 1 ? 1 : screenSlotRow;
+        }
+
+        void PaintScreenSlots(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            spt.Add("Screens");
+            int row = 1;
+            spt.Add("LCD 1", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("LCD 2", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Menu", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void PaintScreenSurfaces(IniContext ic, GridContext gc)
+        {
+            FillSurfaces(gc);
+            Sprites spt = new Sprites(ic);
+            spt.Add(ScreenSlotTitle(screenSlot));
+            int row = 1;
+            for (int i = 0; i < surfaceBlocks.Count; i++)
+            {
+                IMyTerminalBlock block = surfaceBlocks[i];
+                string name = block == null || block.CustomName == null ? "" : block.CustomName;
+                spt.Add(SurfaceLabel(name, surfaceIndexes[i]), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            }
+            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+
+            IMyTextSurface current = null;
+            long blockId = 0;
+            int surfaceIndex = -1;
+            int picked = SelectedRow - 1;
+            if (picked >= 0 && picked < surfaceBlocks.Count)
+            {
+                IMyTerminalBlock block = surfaceBlocks[picked];
+                surfaceIndex = surfaceIndexes[picked];
+                if (block != null && !block.Closed)
+                {
+                    blockId = block.EntityId;
+                    current = SurfaceAt(block, surfaceIndex);
+                }
+            }
+
+            bool moved = markedIndex != surfaceIndex || markedBlockId != blockId;
+            if (moved && markedSurface != null)
+                Sprites.ClearFrame(markedSurface);
+
+            spt.DrawTo(gc.LcdsMenu);
+            if (moved)
+                Sprites.PaintHud();
+
+            markedSurface = current;
+            markedBlockId = blockId;
+            markedIndex = surfaceIndex;
+            if (current != null)
+                spt.DrawPlainMarker(current);
+        }
+
+        static string ScreenSlotTitle(ScreenSlot slot)
+        {
+            if (slot == ScreenSlot.Lcd2)
+                return "LCD 2";
+            if (slot == ScreenSlot.Menu)
+                return "Menu";
+            return "LCD 1";
+        }
+
+        static string SurfaceLabel(string name, int index)
+        {
+            string num = index.ToString();
+            if (string.IsNullOrEmpty(name))
+                return num;
+            return name + " " + num;
+        }
+
+        void AssignSurface(IMyTerminalBlock block, int surfaceIndex, IniContext ic, GridContext gc)
+        {
+            if (block == null || block.Closed || ic == null || gc == null)
+                return;
+
+            IMyCockpit cockpit = block as IMyCockpit;
+            if (cockpit != null)
+            {
+                gc.WriteCockpitSlot(cockpit, CockpitKey(screenSlot), surfaceIndex);
+                gc.ReloadLCDs();
+                return;
+            }
+
+            IMyTextPanel panel = block as IMyTextPanel;
+            if (panel == null)
+                return;
+
+            string tag = SlotTag(ic, screenSlot);
+            if (string.IsNullOrEmpty(tag))
+                return;
+            StripTag(gc, panel.EntityId, tag);
+            AppendTag(panel, tag);
+            gc.ReloadLCDs();
+        }
+
+        static string CockpitKey(ScreenSlot slot)
+        {
+            if (slot == ScreenSlot.Lcd2)
+                return CockpitSpriteIni.LCD2;
+            if (slot == ScreenSlot.Menu)
+                return CockpitSpriteIni.LCDSETTINGS;
+            return CockpitSpriteIni.LCD1;
+        }
+
+        static string SlotTag(IniContext ic, ScreenSlot slot)
+        {
+            if (slot == ScreenSlot.Lcd2)
+                return ic.Lcd2Tag;
+            if (slot == ScreenSlot.Menu)
+                return ic.LcdMenuTag;
+            return ic.Lcd1Tag;
+        }
+
+        void StripTag(GridContext gc, long keepId, string tag)
+        {
+            if (gc.GridTS == null || gc.Me == null || string.IsNullOrEmpty(tag))
+                return;
+
+            tagScan.Clear();
+            gc.GridTS.GetBlocksOfType(tagScan);
+            for (int i = 0; i < tagScan.Count; i++)
+            {
+                IMyTerminalBlock block = tagScan[i];
+                if (block == null || block.Closed || block.EntityId == keepId)
+                    continue;
+                if (block is IMyCockpit)
+                    continue;
+                if (!block.IsSameConstructAs(gc.Me))
+                    continue;
+                RemoveTag(block, tag);
+            }
+        }
+
+        static void AppendTag(IMyTerminalBlock block, string tag)
+        {
+            string name = block.CustomName ?? "";
+            if (name.Contains(tag))
+                return;
+            if (name.Length == 0)
+                block.CustomName = tag;
+            else
+                block.CustomName = name + " " + tag;
+        }
+
+        static void RemoveTag(IMyTerminalBlock block, string tag)
+        {
+            string name = block.CustomName ?? "";
+            bool changed = false;
+            int at = name.IndexOf(tag);
+            while (at >= 0)
+            {
+                int cut = at;
+                int len = tag.Length;
+                if (cut > 0 && name[cut - 1] == ' ')
+                {
+                    cut--;
+                    len++;
+                }
+                name = name.Remove(cut, len);
+                changed = true;
+                at = name.IndexOf(tag);
+            }
+            if (changed)
+                block.CustomName = name;
+        }
+
+        void FillSurfaces(GridContext gc)
+        {
+            surfaceBlocks.Clear();
+            surfaceIndexes.Clear();
+            if (gc == null || gc.GridTS == null || gc.Me == null)
+                return;
+
+            providerScan.Clear();
+            gc.GridTS.GetBlocksOfType<IMyTextSurfaceProvider>(providerScan);
+            for (int i = 0; i < providerScan.Count; i++)
+            {
+                IMyTerminalBlock block = providerScan[i];
+                if (block == null || block.Closed || !block.IsSameConstructAs(gc.Me))
+                    continue;
+                IMyTextSurfaceProvider provider = block as IMyTextSurfaceProvider;
+                if (provider == null)
+                    continue;
+                for (int s = 0; s < provider.SurfaceCount; s++)
+                {
+                    if (provider.GetSurface(s) == null)
+                        continue;
+                    surfaceBlocks.Add(block);
+                    surfaceIndexes.Add(s);
+                }
+            }
+        }
+
+        static IMyTextSurface SurfaceAt(IMyTerminalBlock block, int surfaceIndex)
+        {
+            IMyTextSurfaceProvider provider = block as IMyTextSurfaceProvider;
+            if (provider == null || surfaceIndex < 0 || surfaceIndex >= provider.SurfaceCount)
+                return null;
+            return provider.GetSurface(surfaceIndex);
         }
     }
 }

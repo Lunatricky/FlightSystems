@@ -420,6 +420,13 @@ namespace IngameScript.Domain
             return this;
         }
 
+        public void WriteCockpitSlot(IMyCockpit cockpit, string key, int index)
+        {
+            if (cockpit == null || cockpit.Closed)
+                return;
+            GetCockpitSpriteIni(cockpit).WriteSlot(cockpit, key, index);
+        }
+
         CockpitSpriteIni GetCockpitSpriteIni(IMyCockpit cockpit)
         {
             CockpitSpriteIni cfg;

@@ -164,6 +164,7 @@ namespace IngameScript
                     }
                     else
                     {
+                        menuHud.ReleaseScreenMarker();
                         menuSeatHold = false;
                         pi.ResetControllers(gc.Controllers);
                     }
@@ -1569,6 +1570,7 @@ namespace IngameScript
 
         void CloseMenuFromSpace()
         {
+            menuHud.ReleaseScreenMarker();
             menuToggle = false;
             if (pi.Space())
             {

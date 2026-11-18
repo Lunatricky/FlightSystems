@@ -254,6 +254,47 @@ namespace IngameScript
             return n;
         }
 
+        public void DrawPlainMarker(IMyTextSurface panel)
+        {
+            if (panel == null)
+                return;
+
+            panel.ContentType = ContentType.SCRIPT;
+            panel.Script = "";
+            spriteBuf.Clear();
+
+            Vector2 surfaceSize = panel.SurfaceSize;
+            Vector2 textureSize = panel.TextureSize;
+            if (surfaceSize.X < 1f || surfaceSize.Y < 1f)
+            {
+                Flush(panel);
+                return;
+            }
+
+            // TEXTURE LEFT is the top-left. One square in the visible area, nothing else.
+            float originX = (textureSize.X - surfaceSize.X) * 0.5f;
+            float originY = (textureSize.Y - surfaceSize.Y) * 0.5f;
+            float side = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
+            side = side * 0.45f;
+            if (side < 1f)
+                side = 1f;
+            float x = originX + (surfaceSize.X - side) * 0.5f;
+            float y = originY + (surfaceSize.Y - side) * 0.5f;
+            spriteBuf.Add(MakeRectSprite(new Vector2(x, y), new Vector2(side, side), ic.SpriteMenuColor));
+            Flush(panel);
+        }
+
+        public static void ClearFrame(IMyTextSurface panel)
+        {
+            if (panel == null)
+                return;
+            panel.ContentType = ContentType.SCRIPT;
+            panel.Script = "";
+            using (var frame = panel.DrawFrame())
+            {
+            }
+        }
+
         void Blank(IMyTextSurface panel)
         {
             panel.ContentType = ContentType.SCRIPT;
