@@ -71,16 +71,11 @@ namespace IngameScript.Domain
         const string GroupsSection = "Groups";
         const string RestoreSection = "Restore";
 
-        const string OldLcd1 = "[FS_LCD1]";
-        const string NewLcd1 = "[FS_lcd1]";
-        const string OldLcd2 = "[FS_LCD2]";
-        const string NewLcd2 = "[FS_lcd2]";
-        const string OldMenu = "[FS_LCD_SETTINGS]";
-        const string NewMenu = "[FS_menu]";
-        const string OldCockpit = "[FS_COCKPIT]";
-        const string NewCockpit = "[FS_cockpit]";
-        const string OldRay = "[FS_RAY]";
-        const string NewRay = "[FS_ray]";
+        const string Lcd1 = "[FS_lcd1]";
+        const string Lcd2 = "[FS_lcd2]";
+        const string Menu = "[FS_menu]";
+        const string Cockpit = "[FS_cockpit]";
+        const string Ray = "[FS_ray]";
 
         string dockGroupTag = "Flight Systems";
         string controllerTag = "[FS_reference]";
@@ -398,11 +393,11 @@ namespace IngameScript.Domain
             controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
             overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
             ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
-            lcd1Tag = DropOldDefault(ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(NewLcd1), OldLcd1, NewLcd1);
-            lcd2Tag = DropOldDefault(ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(NewLcd2), OldLcd2, NewLcd2);
-            lcdMenuTag = DropOldDefault(ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(NewMenu), OldMenu, NewMenu);
-            cockpitTag = DropOldDefault(ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(NewCockpit), OldCockpit, NewCockpit);
-            rayCameraTag = DropOldDefault(ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(NewRay), OldRay, NewRay);
+            lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1);
+            lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2);
+            lcdMenuTag = ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(Menu);
+            cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(Cockpit);
+            rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(Ray);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
             dockTriggerGroup = ReadMoved(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
             landingPadGroup = ReadMoved(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
@@ -440,14 +435,6 @@ namespace IngameScript.Domain
             reloadPending = false;
             RewriteFromParsed();
             return iniChanged;
-        }
-
-        // An exact old default is not a tag. A value the player changed is kept. Blocks are not renamed.
-        static string DropOldDefault(string saved, string oldDefault, string newDefault)
-        {
-            if (saved == oldDefault)
-                return newDefault;
-            return saved;
         }
 
         // New section wins. A missing key is read from Names & Tags once, then omitted on the write.
@@ -785,11 +772,10 @@ namespace IngameScript.Domain
                 block = markerOverride;
             else if (!GpsStore.TryMarkerBlock(old, out block))
                 return;
-
             string body = ini.ToString();
             if (body.Length == 0 || body[body.Length - 1] != '\n')
                 body += "\n";
-            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body + block;
+            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body + "\n" + block;
             if (old != written)
                 gc.Me.CustomData = written;
             seenCustomData = written;

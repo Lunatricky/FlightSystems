@@ -950,8 +950,8 @@ namespace IngameScript
         static Color BoolSpriteColor(bool isSelected, bool toggle)
         {
             return (isSelected ?
-                toggle ? Color.Green : Color.Red :
-                toggle ? Color.LightGreen : Color.OrangeRed);
+                toggle ? Color.LightGreen : Color.Orange :
+                toggle ? Color.Green : Color.Red);
         }
 
         bool ActivateDockKinds()
