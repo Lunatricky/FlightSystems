@@ -103,16 +103,7 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
             spt.Add("GPS");
 
-            int window = 6;
-            int start = row - 1 - window / 2;
-            if (start < 0) start = 0;
-            if (start > total - window) start = total - window;
-            if (start < 0) start = 0;
-
-            int end = start + window;
-            if (end > total) end = total;
-
-            for (int i = start; i < end; i++)
+            for (int i = 0; i < total; i++)
             {
                 int displayRow = i + 1;
                 string label;
@@ -125,6 +116,7 @@ namespace IngameScript
                 spt.Add(label, RowColor(displayRow, ic.SpriteBackgroundColor), RowColor(displayRow, ic.SpriteFontColor));
             }
 
+            spt.KeepVisible(row);
             spt.DrawTo(gc.LcdsMenu);
         }
 

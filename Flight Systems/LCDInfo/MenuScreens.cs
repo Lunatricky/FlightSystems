@@ -1021,6 +1021,7 @@ namespace IngameScript
                 row++;
             }
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -1268,6 +1269,7 @@ namespace IngameScript
                 spt.Add(SurfaceLabel(name, surfaceIndexes[i]), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             }
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
 
             IMyTextSurface current = null;
             long blockId = 0;

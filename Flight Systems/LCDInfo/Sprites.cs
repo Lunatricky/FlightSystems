@@ -29,6 +29,7 @@ namespace IngameScript
         readonly List<string> texts = new List<string>();
         readonly List<Color> BackgroundColors = new List<Color>();
         readonly List<Color> FontColors = new List<Color>();
+        int followLine = -1;
 
         public Sprites(IniContext ic)
         {
@@ -40,6 +41,7 @@ namespace IngameScript
             texts.Clear();
             BackgroundColors.Clear();
             FontColors.Clear();
+            followLine = -1;
         }
 
         public void CopyFrom(Sprites src)
@@ -54,6 +56,7 @@ namespace IngameScript
                 BackgroundColors.Add(src.BackgroundColors[i]);
                 FontColors.Add(src.FontColors[i]);
             }
+            followLine = src.followLine;
         }
 
         public void Add(string s)
@@ -82,6 +85,12 @@ namespace IngameScript
             texts.Add(s);
             BackgroundColors.Add(b);
             FontColors.Add(f);
+        }
+
+        // Line index that must stay on screen. Title is 0. The last line stays put.
+        public void KeepVisible(int line)
+        {
+            followLine = line;
         }
 
         public static void BindFlight(
@@ -362,7 +371,7 @@ namespace IngameScript
                     barH = rowPitch * 0.85f;
 
                 // A capped scale must not sit in a bar that grew to fill the screen.
-                if (stack == flightMenu)
+                if (IsMenu(stack))
                 {
                     float glyphBar = baseScale * DebugLineHeight / 0.7f;
                     if (barH > glyphBar)
@@ -386,12 +395,43 @@ namespace IngameScript
                 if (textMaxW < 1f)
                     textMaxW = 1f;
 
+                bool window = IsMenu(stack) && stack.followLine >= 0 && stack.LineCount > rows && rows >= 3;
+                int winStart = 1;
+                if (window)
+                {
+                    int middle = rows - 2;
+                    int sel = stack.followLine;
+                    if (sel < 1)
+                        sel = 1;
+                    if (sel > stack.LineCount - 2)
+                        sel = stack.LineCount - 2;
+                    winStart = sel - middle / 2;
+                    if (winStart < 1)
+                        winStart = 1;
+                    int maxStart = stack.LineCount - 1 - middle;
+                    if (winStart > maxStart)
+                        winStart = maxStart;
+                    if (winStart < 1)
+                        winStart = 1;
+                }
+
                 for (int i = 0; i < rows; i++)
                 {
-                    float centerY = originY + i * rowPitch + rowPitch * 0.5f;
-                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[i]));
+                    int src = i;
+                    if (window)
+                    {
+                        if (i == 0)
+                            src = 0;
+                        else if (i == rows - 1)
+                            src = stack.LineCount - 1;
+                        else
+                            src = winStart + i - 1;
+                    }
 
-                    string line = stack.texts[i] ?? "";
+                    float centerY = originY + i * rowPitch + rowPitch * 0.5f;
+                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[src]));
+
+                    string line = stack.texts[src] ?? "";
                     float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
                     float minScale = MenuMinScale(stack, baseScale);
                     if (scaleLine < minScale)
@@ -409,7 +449,7 @@ namespace IngameScript
                     // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
                     float textX = barX + textPad;
                     float textY = barTop + extra * 0.22f;
-                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[i], line, scaleLine));
+                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[src], line, scaleLine));
                 }
             }
 
@@ -576,10 +616,15 @@ namespace IngameScript
         const int MenuCapRows = 10;
         const float MenuFitFloor = 0.8f;
 
+        static bool IsMenu(Sprites stack)
+        {
+            return stack != flightHud1 && stack != flightHud2;
+        }
+
         static int MenuScaleRows(Sprites stack)
         {
             int rows = stack.LineCount;
-            if (stack != flightMenu)
+            if (!IsMenu(stack))
                 return rows;
             if (rows < MenuBarRows)
                 return MenuBarRows;
@@ -590,7 +635,7 @@ namespace IngameScript
 
         static float MenuMinScale(Sprites stack, float baseScale)
         {
-            if (stack != flightMenu)
+            if (!IsMenu(stack))
                 return DebugMinScale;
             float floor = baseScale * MenuFitFloor;
             if (floor < DebugMinScale)
