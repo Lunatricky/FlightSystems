@@ -103,12 +103,12 @@ namespace IngameScript.Domain
 
         public string NextMarkName()
         {
-            if (!HasName("Mark"))
-                return "Mark";
+            if (!HasName("New GPS"))
+                return "New GPS";
             int n = 2;
-            while (HasName("Mark " + n))
+            while (HasName("New GPS " + n))
                 n++;
-            return "Mark " + n;
+            return "New GPS " + n;
         }
 
         public static int NearestMeter(double value)
