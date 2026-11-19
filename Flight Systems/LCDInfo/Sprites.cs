@@ -322,6 +322,39 @@ namespace IngameScript
             if (side < 1f)
                 side = 1f;
             spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), new Vector2(side, side), ic.SpriteFontColor));
+
+            float originX = centerX - surfaceSize.X * 0.5f;
+            float originY = centerY - surfaceSize.Y * 0.5f;
+            float pad = Pad(surfaceSize);
+            float textMaxW = surfaceSize.X - 2f * pad;
+            if (textMaxW < 1f)
+                textMaxW = 1f;
+
+            float below = originY + surfaceSize.Y - (centerY + side * 0.5f + pad);
+            float above = centerY - side * 0.5f - pad - originY;
+            float band = below > above ? below : above;
+            if (band < 1f)
+                band = 1f;
+
+            float scale = 1.3f;
+            float fitScale = band / DebugLineHeight;
+            if (scale > fitScale)
+                scale = fitScale;
+            string line = SelectThisScreen;
+            float scaleLine = FitWidth(panel, line, scale, textMaxW);
+            float floor = scale * MenuFitFloor;
+            if (floor * DebugLineHeight > band)
+                floor = scaleLine;
+            if (scaleLine < floor)
+            {
+                line = Truncate(panel, line, floor, textMaxW);
+                scaleLine = floor;
+            }
+
+            float textY = centerY + side * 0.5f + pad;
+            if (above > below)
+                textY = centerY - side * 0.5f - pad - scaleLine * DebugLineHeight;
+            spriteBuf.Add(MakeTextSprite(new Vector2(originX + pad, textY), ic.SpriteFontColor, line, scaleLine));
             Flush(panel);
         }
 
@@ -636,6 +669,7 @@ namespace IngameScript
         const int MenuBarRows = 7;
         const int MenuCapRows = 10;
         const float MenuFitFloor = 0.8f;
+        const string SelectThisScreen = "Press space to select this screen";
 
         static bool IsMenu(Sprites stack)
         {
