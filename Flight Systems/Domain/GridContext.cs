@@ -503,8 +503,8 @@ namespace IngameScript.Domain
             string n = s.Name ?? "";
             Color bg = (ic.TransparentLCD && n.ToLower().Contains("transparent"))
                 ? Color.Black
-                : ColorMap.GetColorFromString(ic.LcdBackgroundColor);
-            Color fg = ColorMap.GetColorFromString(ic.LcdFontColor);
+                : ic.LcdBackgroundColor;
+            Color fg = ic.LcdFontColor;
 
             // Do not toggle ContentType: TEXT→SCRIPT→restore blanks cockpit/PB sprite surfaces.
             s.BackgroundColor = bg;

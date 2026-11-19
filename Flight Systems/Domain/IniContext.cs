@@ -115,24 +115,21 @@ namespace IngameScript.Domain
         public const string SPRITEBACKGROUNDCOLOR = "Sprite Background Color";
         public const string SPRITEFONTCOLOR = "Sprite Font Color";
 
-        string lcdBackgroundColor = "Black";
-        string lcdFontColor = "White";
-        string spriteMenuColor = "White";
-        string spriteBackgroundColor = "Black";
-        string spriteFontColor = "White";
+        static readonly Color DefaultLcdBackground = new Color(0, 0, 0);
+        static readonly Color DefaultLcdFont = new Color(255, 255, 255);
+        static readonly Color DefaultSpriteMenu = new Color(255, 255, 255);
+        static readonly Color DefaultSpriteBackground = new Color(0, 0, 0);
+        static readonly Color DefaultSpriteFont = new Color(255, 255, 255);
 
-        const string AvailableColorsSection = "Available Colors";
-
-        const string COLORS = "Available Colors";
-
-        string colors = ColorMap.All.ToString();
-        readonly List<string> colorNames = new List<string>();
-
+        Color lcdBackgroundColor = DefaultLcdBackground;
+        Color lcdFontColor = DefaultLcdFont;
+        Color spriteMenuColor = DefaultSpriteMenu;
+        Color spriteBackgroundColor = DefaultSpriteBackground;
+        Color spriteFontColor = DefaultSpriteFont;
 
         public IniContext(GridContext gc)
         {
             this.gc = gc;
-            FillColorNames();
         }
 
         public bool IniChanged => iniChanged;
@@ -278,81 +275,55 @@ namespace IngameScript.Domain
             }
         }
 
-        public string LcdBackgroundColor
+        public Color LcdBackgroundColor
         {
             get { return lcdBackgroundColor; }
             set
             {
-                lcdBackgroundColor = value ?? "";
-                UpdateIni(SurfaceColorsSection, LCDBACKGROUNDCOLOR, lcdBackgroundColor);
+                lcdBackgroundColor = value;
+                UpdateIni(SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(value));
             }
         }
-        public string LcdFontColor
+        public Color LcdFontColor
         {
             get { return lcdFontColor; }
             set
             {
-                lcdFontColor = value ?? "";
-                UpdateIni(SurfaceColorsSection, LCDFONTCOLOR, lcdFontColor);
+                lcdFontColor = value;
+                UpdateIni(SurfaceColorsSection, LCDFONTCOLOR, FormatRgb(value));
             }
         }
-        public Color SpriteMenuColor => ColorMap.GetColorFromString(spriteMenuColor);
-        public Color SpriteBackgroundColor => ColorMap.GetColorFromString(spriteBackgroundColor);
-        public Color SpriteFontColor => ColorMap.GetColorFromString(spriteFontColor);
-        public string SpriteMenuColorName => spriteMenuColor;
-        public string SpriteBackgroundColorName => spriteBackgroundColor;
-        public string SpriteFontColorName => spriteFontColor;
-
-        public void SetSpriteMenuColor(string name)
+        public Color SpriteMenuColor
         {
-            spriteMenuColor = name ?? "";
-            UpdateIni(SurfaceColorsSection, SPRITEMENUCOLOR, spriteMenuColor);
-        }
-
-        public void SetSpriteBackgroundColor(string name)
-        {
-            spriteBackgroundColor = name ?? "";
-            UpdateIni(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, spriteBackgroundColor);
-        }
-
-        public void SetSpriteFontColor(string name)
-        {
-            spriteFontColor = name ?? "";
-            UpdateIni(SurfaceColorsSection, SPRITEFONTCOLOR, spriteFontColor);
-        }
-
-        public string CycleAvailableColor(string current, bool next)
-        {
-            int count = colorNames.Count;
-            if (count == 0)
-                return current ?? "";
-
-            int index = -1;
-            for (int i = 0; i < count; i++)
+            get { return spriteMenuColor; }
+            set
             {
-                if (colorNames[i] == current)
-                {
-                    index = i;
-                    break;
-                }
+                spriteMenuColor = value;
+                UpdateIni(SurfaceColorsSection, SPRITEMENUCOLOR, FormatRgb(value));
             }
-
-            if (next)
+        }
+        public Color SpriteBackgroundColor
+        {
+            get { return spriteBackgroundColor; }
+            set
             {
-                index++;
-                if (index >= count)
-                    index = 0;
+                spriteBackgroundColor = value;
+                UpdateIni(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(value));
             }
-            else
+        }
+        public Color SpriteFontColor
+        {
+            get { return spriteFontColor; }
+            set
             {
-                if (index < 0)
-                    index = 0;
-                index--;
-                if (index < 0)
-                    index = count - 1;
+                spriteFontColor = value;
+                UpdateIni(SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(value));
             }
+        }
 
-            return colorNames[index];
+        public static string FormatRgb(Color color)
+        {
+            return color.R + "," + color.G + "," + color.B;
         }
 
 
@@ -434,13 +405,11 @@ namespace IngameScript.Domain
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
 
             //SurfaceColorsSection
-            lcdBackgroundColor = ini.Get(SurfaceColorsSection, LCDBACKGROUNDCOLOR).ToString(LcdBackgroundColor);
-            lcdFontColor = ini.Get(SurfaceColorsSection, LCDFONTCOLOR).ToString(LcdFontColor);
-            spriteMenuColor = ini.Get(SurfaceColorsSection, SPRITEMENUCOLOR).ToString(ColorMap.GetStringFromColor(SpriteMenuColor));
-            spriteBackgroundColor = ini.Get(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR).ToString(ColorMap.GetStringFromColor(SpriteBackgroundColor));
-            spriteFontColor = ini.Get(SurfaceColorsSection, SPRITEFONTCOLOR).ToString(ColorMap.GetStringFromColor(SpriteFontColor));
-            colors = ini.Get(AvailableColorsSection, COLORS).ToString(ColorMap.All);
-            FillColorNames();
+            lcdBackgroundColor = ReadRgb(LCDBACKGROUNDCOLOR, DefaultLcdBackground);
+            lcdFontColor = ReadRgb(LCDFONTCOLOR, DefaultLcdFont);
+            spriteMenuColor = ReadRgb(SPRITEMENUCOLOR, DefaultSpriteMenu);
+            spriteBackgroundColor = ReadRgb(SPRITEBACKGROUNDCOLOR, DefaultSpriteBackground);
+            spriteFontColor = ReadRgb(SPRITEFONTCOLOR, DefaultSpriteFont);
 
             gps.Load(ini, rawCustomData);
 
@@ -497,13 +466,11 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel);
 
             //SurfaceColorsSection
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, LcdBackgroundColor);
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, LcdFontColor);
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEMENUCOLOR, ColorMap.GetStringFromColor(SpriteMenuColor));
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, ColorMap.GetStringFromColor(SpriteBackgroundColor));
-            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, ColorMap.GetStringFromColor(SpriteFontColor));
-
-            ini.Set(AvailableColorsSection, COLORS, colors);
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(lcdBackgroundColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, LCDFONTCOLOR, FormatRgb(lcdFontColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEMENUCOLOR, FormatRgb(spriteMenuColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
+            iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
 
             gps.Save(ini);
 
@@ -594,27 +561,77 @@ namespace IngameScript.Domain
             UpdateIni(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore);
         }
 
-        void FillColorNames()
+        Color ReadRgb(string key, Color fallback)
         {
-            colorNames.Clear();
-            if (string.IsNullOrEmpty(colors))
-                return;
+            string raw = ini.Get(SurfaceColorsSection, key).ToString("");
+            Color parsed;
+            if (TryParseRgb(raw, out parsed))
+                return parsed;
+            return fallback;
+        }
 
-            int start = 0;
-            for (int i = 0; i <= colors.Length; i++)
+        static bool TryParseRgb(string text, out Color color)
+        {
+            color = new Color(0, 0, 0);
+            if (string.IsNullOrEmpty(text))
+                return false;
+
+            int i = 0;
+            int r;
+            int g;
+            int b;
+            if (!ReadChannel(text, ref i, out r))
+                return false;
+            if (!ReadComma(text, ref i))
+                return false;
+            if (!ReadChannel(text, ref i, out g))
+                return false;
+            if (!ReadComma(text, ref i))
+                return false;
+            if (!ReadChannel(text, ref i, out b))
+                return false;
+            while (i < text.Length && text[i] == ' ')
+                i++;
+            if (i != text.Length)
+                return false;
+
+            color = new Color(r, g, b);
+            return true;
+        }
+
+        static bool ReadChannel(string text, ref int i, out int value)
+        {
+            value = 0;
+            while (i < text.Length && text[i] == ' ')
+                i++;
+            if (i >= text.Length || text[i] < '0' || text[i] > '9')
+                return false;
+
+            int n = 0;
+            while (i < text.Length && text[i] >= '0' && text[i] <= '9')
             {
-                if (i < colors.Length && colors[i] != ',')
-                    continue;
-
-                int length = i - start;
-                if (length > 0)
-                {
-                    string name = colors.Substring(start, length).Trim();
-                    if (name.Length > 0)
-                        colorNames.Add(name);
-                }
-                start = i + 1;
+                int digit = text[i] - '0';
+                if (n > 25)
+                    n = 255;
+                else
+                    n = n * 10 + digit;
+                if (n > 255)
+                    n = 255;
+                i++;
             }
+
+            value = n;
+            return true;
+        }
+
+        static bool ReadComma(string text, ref int i)
+        {
+            while (i < text.Length && text[i] == ' ')
+                i++;
+            if (i >= text.Length || text[i] != ',')
+                return false;
+            i++;
+            return true;
         }
 
         void UpdateIni(string section, string key, object newVal)
