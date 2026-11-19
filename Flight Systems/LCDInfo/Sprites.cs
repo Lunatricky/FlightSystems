@@ -323,49 +323,46 @@ namespace IngameScript
                 return;
             }
 
-            // MakeRectSprite uses the point as the center. Fill first so the default blue never shows.
+            // One sprite covers the visible area. The sentence stays at a cockpit-readable size.
             float centerX = (textureSize.X - surfaceSize.X) * 0.5f + surfaceSize.X * 0.5f;
             float centerY = (textureSize.Y - surfaceSize.Y) * 0.5f + surfaceSize.Y * 0.5f;
-            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), surfaceSize, ic.SpriteMenuColor));
+            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), surfaceSize, ic.SpriteBackgroundColor));
 
-            float side = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
-            side = side * 0.45f;
-            if (side < 1f)
-                side = 1f;
-            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), new Vector2(side, side), ic.SpriteFontColor));
-
-            float originX = centerX - surfaceSize.X * 0.5f;
-            float originY = centerY - surfaceSize.Y * 0.5f;
             float pad = Pad(surfaceSize);
             float textMaxW = surfaceSize.X - 2f * pad;
             if (textMaxW < 1f)
                 textMaxW = 1f;
 
-            float below = originY + surfaceSize.Y - (centerY + side * 0.5f + pad);
-            float above = centerY - side * 0.5f - pad - originY;
-            float band = below > above ? below : above;
-            if (band < 1f)
-                band = 1f;
-
             float scale = 1.3f;
-            float fitScale = band / DebugLineHeight;
-            if (scale > fitScale)
-                scale = fitScale;
-            string line = SelectThisScreen;
-            float scaleLine = FitWidth(panel, line, scale, textMaxW);
             float floor = scale * MenuFitFloor;
-            if (floor * DebugLineHeight > band)
-                floor = scaleLine;
-            if (scaleLine < floor)
+            string line = SelectThisScreen;
+            string line2 = null;
+            if (WidthOf(panel, line, scale) > textMaxW)
             {
-                line = Truncate(panel, line, floor, textMaxW);
-                scaleLine = floor;
+                line = SelectLineTop;
+                line2 = SelectLineBottom;
+                float w1 = WidthOf(panel, line, scale);
+                float w2 = WidthOf(panel, line2, scale);
+                float widest = w1 > w2 ? w1 : w2;
+                if (widest > textMaxW && widest > 1f)
+                {
+                    float fit = scale * textMaxW / widest;
+                    if (fit < floor)
+                        fit = floor;
+                    scale = fit;
+                }
             }
 
-            float textY = centerY + side * 0.5f + pad;
-            if (above > below)
-                textY = centerY - side * 0.5f - pad - scaleLine * DebugLineHeight;
-            spriteBuf.Add(MakeTextSprite(new Vector2(originX + pad, textY), ic.SpriteFontColor, line, scaleLine));
+            float lineH = scale * DebugLineHeight;
+            float blockH = line2 == null ? lineH : lineH * 2f;
+            float top = centerY - blockH * 0.5f;
+            float wLine = WidthOf(panel, line, scale);
+            spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine * 0.5f, top), ic.SpriteFontColor, line, scale));
+            if (line2 != null)
+            {
+                float wLine2 = WidthOf(panel, line2, scale);
+                spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine2 * 0.5f, top + lineH), ic.SpriteFontColor, line2, scale));
+            }
             Flush(panel);
         }
 
@@ -790,6 +787,8 @@ namespace IngameScript
         const int MenuCapRows = 10;
         const float MenuFitFloor = 0.8f;
         const string SelectThisScreen = "Press space to select this screen";
+        const string SelectLineTop = "Press space to";
+        const string SelectLineBottom = "select this screen";
 
         static bool IsMenu(Sprites stack)
         {
