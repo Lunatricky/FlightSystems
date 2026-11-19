@@ -151,7 +151,7 @@ namespace IngameScript
                     else
                         CancelDockWarning();
                 }
-                else if ((argument.ToLowerInvariant() == "menu" || argument.ToLowerInvariant() == "settings") && (gc.Cockpits.Count > 1 || isDocked))
+                else if (argument.ToLowerInvariant() == "menu" && (gc.Cockpits.Count > 1 || isDocked))
                 {
                     menuToggle = !menuToggle;
 

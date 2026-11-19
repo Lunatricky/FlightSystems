@@ -48,7 +48,6 @@ namespace IngameScript.Domain
         const string INI_LCD1_TAG = "LCD 1";
         const string INI_LCD2_TAG = "LCD 2";
         const string INI_MENU_TAG = "Menu";
-        const string INI_LCD_MENU_TAG = "LCD Menu";
         const string INI_COCKPIT_TAG = "Cockpit";
         const string INI_RAY_CAMERA_TAG = "Ray Camera";
         const string BACKUP_BATTERY_TAG = "Backup battery";
@@ -87,8 +86,6 @@ namespace IngameScript.Domain
         string dockTriggerRestore = "";
         string landingPadTag = "[FS_pad]";
         string landingPadRestore = "";
-        readonly List<string> renameOld = new List<string>();
-        readonly List<string> renameNew = new List<string>();
 
         //ParamsSection
         public const string ParamsSection = "Params";
@@ -335,8 +332,6 @@ namespace IngameScript.Domain
         {
             ini.Clear();
             iniChanged = false;
-            renameOld.Clear();
-            renameNew.Clear();
 
             string rawCustomData = gc.Me.CustomData ?? "";
             // A missing GPS end must not wipe the lines the player pasted.
@@ -378,11 +373,11 @@ namespace IngameScript.Domain
             controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
             overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
             ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
-            lcd1Tag = MigrateDefault(ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(NewLcd1), OldLcd1, NewLcd1);
-            lcd2Tag = MigrateDefault(ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(NewLcd2), OldLcd2, NewLcd2);
-            lcdMenuTag = MigrateDefault(ReadMenuTag(), OldMenu, NewMenu);
-            cockpitTag = MigrateDefault(ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(NewCockpit), OldCockpit, NewCockpit);
-            rayCameraTag = MigrateDefault(ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(NewRay), OldRay, NewRay);
+            lcd1Tag = DropOldDefault(ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(NewLcd1), OldLcd1, NewLcd1);
+            lcd2Tag = DropOldDefault(ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(NewLcd2), OldLcd2, NewLcd2);
+            lcdMenuTag = DropOldDefault(ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(NewMenu), OldMenu, NewMenu);
+            cockpitTag = DropOldDefault(ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(NewCockpit), OldCockpit, NewCockpit);
+            rayCameraTag = DropOldDefault(ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(NewRay), OldRay, NewRay);
             backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
             dockTriggerGroup = ReadMoved(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
             landingPadGroup = ReadMoved(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
@@ -435,7 +430,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, TRANSPARENTLCD, TransparentLCD);
 
-            //NamesTagsSection. LCD Menu is not written, so the next parse drops that key.
+            //NamesTagsSection. LCD Menu is not read, so a leftover key is dropped on write.
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag);
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag);
@@ -473,22 +468,17 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
 
-            // The saved value was the old default on this parse. The next parse holds the new value and does not scan.
-            if (renameOld.Count > 0)
-                gc.ReplaceNameTokens(renameOld, renameNew);
-
             WriteCustomData();
 
             return iniChanged;
         }
 
-        string ReadMenuTag()
+        // An exact old default is not a tag. A value the player changed is kept. Blocks are not renamed.
+        static string DropOldDefault(string saved, string oldDefault, string newDefault)
         {
-            if (ini.ContainsKey(NamesTagsSection, INI_MENU_TAG))
-                return ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(NewMenu);
-            if (ini.ContainsKey(NamesTagsSection, INI_LCD_MENU_TAG))
-                return ini.Get(NamesTagsSection, INI_LCD_MENU_TAG).ToString(OldMenu);
-            return NewMenu;
+            if (saved == oldDefault)
+                return newDefault;
+            return saved;
         }
 
         // New section wins. A missing key is read from Names & Tags once, then omitted on the write.
@@ -499,24 +489,6 @@ namespace IngameScript.Domain
             if (section != NamesTagsSection && ini.ContainsKey(NamesTagsSection, key))
                 return ini.Get(NamesTagsSection, key).ToString(fallback);
             return fallback;
-        }
-
-        string MigrateDefault(string saved, string oldDefault, string newDefault)
-        {
-            if (saved == oldDefault)
-            {
-                QueueNameToken(oldDefault, newDefault);
-                return newDefault;
-            }
-            return saved;
-        }
-
-        void QueueNameToken(string oldToken, string newToken)
-        {
-            if (string.IsNullOrEmpty(oldToken) || oldToken == newToken)
-                return;
-            renameOld.Add(oldToken);
-            renameNew.Add(newToken);
         }
 
         void ApplyFlightSystemsStaticHold()
