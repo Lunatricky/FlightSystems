@@ -337,8 +337,12 @@ namespace IngameScript.Domain
             renameOld.Clear();
             renameNew.Clear();
 
-            if (!ini.TryParse(gc.Me.CustomData)) return IniChanged;
-            string rawCustomData = gc.Me.CustomData;
+            string rawCustomData = gc.Me.CustomData ?? "";
+            // A missing GPS end must not wipe the lines the player pasted.
+            if (!gps.LoadBlock(rawCustomData))
+                return false;
+
+            if (!ini.TryParse(rawCustomData)) return IniChanged;
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
@@ -411,14 +415,10 @@ namespace IngameScript.Domain
             spriteBackgroundColor = ReadRgb(SPRITEBACKGROUNDCOLOR, DefaultSpriteBackground);
             spriteFontColor = ReadRgb(SPRITEFONTCOLOR, DefaultSpriteFont);
 
-            gps.Load(ini, rawCustomData);
-
-
             // ───────────────────── 
             // Delete PB Custom Data
             // ─────────────────────  
             ini.Clear();
-            gc.Me.CustomData = "";
 
             // ───────────────────────────────────────────────────────────────────────────────────────
             // Populate PB Custom Data whilst checking if any value changed to force ReloadGridContext
@@ -472,8 +472,6 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
             iniChanged |= ReadAndDetectChange(ini, SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
 
-            gps.Save(ini);
-
             // The saved value was the old default on this parse. The next parse holds the new value and does not scan.
             if (renameOld.Count > 0)
                 gc.ReplaceNameTokens(renameOld, renameNew);
@@ -518,12 +516,6 @@ namespace IngameScript.Domain
                 return;
             renameOld.Add(oldToken);
             renameNew.Add(newToken);
-        }
-
-        public void FlushGps()
-        {
-            gps.Save(ini);
-            WriteCustomData();
         }
 
         void ApplyFlightSystemsStaticHold()
@@ -642,7 +634,15 @@ namespace IngameScript.Domain
 
         void WriteCustomData()
         {
-            gc.Me.CustomData = $"[Flight Systems: {gc.Me.EntityId}]\n\n" + ini.ToString();
+            string old = gc.Me.CustomData ?? "";
+            string block;
+            if (!GpsStore.TryMarkerBlock(old, out block))
+                return;
+
+            string body = ini.ToString();
+            if (body.Length == 0 || body[body.Length - 1] != '\n')
+                body += "\n";
+            gc.Me.CustomData = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body + block;
         }
 
         bool ReadAndDetectChange(MyIni ini, string section, string key, object newVal)

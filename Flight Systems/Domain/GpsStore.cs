@@ -1,18 +1,15 @@
-using IngameScript.Enums;
-using IngameScript.Utils;
 using System.Collections.Generic;
-using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
 namespace IngameScript.Domain
 {
     class GpsStore
     {
-        public const string Section = "GPS";
+        public const string StartMark = "GPS start";
+        public const string EndMark = "GPS end";
 
         readonly List<GpsWaypoint> items = new List<GpsWaypoint>();
 
-        public List<GpsWaypoint> Items => items;
         public int Count => items.Count;
 
         public GpsWaypoint Get(int index)
@@ -22,122 +19,152 @@ namespace IngameScript.Domain
             return items[index];
         }
 
-        public void Load(MyIni ini, string customData)
+        public void Clear()
         {
             items.Clear();
-            int count = ini.Get(Section, "Count").ToInt32(0);
-            for (int i = 1; i <= count; i++)
+        }
+
+        // False means GPS start is present and GPS end is not. The caller must not write custom data.
+        public bool LoadBlock(string customData)
+        {
+            items.Clear();
+            string block;
+            if (!TryMarkerBlock(customData, out block))
+                return false;
+            ReadBetween(block);
+            return true;
+        }
+
+        public static bool TryMarkerBlock(string text, out string block)
+        {
+            block = StartMark + "\n" + EndMark + "\n";
+            if (string.IsNullOrEmpty(text))
+                return true;
+
+            int start = FindLine(text, 0, StartMark);
+            if (start < 0)
+                return true;
+
+            int end = FindLine(text, LinePast(text, start), EndMark);
+            if (end < 0)
             {
-                string sec = Section + "." + i;
-                if (!ini.ContainsSection(sec) && string.IsNullOrEmpty(ini.Get(sec, "Name").ToString("")))
-                    continue;
-                items.Add(GpsWaypoint.Read(ini, sec));
+                block = null;
+                return false;
             }
 
-            LoadPasted(customData);
+            int stop = LinePast(text, end);
+            block = text.Substring(start, stop - start);
+            return true;
         }
 
-        public void Save(MyIni ini)
+        void ReadBetween(string block)
         {
-            ini.Set(Section, "Count", items.Count);
-            for (int i = 0; i < items.Count; i++)
-                items[i].Write(ini, Section + "." + (i + 1));
-        }
-
-        public void Add(GpsWaypoint wp)
-        {
-            if (wp == null)
+            if (string.IsNullOrEmpty(block))
                 return;
-            if (string.IsNullOrEmpty(wp.Name))
-                wp.Name = wp.BuildName();
-            wp.Name = UniqueName(wp.Name);
+
+            bool inside = false;
+            int i = 0;
+            while (i < block.Length)
+            {
+                int contentEnd = i;
+                while (contentEnd < block.Length && block[contentEnd] != '\n' && block[contentEnd] != '\r')
+                    contentEnd++;
+
+                string line = block.Substring(i, contentEnd - i).Trim();
+                if (!inside)
+                {
+                    if (line == StartMark)
+                        inside = true;
+                }
+                else if (line == EndMark)
+                    break;
+                else
+                    TryAddLine(line);
+
+                i = contentEnd;
+                if (i < block.Length && block[i] == '\r')
+                    i++;
+                if (i < block.Length && block[i] == '\n')
+                    i++;
+            }
+        }
+
+        void TryAddLine(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+                return;
+
+            string[] parts = line.Split(':');
+            if (parts.Length < 5 || parts[0] != "GPS")
+                return;
+
+            string name = parts[1].Trim();
+            if (name.Length == 0)
+                return;
+
+            int x;
+            int y;
+            int z;
+            if (!int.TryParse(parts[2].Trim(), out x))
+                return;
+            if (!int.TryParse(parts[3].Trim(), out y))
+                return;
+            if (!int.TryParse(parts[4].Trim(), out z))
+                return;
+
+            GpsWaypoint wp = new GpsWaypoint();
+            wp.Name = name;
+            wp.Position = new Vector3D(x, y, z);
             items.Add(wp);
         }
 
-        public void Replace(int index, GpsWaypoint wp)
+        static int FindLine(string text, int from, string marker)
         {
-            if (index < 0 || index >= items.Count || wp == null)
-                return;
-            if (string.IsNullOrEmpty(wp.Name))
-                wp.Name = wp.BuildName();
-            string keep = items[index].Name;
-            if (wp.Name != keep)
-                wp.Name = UniqueName(wp.Name);
-            items[index] = wp;
-        }
-
-        public void RemoveAt(int index)
-        {
-            if (index < 0 || index >= items.Count)
-                return;
-            items.RemoveAt(index);
-        }
-
-        public string UniqueName(string baseName)
-        {
-            if (string.IsNullOrEmpty(baseName))
-                baseName = "GPS";
-            if (!ContainsName(baseName))
-                return baseName;
-            int n = 2;
-            while (ContainsName(baseName + " " + n))
-                n++;
-            return baseName + " " + n;
-        }
-
-        bool ContainsName(string name)
-        {
-            for (int i = 0; i < items.Count; i++)
+            int i = from;
+            if (i < 0)
+                i = 0;
+            while (i < text.Length)
             {
-                if (items[i].Name == name)
-                    return true;
+                int contentEnd = i;
+                while (contentEnd < text.Length && text[contentEnd] != '\n' && text[contentEnd] != '\r')
+                    contentEnd++;
+                if (LineEquals(text, i, contentEnd, marker))
+                    return i;
+                i = contentEnd;
+                if (i < text.Length && text[i] == '\r')
+                    i++;
+                if (i < text.Length && text[i] == '\n')
+                    i++;
             }
-            return false;
+            return -1;
         }
 
-        bool ContainsPosition(Vector3D pos)
+        static bool LineEquals(string text, int start, int end, string marker)
         {
-            for (int i = 0; i < items.Count; i++)
+            while (start < end && text[start] == ' ')
+                start++;
+            while (end > start && text[end - 1] == ' ')
+                end--;
+            if (end - start != marker.Length)
+                return false;
+            for (int i = 0; i < marker.Length; i++)
             {
-                if (Vector3D.DistanceSquared(items[i].Position, pos) < 1)
-                    return true;
+                if (text[start + i] != marker[i])
+                    return false;
             }
-            return false;
+            return true;
         }
 
-        void LoadPasted(string customData)
+        static int LinePast(string text, int lineStart)
         {
-            if (string.IsNullOrEmpty(customData))
-                return;
-
-            string[] lines = customData.Split('\n');
-            for (int i = 0; i < lines.Length; i++)
-            {
-                string line = lines[i].Trim();
-                if (line.Length > 0 && line[0] == ';')
-                    continue;
-                int gpsAt = line.IndexOf("GPS:");
-                if (gpsAt < 0)
-                    continue;
-                if (gpsAt > 0 && line.IndexOf('=') >= 0 && line.IndexOf('=') < gpsAt)
-                    continue;
-
-                string gps = gpsAt == 0 ? line : line.Substring(gpsAt);
-                Vector3D pos;
-                if (!UtilsHelpder.TryParseGPS(gps, out pos))
-                    continue;
-                if (ContainsPosition(pos))
-                    continue;
-
-                GpsWaypoint wp = new GpsWaypoint();
-                wp.Position = pos;
-                wp.Name = UtilsHelpder.GpsName(gps);
-                wp.Location = LocationType.PoI;
-                if (string.IsNullOrEmpty(wp.Name))
-                    wp.Name = wp.BuildName();
-                wp.Name = UniqueName(wp.Name);
-                items.Add(wp);
-            }
+            int i = lineStart;
+            while (i < text.Length && text[i] != '\n' && text[i] != '\r')
+                i++;
+            if (i < text.Length && text[i] == '\r')
+                i++;
+            if (i < text.Length && text[i] == '\n')
+                i++;
+            return i;
         }
     }
 }
