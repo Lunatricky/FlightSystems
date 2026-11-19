@@ -59,6 +59,21 @@ namespace IngameScript.Domain
             return true;
         }
 
+        // GPS lines are not ini. A missing end still drops from GPS start through the rest of the text.
+        public static string WithoutMarker(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+
+            int start = FindLine(text, 0, StartMark);
+            if (start < 0)
+                return text;
+
+            int end = FindLine(text, LinePast(text, start), EndMark);
+            int stop = end < 0 ? text.Length : LinePast(text, end);
+            return text.Substring(0, start) + text.Substring(stop);
+        }
+
         void ReadBetween(string block)
         {
             if (string.IsNullOrEmpty(block))

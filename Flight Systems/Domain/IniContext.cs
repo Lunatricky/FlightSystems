@@ -57,17 +57,28 @@ namespace IngameScript.Domain
         public const string TRANSPARENTLCD = "Keep LCD Transparency";
         public const string TEXT_PANELS = "Text Panels";
 
-        bool allowFlightSystems = true;
-        bool analogThrotle = false;
-        bool allowLowFuelLand = false;
-        bool allowDockMode = false;
-        bool controlAntennas = false;
+        const bool DefaultFlightSystems = true;
+        const bool DefaultAnalogThrotle = false;
+        const bool DefaultLowFuelLand = false;
+        const bool DefaultDockMode = false;
+        const bool DefaultControlAntennas = false;
+        const bool DefaultRenameSubgrids = false;
+        const bool DefaultPaintSurfaces = false;
+        const bool DefaultTransparentLCD = true;
+        const bool DefaultTextPanels = false;
+
+        bool allowFlightSystems = DefaultFlightSystems;
+        bool analogThrotle = DefaultAnalogThrotle;
+        bool allowLowFuelLand = DefaultLowFuelLand;
+        bool allowDockMode = DefaultDockMode;
+        bool controlAntennas = DefaultControlAntennas;
         bool flightRestoreSet;
         bool flightRestoreValue;
-        bool renameSubgrids = false;
-        bool paintSurfaces = false;
-        bool transparentLCD = true;
-        bool textPanels = false;
+        bool renameSubgrids = DefaultRenameSubgrids;
+        bool paintSurfaces = DefaultPaintSurfaces;
+        bool transparentLCD = DefaultTransparentLCD;
+        bool textPanels = DefaultTextPanels;
+        int toggleBits;
 
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
@@ -242,6 +253,8 @@ namespace IngameScript.Domain
             get {return allowFlightSystems;}
             set 
             {
+                if ((toggleBits & 1) == 0)
+                    return;
                 allowFlightSystems = value;
                 UpdateIni(ToggleSection, FLIGHT_SYSTEMS, allowFlightSystems);
             }
@@ -252,6 +265,8 @@ namespace IngameScript.Domain
             get {return analogThrotle;}
             set 
             {
+                if ((toggleBits & 2) == 0)
+                    return;
                 analogThrotle = value;
                 UpdateIni(ToggleSection, ANALOG_THROTLE, analogThrotle);
             }
@@ -262,6 +277,8 @@ namespace IngameScript.Domain
             get {return allowLowFuelLand; }
             set
             {
+                if ((toggleBits & 4) == 0)
+                    return;
                 allowLowFuelLand = value;
                 UpdateIni(ToggleSection, LOW_FUEL_LAND, allowLowFuelLand);
             }
@@ -272,6 +289,8 @@ namespace IngameScript.Domain
             get {return allowDockMode; }
             set
             {
+                if ((toggleBits & 8) == 0)
+                    return;
                 allowDockMode = value;
                 UpdateIni(ToggleSection, DOCK_MODE, allowDockMode);
             }
@@ -282,6 +301,8 @@ namespace IngameScript.Domain
             get { return controlAntennas; }
             set
             {
+                if ((toggleBits & 16) == 0)
+                    return;
                 controlAntennas = value;
                 UpdateIni(ToggleSection, CONTROL_ANTENNAS, controlAntennas);
             }
@@ -292,6 +313,8 @@ namespace IngameScript.Domain
             get { return renameSubgrids; }
             set
             {
+                if ((toggleBits & 32) == 0)
+                    return;
                 renameSubgrids = value;
                 UpdateIni(ToggleSection, RENAME_SUBGRIDS, renameSubgrids);
             }
@@ -302,6 +325,8 @@ namespace IngameScript.Domain
             get { return paintSurfaces; }
             set
             {
+                if ((toggleBits & 64) == 0)
+                    return;
                 paintSurfaces = value;
                 UpdateIni(ToggleSection, PAINT_SURFACES, paintSurfaces);
             }
@@ -312,6 +337,8 @@ namespace IngameScript.Domain
             get { return transparentLCD; }
             set
             {
+                if ((toggleBits & 128) == 0)
+                    return;
                 transparentLCD = value;
                 UpdateIni(ToggleSection, TRANSPARENTLCD, transparentLCD);
             }
@@ -322,6 +349,8 @@ namespace IngameScript.Domain
             get { return textPanels; }
             set
             {
+                if ((toggleBits & 256) == 0)
+                    return;
                 textPanels = value;
                 GridContext.PaintAsText = value;
                 UpdateIni(ToggleSection, TEXT_PANELS, textPanels);
@@ -390,10 +419,14 @@ namespace IngameScript.Domain
 
             string rawCustomData = gc.Me.CustomData ?? "";
             // A missing GPS end must not wipe the lines the player pasted.
-            if (!gps.LoadBlock(rawCustomData))
+            bool gpsOk = gps.LoadBlock(rawCustomData);
+            // GPS lines are not ini. A missing end still leaves the ini above GPS start.
+            bool parsed = ini.TryParse(GpsStore.WithoutMarker(rawCustomData));
+            if (!parsed)
+            {
+                ReadToggles(false);
                 return false;
-
-            if (!ini.TryParse(rawCustomData)) return IniChanged;
+            }
 
             List<string> sectionsNames = new List<string>();
             string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
@@ -410,17 +443,8 @@ namespace IngameScript.Domain
             // Read PB Custom Data and populate properties
             // ───────────────────────────────────────────
 
-            //ToggleSection
-            allowFlightSystems = ini.Get(ToggleSection, FLIGHT_SYSTEMS).ToBoolean(AllowFlightSystems);
-            analogThrotle = ini.Get(ToggleSection, ANALOG_THROTLE).ToBoolean(AnalogThrotle);
-            allowLowFuelLand = ini.Get(ToggleSection, LOW_FUEL_LAND).ToBoolean(AllowLowFuelLand);
-            allowDockMode = ini.Get(ToggleSection, DOCK_MODE).ToBoolean(AllowDockMode);
-            controlAntennas = ini.Get(ToggleSection, CONTROL_ANTENNAS).ToBoolean(ControlAntennas);
-            renameSubgrids = ini.Get(ToggleSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
-            paintSurfaces = ini.Get(ToggleSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
-            transparentLCD = ini.Get(ToggleSection, TRANSPARENTLCD).ToBoolean(TransparentLCD);
-            textPanels = ini.Get(ToggleSection, TEXT_PANELS).ToBoolean(TextPanels);
-            GridContext.PaintAsText = textPanels;
+            //ToggleSection. A missing key uses the code default, not the live field.
+            ReadToggles(true);
 
             //NamesTagsSection
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
@@ -480,10 +504,43 @@ namespace IngameScript.Domain
             spriteBackgroundColor = ReadRgb(SPRITEBACKGROUNDCOLOR, DefaultSpriteBackground);
             spriteFontColor = ReadRgb(SPRITEFONTCOLOR, DefaultSpriteFont);
 
+            if (!gpsOk)
+                return false;
             iniChanged = reloadPending || seenCustomData != rawCustomData;
             reloadPending = false;
             RewriteFromParsed();
             return iniChanged;
+        }
+
+        void ReadToggles(bool parsed)
+        {
+            allowFlightSystems = ReadToggle(FLIGHT_SYSTEMS, DefaultFlightSystems, parsed, 1);
+            analogThrotle = ReadToggle(ANALOG_THROTLE, DefaultAnalogThrotle, parsed, 2);
+            allowLowFuelLand = ReadToggle(LOW_FUEL_LAND, DefaultLowFuelLand, parsed, 4);
+            allowDockMode = ReadToggle(DOCK_MODE, DefaultDockMode, parsed, 8);
+            controlAntennas = ReadToggle(CONTROL_ANTENNAS, DefaultControlAntennas, parsed, 16);
+            renameSubgrids = ReadToggle(RENAME_SUBGRIDS, DefaultRenameSubgrids, parsed, 32);
+            paintSurfaces = ReadToggle(PAINT_SURFACES, DefaultPaintSurfaces, parsed, 64);
+            transparentLCD = ReadToggle(TRANSPARENTLCD, DefaultTransparentLCD, parsed, 128);
+            textPanels = ReadToggle(TEXT_PANELS, DefaultTextPanels, parsed, 256);
+            GridContext.PaintAsText = textPanels;
+        }
+
+        bool ReadToggle(string key, bool codeDefault, bool parsed, int bit)
+        {
+            toggleBits &= ~bit;
+            if (!ini.ContainsKey(ToggleSection, key))
+            {
+                if (parsed)
+                    toggleBits |= bit;
+                return codeDefault;
+            }
+
+            bool value;
+            if (!bool.TryParse(ini.Get(ToggleSection, key).ToString("").Trim(), out value))
+                return codeDefault;
+            toggleBits |= bit;
+            return value;
         }
 
         // New section wins. A missing key is read from Names & Tags once, then omitted on the write.
@@ -613,7 +670,7 @@ namespace IngameScript.Domain
             if (!GpsStore.TryMarkerBlock(raw, out block))
                 return;
             ini.Clear();
-            if (!ini.TryParse(raw))
+            if (!ini.TryParse(GpsStore.WithoutMarker(raw)))
                 return;
 
             string text = newVal.ToString();
