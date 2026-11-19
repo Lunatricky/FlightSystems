@@ -599,6 +599,7 @@ namespace IngameScript
             spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
             spt.Add(IniContext.TEXT_PANELS, BoolSpriteColor(SelectedRow == row++, ic.TextPanels), Color.Black);
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
