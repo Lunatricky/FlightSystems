@@ -245,6 +245,27 @@ namespace IngameScript.Domain
                 rayCamera.Enabled = true;
         }
 
+        // Same ray tag. Already facing gravity, within RaycastConeLimit radians. Do not aim the forward camera.
+        public IMyCameraBlock FindDownCamera(string tag, Vector3D gravity)
+        {
+            if (string.IsNullOrEmpty(tag) || gravity.LengthSquared() < 1e-6)
+                return null;
+
+            Vector3D down = Vector3D.Normalize(gravity);
+            for (int i = 0; i < cameras.Count; i++)
+            {
+                IMyCameraBlock cam = cameras[i];
+                if (cam == null || cam.Closed || !cam.Enabled || !cam.IsFunctional)
+                    continue;
+                string name = cam.CustomName ?? "";
+                if (!name.Contains(tag))
+                    continue;
+                if (cam.WorldMatrix.Forward.Dot(down) + 1e-3 >= Math.Cos(cam.RaycastConeLimit))
+                    return cam;
+            }
+            return null;
+        }
+
         public bool IsOwnGrid(long entityId)
         {
             for (int i = 0; i < ownGridIds.Count; i++)

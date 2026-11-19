@@ -1110,6 +1110,10 @@ namespace IngameScript
         bool rayDidScan;
         bool rayHitClose;
         bool rayBlocksLevel;
+        int lastDownTick = -10;
+        bool downHave;
+        Vector3D downPoint;
+        IMyCameraBlock downCam;
 
         double ThreatRange(double cruiseSpeed)
         {
@@ -1627,6 +1631,7 @@ namespace IngameScript
             gc.ResetGyros();
             gc.ResetThrusters(gc.Thrusters);
             DisarmForwardRay(gc);
+            DisarmDown();
             if (pc != null)
                 pc.UnlockClimbPitch();
         }
@@ -1791,7 +1796,14 @@ namespace IngameScript
                 }
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
-            return pc.GroundLevel < 1.1 * pc.StopYDist + 2 * gc.GridHeight;
+            double agl = DescentAgl(gc);
+            double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
+            if (downHave && agl < stopReach)
+            {
+                VectorHelper.MatchVerticalSpeed(gc, pc, 0, false);
+                return false;
+            }
+            return agl < stopReach;
         }
 
         bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
@@ -1808,12 +1820,93 @@ namespace IngameScript
 
             double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
 
-            double agl = pc.GroundLevel;
+            double agl = DescentAgl(gc);
             double stop = pc.StopYDist;
+            double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
+            // Platform distance is the ground. Hold there. Do not steer off it.
+            if (downHave && agl < stopReach)
+            {
+                VectorHelper.MatchVerticalSpeed(gc, pc, 0, false);
+                return false;
+            }
             // ease to about -2 m/s as AGL approaches one ship-height
             double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
-            return agl < Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
+            return agl < stopReach;
+        }
+
+        // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
+        double DescentAgl(GridContext grid)
+        {
+            double planet = pc.GroundLevel;
+            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
+                return planet;
+
+            IMyCameraBlock cam = grid.FindDownCamera(ic.RayCameraTag, pc.NaturalGravity);
+            if (cam == null)
+            {
+                DisarmDown();
+                return planet;
+            }
+
+            if (downCam != null && downCam != cam)
+                DisarmDown();
+            downCam = cam;
+            cam.EnableRaycast = true;
+
+            if (tick - lastDownTick >= 10)
+            {
+                double reach = cam.AvailableScanRange;
+                double cast = reach < planet ? reach : planet;
+                if (cast >= 1 && cam.CanScan(cast))
+                {
+                    lastDownTick = tick;
+                    ReadDownHit(grid, cam.Raycast(cast), planet);
+                }
+            }
+
+            if (!downHave)
+                return planet;
+
+            double agl = (downPoint - grid.Controller.GetPosition()).Dot(Vector3D.Normalize(pc.NaturalGravity));
+            if (agl <= 0 || agl >= planet)
+            {
+                downHave = false;
+                return planet;
+            }
+            return agl;
+        }
+
+        void ReadDownHit(GridContext grid, MyDetectedEntityInfo hit, double planet)
+        {
+            if (hit.IsEmpty() || hit.Type == MyDetectedEntityType.None || !hit.HitPosition.HasValue)
+                return;
+            if (hit.Type == MyDetectedEntityType.Planet || hit.Type == MyDetectedEntityType.Asteroid)
+                return;
+            if (hit.Type != MyDetectedEntityType.LargeGrid && hit.Type != MyDetectedEntityType.SmallGrid)
+                return;
+            if (grid.IsOwnGrid(hit.EntityId))
+                return;
+
+            Vector3D point = hit.HitPosition.Value;
+            double agl = (point - grid.Controller.GetPosition()).Dot(Vector3D.Normalize(pc.NaturalGravity));
+            if (agl <= 0 || agl >= planet)
+                return;
+            downHave = true;
+            downPoint = point;
+        }
+
+        void DisarmDown()
+        {
+            downHave = false;
+            lastDownTick = -10;
+            if (downCam == null || downCam.Closed)
+            {
+                downCam = null;
+                return;
+            }
+            downCam.EnableRaycast = false;
+            downCam = null;
         }
 
         string gearLockNote;
