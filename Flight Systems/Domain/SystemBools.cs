@@ -15,6 +15,27 @@ namespace IngameScript.Domain
         public bool LastCheckIsOnNatGrav;
         public bool StopCruiseWhenOutOfGrav;
 
+        public void SetModeOn(MainState modeName)
+        {
+            CruiseToggle = false;
+            OrbitToggle = false;
+            GlideToggle = false;
+            CNavToggle = false;
+            LandToggle = false;
+            SBurnToggle = false;
+            GpsToggle = false;
+            switch (modeName)
+            {
+                case MainState.Cruise: CruiseToggle = true; break;
+                case MainState.Orbit: OrbitToggle = true; break;
+                case MainState.Glide: GlideToggle = true; break;
+                case MainState.CNav: CNavToggle = true; break;
+                case MainState.Land: LandToggle = true; break;
+                case MainState.SBurn: SBurnToggle = true; break;
+                case MainState.Gps: GpsToggle = true; break;
+            }
+        }
+
         public void SetActiveMode(MainState modeName)
         {
             // Get current state of the target mode

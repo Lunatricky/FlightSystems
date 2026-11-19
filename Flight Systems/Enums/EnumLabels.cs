@@ -72,5 +72,48 @@ namespace IngameScript.Enums
             }
         }
 
+        public static bool TryState(string text, out MainState state)
+        {
+            if (text == State(MainState.Abort)) { state = MainState.Abort; return true; }
+            if (text == State(MainState.Reload)) { state = MainState.Reload; return true; }
+            if (text == State(MainState.Idle)) { state = MainState.Idle; return true; }
+            if (text == State(MainState.Cruise)) { state = MainState.Cruise; return true; }
+            if (text == State(MainState.Orbit)) { state = MainState.Orbit; return true; }
+            if (text == State(MainState.Glide)) { state = MainState.Glide; return true; }
+            if (text == State(MainState.CNav)) { state = MainState.CNav; return true; }
+            if (text == State(MainState.Land)) { state = MainState.Land; return true; }
+            if (text == State(MainState.SBurn)) { state = MainState.SBurn; return true; }
+            if (text == State(MainState.Gps)) { state = MainState.Gps; return true; }
+            state = MainState.Idle;
+            return false;
+        }
+
+        public static bool TryLand(string text, out AutoLandState state)
+        {
+            if (text == Land(AutoLandState.Abort)) { state = AutoLandState.Abort; return true; }
+            if (text == Land(AutoLandState.Align)) { state = AutoLandState.Align; return true; }
+            if (text == Land(AutoLandState.Drop)) { state = AutoLandState.Drop; return true; }
+            if (text == Land(AutoLandState.Cushion)) { state = AutoLandState.Cushion; return true; }
+            if (text == Land(AutoLandState.LockGear)) { state = AutoLandState.LockGear; return true; }
+            if (text == Land(AutoLandState.Idle)) { state = AutoLandState.Idle; return true; }
+            state = AutoLandState.Idle;
+            return false;
+        }
+
+        public static bool TryStep(string text, out Step step)
+        {
+            if (text == StepName(Step.On)) { step = Step.On; return true; }
+            if (text == StepName(Step.Off)) { step = Step.Off; return true; }
+            if (text == StepName(Step.AimToGPS)) { step = Step.AimToGPS; return true; }
+            if (text == StepName(Step.Cruise)) { step = Step.Cruise; return true; }
+            if (text == StepName(Step.Preclimb)) { step = Step.Preclimb; return true; }
+            if (text == StepName(Step.Lift)) { step = Step.Lift; return true; }
+            if (text == StepName(Step.Climb)) { step = Step.Climb; return true; }
+            if (text == StepName(Step.Orbit)) { step = Step.Orbit; return true; }
+            if (text == StepName(Step.Toggle)) { step = Step.Toggle; return true; }
+            step = Step.Toggle;
+            return false;
+        }
+
     }
 }

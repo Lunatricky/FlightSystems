@@ -1,4 +1,6 @@
-﻿using System;
+﻿using IngameScript.Enums;
+using IngameScript.UseCases;
+using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
@@ -21,6 +23,18 @@ namespace IngameScript.Domain
         string pendingKey;
         string pendingValue;
         bool reloadPending;
+        bool commandRead;
+        bool restoreHold;
+        MainState savedState = MainState.Idle;
+        Step savedStep = Step.Toggle;
+        AutoLandState savedLand = AutoLandState.Idle;
+        double savedNumber;
+        bool savedTarget;
+        int savedX;
+        int savedY;
+        int savedZ;
+        string warnWord;
+        string warnKey;
 
         bool iniChanged;
 
@@ -70,6 +84,14 @@ namespace IngameScript.Domain
         const string ScriptTagsSection = "Script Tags";
         const string GroupsSection = "Groups";
         const string RestoreSection = "Restore";
+        const string CommandSection = "Command";
+        const string KeyState = "State";
+        const string KeyStep = "Step";
+        const string KeyLand = "AutoLand";
+        const string KeyNumber = "Number";
+        const string KeyX = "X";
+        const string KeyY = "Y";
+        const string KeyZ = "Z";
 
         const string Lcd1 = "[FS_lcd1]";
         const string Lcd2 = "[FS_lcd2]";
@@ -138,6 +160,8 @@ namespace IngameScript.Domain
         }
 
         public bool IniChanged => iniChanged;
+        internal string CommandWarnWord { get { return warnWord; } }
+        internal string CommandWarnKey { get { return warnKey; } }
         public string DockGroupTag => dockGroupTag;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
@@ -583,6 +607,7 @@ namespace IngameScript.Domain
         // Owned keys go out in the order they are set. A present key keeps the player's text.
         void RewriteFromParsed()
         {
+            ReadSavedCommand();
             SnapshotParsed();
             ini.Clear();
 
@@ -631,8 +656,211 @@ namespace IngameScript.Domain
             SetKept(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
             SetKept(SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
 
+            WriteCommand();
             WriteForeign();
             WriteCustomData();
+        }
+
+        internal void ClearRestoreHold()
+        {
+            restoreHold = false;
+        }
+
+        internal void ApplySavedCommand(Command command, ref SystemBools modes)
+        {
+            if (!restoreHold || savedState == MainState.Idle || command == null || command.Param == null)
+                return;
+            command.State = savedState;
+            command.Param.Step = savedStep;
+            command.Param.AutoLandState = savedLand;
+            command.Param.Number = savedNumber;
+            command.Param.TargetCoordinates = savedTarget ? new Vector3D(savedX, savedY, savedZ) : new Vector3D();
+            modes.SetModeOn(savedState);
+        }
+
+        internal void SaveCommand(Command command)
+        {
+            if (!commandRead || command == null || command.Param == null)
+                return;
+
+            MainState state = command.State;
+            if (state == MainState.Abort || state == MainState.Reload)
+            {
+                restoreHold = false;
+                state = MainState.Idle;
+            }
+
+            Step step = command.Param.Step;
+            AutoLandState land = command.Param.AutoLandState;
+            double number = command.Param.Number;
+            Vector3D at = command.Param.TargetCoordinates;
+            bool target = at.X != 0 || at.Y != 0 || at.Z != 0;
+            int x = 0;
+            int y = 0;
+            int z = 0;
+            if (target)
+            {
+                x = GpsStore.NearestMeter(at.X);
+                y = GpsStore.NearestMeter(at.Y);
+                z = GpsStore.NearestMeter(at.Z);
+                if (x == 0 && y == 0 && z == 0)
+                    target = false;
+            }
+
+            if (restoreHold && state == MainState.Idle)
+                return;
+
+            if (restoreHold && (state != savedState || step != savedStep || land != savedLand || number != savedNumber || target != savedTarget || x != savedX || y != savedY || z != savedZ))
+                restoreHold = false;
+
+            if (state == savedState && step == savedStep && land == savedLand && number == savedNumber && target == savedTarget && x == savedX && y == savedY && z == savedZ)
+                return;
+
+            savedState = state;
+            savedStep = step;
+            savedLand = land;
+            savedNumber = number;
+            savedTarget = target;
+            savedX = x;
+            savedY = y;
+            savedZ = z;
+            RewriteFromParsed();
+        }
+
+        void ReadSavedCommand()
+        {
+            if (commandRead)
+                return;
+            commandRead = true;
+            if (!ini.ContainsKey(CommandSection, KeyState))
+                return;
+
+            MainState state;
+            if (!EnumLabels.TryState(ini.Get(CommandSection, KeyState).ToString(""), out state))
+            {
+                WarnCommand(KeyState);
+                return;
+            }
+            if (state == MainState.Idle || state == MainState.Abort || state == MainState.Reload)
+                return;
+
+            Step step = Step.On;
+            if (ini.ContainsKey(CommandSection, KeyStep))
+            {
+                Step parsed;
+                if (!EnumLabels.TryStep(ini.Get(CommandSection, KeyStep).ToString(""), out parsed))
+                {
+                    WarnCommand(KeyStep);
+                    return;
+                }
+                step = parsed == Step.Toggle ? Step.On : parsed;
+            }
+
+            AutoLandState land = AutoLandState.Idle;
+            if (ini.ContainsKey(CommandSection, KeyLand))
+            {
+                AutoLandState parsedLand;
+                if (!EnumLabels.TryLand(ini.Get(CommandSection, KeyLand).ToString(""), out parsedLand))
+                {
+                    WarnCommand(KeyLand);
+                    return;
+                }
+                land = parsedLand;
+            }
+
+            double number = 0;
+            if (ini.ContainsKey(CommandSection, KeyNumber))
+            {
+                double parsedNumber;
+                if (!double.TryParse(ini.Get(CommandSection, KeyNumber).ToString(""), out parsedNumber))
+                {
+                    WarnCommand(KeyNumber);
+                    return;
+                }
+                number = parsedNumber;
+            }
+
+            bool hasX = ini.ContainsKey(CommandSection, KeyX);
+            bool hasY = ini.ContainsKey(CommandSection, KeyY);
+            bool hasZ = ini.ContainsKey(CommandSection, KeyZ);
+            if (state == MainState.Gps && (!hasX || !hasY || !hasZ))
+            {
+                WarnCommand(KeyX);
+                return;
+            }
+
+            bool target = false;
+            int x = 0;
+            int y = 0;
+            int z = 0;
+            if (hasX || hasY || hasZ)
+            {
+                if (!hasX || !hasY || !hasZ)
+                {
+                    WarnCommand(KeyX);
+                    return;
+                }
+                double dx;
+                double dy;
+                double dz;
+                if (!double.TryParse(ini.Get(CommandSection, KeyX).ToString(""), out dx))
+                {
+                    WarnCommand(KeyX);
+                    return;
+                }
+                if (!double.TryParse(ini.Get(CommandSection, KeyY).ToString(""), out dy))
+                {
+                    WarnCommand(KeyY);
+                    return;
+                }
+                if (!double.TryParse(ini.Get(CommandSection, KeyZ).ToString(""), out dz))
+                {
+                    WarnCommand(KeyZ);
+                    return;
+                }
+                x = GpsStore.NearestMeter(dx);
+                y = GpsStore.NearestMeter(dy);
+                z = GpsStore.NearestMeter(dz);
+                target = x != 0 || y != 0 || z != 0;
+                if (state == MainState.Gps && !target)
+                {
+                    WarnCommand(KeyX);
+                    return;
+                }
+            }
+
+            savedState = state;
+            savedStep = step;
+            savedLand = land;
+            savedNumber = number;
+            savedTarget = target;
+            savedX = x;
+            savedY = y;
+            savedZ = z;
+            restoreHold = true;
+        }
+
+        void WarnCommand(string key)
+        {
+            warnWord = "Bad";
+            warnKey = key;
+        }
+
+        void WriteCommand()
+        {
+            if (savedState == MainState.Idle)
+                return;
+            ini.Set(CommandSection, KeyState, EnumLabels.State(savedState));
+            ini.Set(CommandSection, KeyStep, EnumLabels.StepName(savedStep));
+            if (savedLand != AutoLandState.Idle)
+                ini.Set(CommandSection, KeyLand, EnumLabels.Land(savedLand));
+            if (savedNumber != 0)
+                ini.Set(CommandSection, KeyNumber, savedNumber.ToString());
+            if (!savedTarget)
+                return;
+            ini.Set(CommandSection, KeyX, savedX.ToString());
+            ini.Set(CommandSection, KeyY, savedY.ToString());
+            ini.Set(CommandSection, KeyZ, savedZ.ToString());
         }
 
         void SnapshotParsed()
@@ -689,7 +917,8 @@ namespace IngameScript.Domain
                 || string.Equals(section, GroupsSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, RestoreSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, ParamsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase);
+                || string.Equals(section, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(section, CommandSection, StringComparison.OrdinalIgnoreCase);
         }
 
         void WriteForeign()

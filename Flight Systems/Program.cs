@@ -228,7 +228,7 @@ namespace IngameScript
 
                     menuHud.Handle(
                         pi, gc, ic, sb, command, menuToggle,
-                        () => AbortShipContext(gc),
+                        () => { ic.ClearRestoreHold(); AbortShipContext(gc); },
                         () => SoftAbort(gc),
                         CloseMenuFromSpace,
                         LockInput);
@@ -337,6 +337,7 @@ namespace IngameScript
 
             if (gc.ErrorMessage.Length > 0)
             {
+                ic.SaveCommand(command);
                 Echo("ErrorMessage: \n" + gc.ErrorMessage.ToString());
                 return;
             }
@@ -414,10 +415,13 @@ namespace IngameScript
                     lastDockMode = isDockMode;
                 }
                 ReloadGridContext(gc, ic);
+                ic.ApplySavedCommand(command, ref sb);
                 tick = 0;
                 RedrawSpriteLcds();
                 return true;
             }
+
+            ic.ApplySavedCommand(command, ref sb);
 
             if (gc.SyncTaggedCockpitIni())
             {
@@ -526,6 +530,7 @@ namespace IngameScript
             double avgRuntime = RunTimeSum / SumCounter;
             double avgInstructions = InstructionSum / SumCounter;
 
+            ic.SaveCommand(command);
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
@@ -563,6 +568,18 @@ namespace IngameScript
             {
                 return;
             }
+
+            ic.SaveCommand(command);
+            if (gc.Controller == null || gc.Controller.Closed)
+            {
+                if (command.State == MainState.Reload)
+                    ReloadGridContext(gc, ic);
+                else if (command.State == MainState.Abort)
+                    AbortShipContext(gc);
+                return;
+            }
+            ic.ApplySavedCommand(command, ref sb);
+            ic.ClearRestoreHold();
 
             if (ic.AllowLowFuelLand && pc.Gravity > 0)
             {
