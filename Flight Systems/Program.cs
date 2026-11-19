@@ -214,7 +214,7 @@ namespace IngameScript
                 if (!menuIsLocked)
                 {
                     RefreshHudLines();
-                    if (menuHud.ShouldClose())
+                    if (menuHud.ShouldClose(ic))
                     {
                         CloseMenuFromSpace();
                         menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
@@ -536,6 +536,8 @@ namespace IngameScript
                 report = report + "\n" + gearLockNote;
             if (textModeEcho != null)
                 report = report + "\n" + textModeEcho;
+            if (ic.WarnEcho != null)
+                report = report + ic.WarnEcho;
             return report;
         }
 
@@ -782,7 +784,7 @@ namespace IngameScript
             HoldDockSeats();
             if (menuToggle)
                 menuHud.NoteSpace(pi);
-            if (menuToggle && menuHud.ShouldClose())
+            if (menuToggle && menuHud.ShouldClose(ic))
             {
                 LockInput();
                 CancelDockWarning();

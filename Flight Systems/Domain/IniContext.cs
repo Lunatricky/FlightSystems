@@ -2,6 +2,7 @@
 using IngameScript.UseCases;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -35,6 +36,11 @@ namespace IngameScript.Domain
         int savedZ;
         string warnWord;
         string warnKey;
+        string cruiseWarn;
+        string warnA;
+        string warnB;
+        string warnEcho;
+        int warnCount;
 
         bool iniChanged;
 
@@ -162,6 +168,13 @@ namespace IngameScript.Domain
         public bool IniChanged => iniChanged;
         internal string CommandWarnWord { get { return warnWord; } }
         internal string CommandWarnKey { get { return warnKey; } }
+        internal int WarnCount { get { return warnCount; } }
+        internal string WarnEcho { get { return warnEcho; } }
+
+        internal string WarnLine(int index)
+        {
+            return index == 0 ? warnA : warnB;
+        }
         public string DockGroupTag => dockGroupTag;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
@@ -443,7 +456,19 @@ namespace IngameScript.Domain
                 ? double.PositiveInfinity
                 : double.Parse(s);
 
+            bool cruiseMissing = !ini.ContainsKey(ParamsSection, CRUISE_SPEED);
+            string cruiseText = ini.Get(ParamsSection, CRUISE_SPEED).ToString("");
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
+            double parsedCruise;
+            if (cruiseMissing)
+                cruiseWarn = "No " + CRUISE_SPEED;
+            else if (!double.TryParse(cruiseText, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedCruise))
+                cruiseWarn = "Bad " + CRUISE_SPEED;
+            else
+            {
+                cruiseSpeed = parsedCruise;
+                cruiseWarn = null;
+            }
             cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(SafeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
@@ -659,6 +684,33 @@ namespace IngameScript.Domain
             WriteCommand();
             WriteForeign();
             WriteCustomData();
+            RefreshWarnLines();
+        }
+
+        void RefreshWarnLines()
+        {
+            warnCount = 0;
+            warnA = null;
+            warnB = null;
+            if (cruiseWarn != null)
+                AddWarn(cruiseWarn);
+            if (warnKey != null)
+                AddWarn(warnWord + " " + warnKey);
+            if (warnCount == 0)
+                warnEcho = null;
+            else if (warnCount == 1)
+                warnEcho = "\n" + warnA;
+            else
+                warnEcho = "\n" + warnA + "\n" + warnB;
+        }
+
+        void AddWarn(string line)
+        {
+            if (warnCount == 0)
+                warnA = line;
+            else if (warnCount == 1)
+                warnB = line;
+            warnCount++;
         }
 
         internal void ClearRestoreHold()

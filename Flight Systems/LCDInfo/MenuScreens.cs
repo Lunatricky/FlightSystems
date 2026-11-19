@@ -21,7 +21,8 @@ namespace IngameScript
         DockKinds,
         DockBlocks,
         ScreenSlots,
-        ScreenSurfaces
+        ScreenSurfaces,
+        Warnings
     }
 
     enum DockBlockKind
@@ -55,7 +56,10 @@ namespace IngameScript
 
         public const string BackLabel = "Back (C)";
 
-        const int HomeRows = 7;
+        static int HomeCount(IniContext ic)
+        {
+            return ic.WarnCount > 0 ? 8 : 7;
+        }
         const int ToggleValueRows = 9;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
@@ -116,13 +120,13 @@ namespace IngameScript
             return edge;
         }
 
-        public bool ShouldClose()
+        public bool ShouldClose(IniContext ic)
         {
             if (gpsMenu.IsOpen || view != MenuView.Home)
                 return false;
             if (cEdge)
                 return true;
-            return SelectedRow == HomeRows && spaceEdge;
+            return SelectedRow == HomeCount(ic) && spaceEdge;
         }
 
         public void Handle(
@@ -142,6 +146,13 @@ namespace IngameScript
             {
                 FlightSystemIdle(ic, gc, sb);
                 return;
+            }
+
+            if (view == MenuView.Warnings && ic.WarnCount == 0)
+            {
+                view = MenuView.Home;
+                SelectedRow = 1;
+                spaceEdge = false;
             }
 
             if (gpsMenu.IsOpen)
@@ -285,6 +296,22 @@ namespace IngameScript
                 {
                     view = MenuView.ScreenSlots;
                     SelectedRow = 1;
+                    return true;
+                }
+                if (ic.WarnCount > 0 && SelectedRow == 7)
+                {
+                    view = MenuView.Warnings;
+                    SelectedRow = 1;
+                    return true;
+                }
+                return false;
+            }
+
+            if (view == MenuView.Warnings)
+            {
+                if (ic.WarnCount == 0 || SelectedRow > ic.WarnCount)
+                {
+                    ReturnHome();
                     return true;
                 }
                 return false;
@@ -543,6 +570,8 @@ namespace IngameScript
                 PaintScreenSlots(ic, gc);
             else if (view == MenuView.ScreenSurfaces)
                 PaintScreenSurfaces(ic, gc);
+            else if (view == MenuView.Warnings)
+                PaintWarnings(ic, gc);
         }
 
         void PaintHome(IniContext ic, GridContext gc)
@@ -556,7 +585,19 @@ namespace IngameScript
             spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock blocks", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Screens", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            if (ic.WarnCount > 0)
+                spt.Add(ic.WarnLine(0), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void PaintWarnings(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+            for (int i = 0; i < ic.WarnCount; i++)
+                spt.Add(ic.WarnLine(i), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -842,6 +883,8 @@ namespace IngameScript
                 SelectedRow = 5;
             else if (view == MenuView.ScreenSlots)
                 SelectedRow = 6;
+            else if (view == MenuView.Warnings)
+                SelectedRow = 7;
             else
                 SelectedRow = 1;
             view = MenuView.Home;
@@ -849,7 +892,7 @@ namespace IngameScript
 
         void ClampFor(GridContext gc, IniContext ic)
         {
-            int max = HomeRows;
+            int max = HomeCount(ic);
             if (view == MenuView.Flight)
                 max = FlightGpsRow(gc) + 1;
             else if (view == MenuView.Toggles)
@@ -874,6 +917,8 @@ namespace IngameScript
                 FillSurfaces(gc);
                 max = surfaceBlocks.Count + 1;
             }
+            else if (view == MenuView.Warnings)
+                max = ic.WarnCount + 1;
             ClampRow(1, max);
         }
 
