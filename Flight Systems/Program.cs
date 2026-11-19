@@ -1798,11 +1798,6 @@ namespace IngameScript
             GravityAlignedOverride(gc);
             double agl = DescentAgl(gc);
             double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            if (downHave && agl < stopReach)
-            {
-                VectorHelper.MatchVerticalSpeed(gc, pc, 0, false);
-                return false;
-            }
             return agl < stopReach;
         }
 
@@ -1823,12 +1818,6 @@ namespace IngameScript
             double agl = DescentAgl(gc);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
-            // Platform distance is the ground. Hold there. Do not steer off it.
-            if (downHave && agl < stopReach)
-            {
-                VectorHelper.MatchVerticalSpeed(gc, pc, 0, false);
-                return false;
-            }
             // ease to about -2 m/s as AGL approaches one ship-height
             double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
