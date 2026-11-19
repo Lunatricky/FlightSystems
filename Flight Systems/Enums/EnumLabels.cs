@@ -12,20 +12,6 @@ namespace IngameScript.Enums
             }
         }
 
-        public static string PlanetKind(PlanetType t)
-        {
-            switch (t)
-            {
-                case PlanetType.EarthFamily: return "EarthFamily";
-                case PlanetType.Mars: return "Mars";
-                case PlanetType.Alien: return "Alien";
-                case PlanetType.Triton: return "Triton";
-                case PlanetType.Pertam: return "Pertam";
-                case PlanetType.MoonFamily: return "MoonFamily";
-                default: return "Unknown";
-            }
-        }
-
         public static string State(MainState t)
         {
             switch (t)

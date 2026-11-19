@@ -68,7 +68,6 @@ namespace IngameScript
         bool menuSeatHold;
 
         double planetRadius = 0;
-        PlanetType planet = PlanetType.Unknown;
 
         SystemBools sb;
 
@@ -344,16 +343,10 @@ namespace IngameScript
                     return;
                 }
 
-                if (pc.Gravity > 0 && (planetRadius == 0 || planet == PlanetType.Unknown))
-                {
+                if (pc.Gravity > 0 && planetRadius == 0)
                     planetRadius = Vector3D.Distance(gc.Controller.GetPosition(), pc.PlanetCenter) - pc.SeaLevel;
-                    planet = DetectPlanet(planetRadius);
-                }
                 else if (pc.Gravity == 0)
-                {
                     planetRadius = 0;
-                    planet = PlanetType.Unknown;
-                }
             }
 
             switch (tick % tickSplit)
@@ -437,7 +430,7 @@ namespace IngameScript
                 return;
             }
 
-            Lcd1Display.Fill(hudStack1, ic, gc, pc, command, planet, planetRadius);
+            Lcd1Display.Fill(hudStack1, ic, gc, pc, command);
             Lcd2Display.Fill(hudStack2, pc, command, sb);
             Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
@@ -1012,7 +1005,7 @@ namespace IngameScript
 
                     if (AimHorizonToGps(gc, command.Param.TargetCoordinates))
                     {
-                        if (GetGravityRadius(planetRadius, planet) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
+                        if (GetGravityRadius(planetRadius) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
                             VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
                         {
                             command.Param.Step = Step.Orbit;
@@ -1768,36 +1761,9 @@ namespace IngameScript
             return false;
         }
 
-        PlanetType DetectPlanet(double radius)
+        double GetGravityRadius(double radius)
         {
-            if (radius < 12000)
-                return PlanetType.MoonFamily;
-
-            if (radius < 35000)
-                return PlanetType.Pertam;
-
-            if (radius < 50000)
-                return PlanetType.Triton;
-
-            return PlanetType.EarthFamily;
-        }
-
-        double GetGravityRadius(double radius, PlanetType type)
-        {
-            switch (type)
-            {
-                case PlanetType.Triton:
-                    return radius * 1.847800623;
-
-                case PlanetType.Pertam:
-                    return radius * 1.620035921;
-
-                case PlanetType.MoonFamily:
-                    return radius * 1.319403509;
-
-                default:
-                    return radius * 1.701333333;
-            }
+            return radius * 1.32;
         }
 
         ////////////////////////////////////////////////////////
