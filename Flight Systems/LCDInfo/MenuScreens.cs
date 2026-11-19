@@ -45,6 +45,14 @@ namespace IngameScript
         MenuView view = MenuView.Home;
         bool spaceWasDown;
         bool spaceEdge;
+        bool cWasDown;
+        bool cEdge;
+        bool qWasDown;
+        bool qEdge;
+        bool eWasDown;
+        bool eEdge;
+
+        public const string BackLabel = "Back (C)";
 
         const int HomeRows = 7;
         const int ToggleValueRows = 8;
@@ -82,19 +90,36 @@ namespace IngameScript
             // A new open has not seen Space down, so the first press counts.
             spaceWasDown = false;
             spaceEdge = false;
+            // C already held must not close the menu on the open tick.
+            cWasDown = true;
+            cEdge = false;
+            qWasDown = false;
+            qEdge = false;
+            eWasDown = false;
+            eEdge = false;
         }
 
         public void NoteSpace(PlayerInput pi)
         {
-            bool down = pi.Space();
-            spaceEdge = down && !spaceWasDown;
-            spaceWasDown = down;
+            spaceEdge = Rising(pi.Space(), ref spaceWasDown);
+            cEdge = Rising(pi.C(), ref cWasDown);
+            qEdge = Rising(pi.Q(), ref qWasDown);
+            eEdge = Rising(pi.E(), ref eWasDown);
+        }
+
+        static bool Rising(bool down, ref bool wasDown)
+        {
+            bool edge = down && !wasDown;
+            wasDown = down;
+            return edge;
         }
 
         public bool ShouldClose()
         {
             if (gpsMenu.IsOpen || view != MenuView.Home)
                 return false;
+            if (cEdge)
+                return true;
             return SelectedRow == HomeRows && spaceEdge;
         }
 
@@ -119,7 +144,7 @@ namespace IngameScript
 
             if (gpsMenu.IsOpen)
             {
-                if (pi.Q())
+                if (cEdge)
                 {
                     lockInput();
                     gpsMenu.Back();
@@ -151,22 +176,21 @@ namespace IngameScript
                 SelectedRow++;
             }
 
-            // Q on the home list is not a page key.
+            // Q and E change the sibling page. They do not move the row and they do not go back.
             bool backed = false;
-            if (pi.Q() && view != MenuView.Home)
+            if (cEdge && view != MenuView.Home)
             {
                 lockInput();
-                if (view == MenuView.DockBlocks)
-                    BackToDockKinds();
-                else if (view == MenuView.ScreenSurfaces)
-                    BackToScreenSlots();
-                else
-                {
-                    if (view == MenuView.Colors)
-                        RestoreColors(ic);
-                    ReturnHome();
-                }
+                GoBack(ic);
                 backed = true;
+            }
+            else if (qEdge || eEdge)
+            {
+                if (CycleSibling(qEdge ? -1 : 1, ic))
+                {
+                    lockInput();
+                    backed = true;
+                }
             }
 
             ClampFor(gc, ic);
@@ -471,7 +495,7 @@ namespace IngameScript
             spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             if (includeClose)
-                spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+                spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
         }
 
         void PaintToggles(IniContext ic, GridContext gc)
@@ -488,7 +512,7 @@ namespace IngameScript
             spt.Add(IniContext.RENAME_SUBGRIDS, BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add(IniContext.PAINT_SURFACES, BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
-            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -503,7 +527,7 @@ namespace IngameScript
             spt.Add(IniContext.CNAV_ALTITUDE + ": " + ic.SafeAltitude, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.DISTANCE_TO_GPS + ": " + ic.DistanceToGPS, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.MINIMUM_ACCEPTED_FUEL + ": " + ic.MinimumAcceptedFuel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -544,6 +568,126 @@ namespace IngameScript
         {
             spt.Add(key + ": " + name, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
             row++;
+        }
+
+        void GoBack(IniContext ic)
+        {
+            if (view == MenuView.DockBlocks)
+                BackToDockKinds();
+            else if (view == MenuView.ScreenSurfaces)
+                BackToScreenSlots();
+            else
+            {
+                if (view == MenuView.Colors)
+                    RestoreColors(ic);
+                ReturnHome();
+            }
+        }
+
+        bool CycleSibling(int dir, IniContext ic)
+        {
+            if (view == MenuView.DockBlocks)
+            {
+                CycleDockKind(dir);
+                return true;
+            }
+
+            if (view == MenuView.ScreenSurfaces)
+            {
+                CycleScreenSlot(dir);
+                return true;
+            }
+
+            int index = SectionIndex();
+            if (index < 0)
+                return false;
+
+            if (view == MenuView.Colors)
+                RestoreColors(ic);
+
+            index += dir;
+            if (index < 0)
+                index = 5;
+            else if (index > 5)
+                index = 0;
+            OpenSection(index, ic);
+            return true;
+        }
+
+        int SectionIndex()
+        {
+            if (view == MenuView.Flight) return 0;
+            if (view == MenuView.Toggles) return 1;
+            if (view == MenuView.Numbers) return 2;
+            if (view == MenuView.Colors) return 3;
+            if (view == MenuView.DockKinds) return 4;
+            if (view == MenuView.ScreenSlots) return 5;
+            return -1;
+        }
+
+        void OpenSection(int index, IniContext ic)
+        {
+            if (index == 0)
+                view = MenuView.Flight;
+            else if (index == 1)
+                view = MenuView.Toggles;
+            else if (index == 2)
+                view = MenuView.Numbers;
+            else if (index == 3)
+            {
+                CopyColors(ic);
+                view = MenuView.Colors;
+            }
+            else if (index == 4)
+                view = MenuView.DockKinds;
+            else
+                view = MenuView.ScreenSlots;
+        }
+
+        void CycleDockKind(int dir)
+        {
+            int index = 0;
+            if (dockKind == DockBlockKind.TriggerConnectors)
+                index = 1;
+            else if (dockKind == DockBlockKind.PadConnectors)
+                index = 2;
+
+            index += dir;
+            if (index < 0)
+                index = 2;
+            else if (index > 2)
+                index = 0;
+
+            if (index == 0)
+                dockKind = DockBlockKind.TriggerGears;
+            else if (index == 1)
+                dockKind = DockBlockKind.TriggerConnectors;
+            else
+                dockKind = DockBlockKind.PadConnectors;
+            dockKindRow = index + 1;
+        }
+
+        void CycleScreenSlot(int dir)
+        {
+            int index = 0;
+            if (screenSlot == ScreenSlot.Lcd2)
+                index = 1;
+            else if (screenSlot == ScreenSlot.Menu)
+                index = 2;
+
+            index += dir;
+            if (index < 0)
+                index = 2;
+            else if (index > 2)
+                index = 0;
+
+            if (index == 0)
+                screenSlot = ScreenSlot.Lcd1;
+            else if (index == 1)
+                screenSlot = ScreenSlot.Lcd2;
+            else
+                screenSlot = ScreenSlot.Menu;
+            screenSlotRow = index + 1;
         }
 
         void ReturnHome()
@@ -721,7 +865,7 @@ namespace IngameScript
             spt.Add("Dock trigger gears", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock trigger connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Landing pad connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -739,7 +883,7 @@ namespace IngameScript
                 spt.Add(name, BoolSpriteColor(SelectedRow == row, marked), Color.Black);
                 row++;
             }
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -970,7 +1114,7 @@ namespace IngameScript
             spt.Add("LCD 1", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("LCD 2", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Menu", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -986,7 +1130,7 @@ namespace IngameScript
                 string name = block == null || block.CustomName == null ? "" : block.CustomName;
                 spt.Add(SurfaceLabel(name, surfaceIndexes[i]), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             }
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
 
             IMyTextSurface current = null;
             long blockId = 0;

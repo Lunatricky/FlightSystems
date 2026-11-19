@@ -1565,7 +1565,7 @@ namespace IngameScript
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            if (pi.Space())
+            if (pi.Space() || pi.C())
             {
                 menuSeatHold = true;
                 HoldMenuSeat();
@@ -1580,7 +1580,7 @@ namespace IngameScript
         {
             if (!menuSeatHold)
                 return;
-            if (pi.Space())
+            if (pi.Space() || pi.C())
             {
                 HoldMenuSeat();
                 return;

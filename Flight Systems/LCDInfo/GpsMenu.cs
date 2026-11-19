@@ -146,7 +146,7 @@ namespace IngameScript
                 else if (i == store.Count)
                     label = "Add GPS";
                 else
-                    label = "Back";
+                    label = MenuScreens.BackLabel;
 
                 spt.Add(label, RowColor(displayRow, ic.SpriteBackgroundColor), RowColor(displayRow, ic.SpriteFontColor));
             }
@@ -203,7 +203,7 @@ namespace IngameScript
             spt.Add("Fly to GPS", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Edit", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
+            spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -237,7 +237,7 @@ namespace IngameScript
             spt.Add(editing ? "Edit GPS" : "Add GPS");
             int r = 1;
             spt.Add("Type: " + draft.KindLabel(), RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
+            spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -275,7 +275,7 @@ namespace IngameScript
             spt.Add("Save here", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             if (editing)
                 spt.Add("Save tags", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
-            spt.Add("Back", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
+            spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
 
