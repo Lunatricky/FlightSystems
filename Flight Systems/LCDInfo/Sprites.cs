@@ -337,7 +337,7 @@ namespace IngameScript
                 Sprites stack = shown[s];
                 if (stack == null || stack.LineCount < 1)
                     continue;
-                float hs = HeightScale(surfaceSize.Y, stack.LineCount, pad);
+                float hs = HeightScale(surfaceSize.Y, MenuScaleRows(stack), pad);
                 if (hs < baseScale)
                     baseScale = hs;
             }
@@ -352,10 +352,30 @@ namespace IngameScript
                 if (rows < 1)
                     continue;
 
-                float rowPitch = surfaceSize.Y / rows;
+                int pitchRows = MenuScaleRows(stack);
+                if (rows > pitchRows)
+                    rows = pitchRows;
+
+                float rowPitch = surfaceSize.Y / pitchRows;
                 float barH = rowPitch - pad;
                 if (barH < 4f)
                     barH = rowPitch * 0.85f;
+
+                // A capped scale must not sit in a bar that grew to fill the screen.
+                if (stack == flightMenu)
+                {
+                    float glyphBar = baseScale * DebugLineHeight / 0.7f;
+                    if (barH > glyphBar)
+                    {
+                        barH = glyphBar;
+                        rowPitch = barH + pad;
+                        int fit = (int)(surfaceSize.Y / rowPitch);
+                        if (fit < 1)
+                            fit = 1;
+                        if (rows > fit)
+                            rows = fit;
+                    }
+                }
 
                 float barX = originX + s * colW + pad;
                 float barW = colW - 2f * pad;
@@ -373,10 +393,11 @@ namespace IngameScript
 
                     string line = stack.texts[i] ?? "";
                     float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
-                    if (scaleLine < DebugMinScale)
+                    float minScale = MenuMinScale(stack, baseScale);
+                    if (scaleLine < minScale)
                     {
-                        line = Truncate(panel, line, DebugMinScale, textMaxW);
-                        scaleLine = DebugMinScale;
+                        line = Truncate(panel, line, minScale, textMaxW);
+                        scaleLine = minScale;
                     }
 
                     float lineH = scaleLine * DebugLineHeight;
@@ -549,6 +570,33 @@ namespace IngameScript
         const float DebugLineHeight = 28.8f;
         const float DebugCharWidth = 15f;
         const float DebugMinScale = 0.35f;
+        // Home, Flight, and the other short pages stay on their own line count.
+        // A shorter page uses the 7-row bars. A longer list does not shrink past 10.
+        const int MenuBarRows = 7;
+        const int MenuCapRows = 10;
+        const float MenuFitFloor = 0.8f;
+
+        static int MenuScaleRows(Sprites stack)
+        {
+            int rows = stack.LineCount;
+            if (stack != flightMenu)
+                return rows;
+            if (rows < MenuBarRows)
+                return MenuBarRows;
+            if (rows > MenuCapRows)
+                return MenuCapRows;
+            return rows;
+        }
+
+        static float MenuMinScale(Sprites stack, float baseScale)
+        {
+            if (stack != flightMenu)
+                return DebugMinScale;
+            float floor = baseScale * MenuFitFloor;
+            if (floor < DebugMinScale)
+                return DebugMinScale;
+            return floor;
+        }
 
         float FitWidth(IMyTextSurface panel, string text, float scale, float maxW)
         {
