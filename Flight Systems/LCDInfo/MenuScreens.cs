@@ -1194,10 +1194,10 @@ namespace IngameScript
             markedSurface = null;
             markedBlockId = 0;
             markedIndex = -1;
+            Sprites.SetMarked(null);
             if (previous == null)
                 return;
-            Sprites.ClearFrame(previous);
-            Sprites.PaintHud();
+            Sprites.RestoreUnmarked(previous);
         }
 
         bool ActivateScreenSlots()
@@ -1287,16 +1287,15 @@ namespace IngameScript
             }
 
             bool moved = markedIndex != surfaceIndex || markedBlockId != blockId;
-            if (moved && markedSurface != null)
-                Sprites.ClearFrame(markedSurface);
-
-            spt.DrawTo(gc.LcdsMenu);
-            if (moved)
-                Sprites.PaintHud();
-
+            IMyTextSurface previous = markedSurface;
             markedSurface = current;
             markedBlockId = blockId;
             markedIndex = surfaceIndex;
+            Sprites.SetMarked(current);
+            if (moved && previous != null && previous != current)
+                Sprites.RestoreUnmarked(previous);
+
+            spt.DrawTo(gc.LcdsMenu);
             if (current != null)
                 spt.DrawPlainMarker(current);
         }

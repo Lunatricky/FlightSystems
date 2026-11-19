@@ -20,6 +20,7 @@ namespace IngameScript
         static Sprites flightHud2;
         static Sprites flightMenu;
         static readonly List<IMyTextSurface> painted = new List<IMyTextSurface>();
+        static IMyTextSurface markedPanel;
 
         readonly IniContext ic;
         readonly StringBuilder measure = new StringBuilder();
@@ -175,6 +176,8 @@ namespace IngameScript
                 IMyTextSurface panel = list[i];
                 if (panel == null)
                     continue;
+                if (panel == markedPanel)
+                    continue;
                 if (Contains(painted, panel))
                     continue;
 
@@ -263,6 +266,35 @@ namespace IngameScript
             return n;
         }
 
+        public static void SetMarked(IMyTextSurface panel)
+        {
+            markedPanel = panel;
+        }
+
+        // A flight surface gets its HUD back. A menu surface is left for the menu draw.
+        public static void RestoreUnmarked(IMyTextSurface panel)
+        {
+            if (panel == null || panel == markedPanel || flightHud1 == null)
+                return;
+            if (!Contains(flight1, panel) && !Contains(flight2, panel))
+                return;
+            flightHud1.PaintOneHud(panel);
+        }
+
+        void PaintOneHud(IMyTextSurface panel)
+        {
+            if (panel == null || panel == markedPanel)
+                return;
+            bool onSettings = Contains(flightSettings, panel);
+            if (onSettings && flightSettingsOpen)
+                return;
+
+            int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
+            bool in1 = Contains(flight1, panel);
+            Sprites settings = onSettings ? null : flightMenu;
+            PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+        }
+
         public void DrawPlainMarker(IMyTextSurface panel)
         {
             if (panel == null)
@@ -280,28 +312,17 @@ namespace IngameScript
                 return;
             }
 
-            // TEXTURE LEFT is the top-left. One square in the visible area, nothing else.
-            float originX = (textureSize.X - surfaceSize.X) * 0.5f;
-            float originY = (textureSize.Y - surfaceSize.Y) * 0.5f;
+            // MakeRectSprite uses the point as the center. Fill first so the default blue never shows.
+            float centerX = (textureSize.X - surfaceSize.X) * 0.5f + surfaceSize.X * 0.5f;
+            float centerY = (textureSize.Y - surfaceSize.Y) * 0.5f + surfaceSize.Y * 0.5f;
+            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), surfaceSize, ic.SpriteMenuColor));
+
             float side = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
             side = side * 0.45f;
             if (side < 1f)
                 side = 1f;
-            float x = originX + (surfaceSize.X - side) * 0.5f;
-            float y = originY + (surfaceSize.Y - side) * 0.5f;
-            spriteBuf.Add(MakeRectSprite(new Vector2(x, y), new Vector2(side, side), ic.SpriteMenuColor));
+            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), new Vector2(side, side), ic.SpriteFontColor));
             Flush(panel);
-        }
-
-        public static void ClearFrame(IMyTextSurface panel)
-        {
-            if (panel == null)
-                return;
-            panel.ContentType = ContentType.SCRIPT;
-            panel.Script = "";
-            using (var frame = panel.DrawFrame())
-            {
-            }
         }
 
         void Blank(IMyTextSurface panel)
