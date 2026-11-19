@@ -56,7 +56,7 @@ namespace IngameScript
         public const string BackLabel = "Back (C)";
 
         const int HomeRows = 7;
-        const int ToggleValueRows = 8;
+        const int ToggleValueRows = 9;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
         const int DockKindRows = 3;
@@ -508,6 +508,7 @@ namespace IngameScript
             else if (SelectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
             else if (SelectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
             else if (SelectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
+            else if (SelectedRow == row++) ic.TextPanels = !ic.TextPanels;
         }
 
         void AdjustNumbers(IniContext ic, PlayerInput pi, Action lockInput)
@@ -596,6 +597,7 @@ namespace IngameScript
             spt.Add(IniContext.RENAME_SUBGRIDS, BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add(IniContext.PAINT_SURFACES, BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
+            spt.Add(IniContext.TEXT_PANELS, BoolSpriteColor(SelectedRow == row++, ic.TextPanels), Color.Black);
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }

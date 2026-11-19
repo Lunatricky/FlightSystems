@@ -66,6 +66,7 @@ namespace IngameScript
         bool menuToggle;
         bool menuIsLocked;
         bool menuSeatHold;
+        string textModeEcho;
 
         double planetRadius = 0;
 
@@ -95,6 +96,8 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            Sprites.NoteSpriteTick();
+
             // Stop at 121 so a long idle cannot wrap the gap back into the 120-tick window.
             if (dockPressCount > 0 && ticksSinceDockPress <= 120)
                 ticksSinceDockPress++;
@@ -150,6 +153,12 @@ namespace IngameScript
                         OnDockConfirm();
                     else
                         CancelDockWarning();
+                }
+                else if (dockArg == "text")
+                {
+                    ic.TextPanels = !ic.TextPanels;
+                    textModeEcho = ic.TextPanels ? "Text" : "Sprites";
+                    Echo(textModeEcho);
                 }
                 else if (argument.ToLowerInvariant() == "menu" && (gc.Cockpits.Count > 1 || isDocked))
                 {
@@ -520,6 +529,8 @@ namespace IngameScript
             string report = $"Local Max\nTask: {maxTask}\nRuntime: {MaxRuntime} Ms\nInstructions: {MaxInstruction} Ms\n\nAverage\nRuntime: {avgRuntime:F4} Ms\nInstructions: {avgInstructions:0}";
             if (gearLockNote != null)
                 report = report + "\n" + gearLockNote;
+            if (textModeEcho != null)
+                report = report + "\n" + textModeEcho;
             return report;
         }
 

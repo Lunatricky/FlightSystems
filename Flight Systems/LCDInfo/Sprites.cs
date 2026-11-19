@@ -1,5 +1,6 @@
 using IngameScript.Domain;
 using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using VRage.Game.GUI.TextPanel;
@@ -20,7 +21,11 @@ namespace IngameScript
         static Sprites flightHud2;
         static Sprites flightMenu;
         static readonly List<IMyTextSurface> painted = new List<IMyTextSurface>();
+        static readonly StringBuilder textOut = new StringBuilder();
         static IMyTextSurface markedPanel;
+        static int spriteTicks;
+        static bool leadEmptySprite;
+        static bool leadArmed;
 
         readonly IniContext ic;
         readonly StringBuilder measure = new StringBuilder();
@@ -300,6 +305,12 @@ namespace IngameScript
             if (panel == null)
                 return;
 
+            if (ic.TextPanels)
+            {
+                WriteMarkerText(panel);
+                return;
+            }
+
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
             spriteBuf.Clear();
@@ -360,6 +371,14 @@ namespace IngameScript
 
         void Blank(IMyTextSurface panel)
         {
+            if (ic.TextPanels)
+            {
+                PrepareText(panel, TextAlignment.LEFT);
+                textOut.Clear();
+                panel.WriteText(textOut);
+                return;
+            }
+
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
             spriteBuf.Clear();
@@ -368,6 +387,12 @@ namespace IngameScript
 
         void PaintShown(IMyTextSurface panel, int cols)
         {
+            if (ic.TextPanels)
+            {
+                WriteStackedText(panel, cols);
+                return;
+            }
+
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
             spriteBuf.Clear();
@@ -510,10 +535,105 @@ namespace IngameScript
             Flush(panel);
         }
 
+        // Update1 is 60 Hz. Hold the flag until a sprite frame is drawn, because that tick may not paint.
+        public static void NoteSpriteTick()
+        {
+            if (leadArmed)
+            {
+                leadEmptySprite = false;
+                leadArmed = false;
+            }
+            if (leadEmptySprite)
+                return;
+
+            spriteTicks++;
+            if (spriteTicks >= 180)
+            {
+                spriteTicks = 0;
+                leadEmptySprite = true;
+            }
+        }
+
+        void PrepareText(IMyTextSurface panel, TextAlignment align)
+        {
+            if (panel.ContentType != ContentType.TEXT_AND_IMAGE)
+                panel.ContentType = ContentType.TEXT_AND_IMAGE;
+            if (panel.Alignment != align)
+                panel.Alignment = align;
+
+            string name = panel.Name;
+            bool transparent = ic.TransparentLCD && name != null && name.IndexOf("transparent", StringComparison.OrdinalIgnoreCase) >= 0;
+            panel.BackgroundColor = transparent ? Color.Black : ic.LcdBackgroundColor;
+            panel.FontColor = ic.LcdFontColor;
+        }
+
+        void WriteStackedText(IMyTextSurface panel, int cols)
+        {
+            PrepareText(panel, TextAlignment.LEFT);
+            textOut.Clear();
+            if (cols < 1)
+                cols = 1;
+            if (cols > shown.Length)
+                cols = shown.Length;
+
+            bool any = false;
+            for (int s = 0; s < cols; s++)
+            {
+                Sprites stack = shown[s];
+                if (stack == null)
+                    continue;
+
+                for (int i = 0; i < stack.texts.Count; i++)
+                {
+                    if (any)
+                        textOut.Append('\n');
+                    any = true;
+                    string line = stack.texts[i];
+                    if (line != null)
+                        textOut.Append(line);
+                }
+            }
+
+            panel.WriteText(textOut);
+        }
+
+        void WriteMarkerText(IMyTextSurface panel)
+        {
+            PrepareText(panel, TextAlignment.CENTER);
+
+            string font = panel.Font;
+            if (string.IsNullOrEmpty(font))
+                font = "DEBUG";
+            measure.Clear();
+            measure.Append('A');
+            Vector2 size = panel.MeasureStringInPixels(measure, font, panel.FontSize);
+            float lineH = size.Y;
+            if (lineH < 1f)
+                lineH = panel.FontSize * DebugLineHeight;
+            if (lineH < 1f)
+                lineH = DebugLineHeight;
+
+            int fit = (int)(panel.SurfaceSize.Y / lineH);
+            if (fit < 1)
+                fit = 1;
+            int pad = (fit - 1) / 2;
+
+            textOut.Clear();
+            for (int i = 0; i < pad; i++)
+                textOut.Append('\n');
+            textOut.Append(SelectThisScreen);
+            panel.WriteText(textOut);
+        }
+
         void Flush(IMyTextSurface panel)
         {
             using (var frame = panel.DrawFrame())
             {
+                if (leadEmptySprite)
+                {
+                    frame.Add(new MySprite());
+                    leadArmed = true;
+                }
                 for (int i = 0; i < spriteBuf.Count; i++)
                     frame.Add(spriteBuf[i]);
             }

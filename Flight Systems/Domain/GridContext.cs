@@ -12,6 +12,9 @@ namespace IngameScript.Domain
 {
     public class GridContext
     {
+        // While text panels are on, reload must not put a painted surface back on script.
+        public static bool PaintAsText;
+
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
 
@@ -529,6 +532,13 @@ namespace IngameScript.Domain
 
         public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
         {
+            if (PaintAsText)
+            {
+                if (surface.ContentType != ContentType.TEXT_AND_IMAGE)
+                    surface.ContentType = ContentType.TEXT_AND_IMAGE;
+                return surface;
+            }
+
             surface.ContentType = ContentType.SCRIPT;
             surface.Script = "";
             surface.Font = "DEBUG";
@@ -919,6 +929,9 @@ namespace IngameScript.Domain
         public void CleanSurfaces() => CleanSurfaces(surfaces);
         public void CleanSurfaces(List<IMyTextSurface> lcds)
         {
+            if (PaintAsText)
+                return;
+
             foreach (IMyTextSurface lcd in lcds)
             {
                 lcd.ContentType = ContentType.SCRIPT;

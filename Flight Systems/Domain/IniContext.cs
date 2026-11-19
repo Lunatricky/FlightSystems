@@ -25,6 +25,7 @@ namespace IngameScript.Domain
         public const string RENAME_SUBGRIDS = "Rename Subgrids";
         public const string PAINT_SURFACES = "Change Screen Colors";
         public const string TRANSPARENTLCD = "Keep LCD Transparency";
+        public const string TEXT_PANELS = "Text Panels";
 
         bool allowFlightSystems = true;
         bool analogThrotle = false;
@@ -36,6 +37,7 @@ namespace IngameScript.Domain
         bool renameSubgrids = false;
         bool paintSurfaces = false;
         bool transparentLCD = true;
+        bool textPanels = false;
 
         //NamesTagsSection
         const string NamesTagsSection = "Names & Tags";
@@ -273,6 +275,17 @@ namespace IngameScript.Domain
             }
         }
 
+        public bool TextPanels
+        {
+            get { return textPanels; }
+            set
+            {
+                textPanels = value;
+                GridContext.PaintAsText = value;
+                UpdateIni(ToggleSection, TEXT_PANELS, textPanels);
+            }
+        }
+
         public Color LcdBackgroundColor
         {
             get { return lcdBackgroundColor; }
@@ -364,6 +377,8 @@ namespace IngameScript.Domain
             renameSubgrids = ini.Get(ToggleSection, RENAME_SUBGRIDS).ToBoolean(RenameSubgrids);
             paintSurfaces = ini.Get(ToggleSection, PAINT_SURFACES).ToBoolean(PaintSurfaces);
             transparentLCD = ini.Get(ToggleSection, TRANSPARENTLCD).ToBoolean(TransparentLCD);
+            textPanels = ini.Get(ToggleSection, TEXT_PANELS).ToBoolean(TextPanels);
+            GridContext.PaintAsText = textPanels;
 
             //NamesTagsSection
             string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
@@ -429,6 +444,7 @@ namespace IngameScript.Domain
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, RENAME_SUBGRIDS, RenameSubgrids);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, PAINT_SURFACES, PaintSurfaces);
             iniChanged |= ReadAndDetectChange(ini, ToggleSection, TRANSPARENTLCD, TransparentLCD);
+            iniChanged |= ReadAndDetectChange(ini, ToggleSection, TEXT_PANELS, TextPanels);
 
             //NamesTagsSection. LCD Menu is not read, so a leftover key is dropped on write.
             iniChanged |= ReadAndDetectChange(ini, NamesTagsSection, INI_GRID_NAME, gc.GridName);
