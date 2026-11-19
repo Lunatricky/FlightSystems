@@ -1044,9 +1044,19 @@ namespace IngameScript
 
             if (dockKind == DockBlockKind.PadConnectors)
             {
+                if (InConnectorGroup(block.EntityId))
+                    return;
                 TogglePad(block, ic, gc);
                 return;
             }
+
+            if (dockKind == DockBlockKind.TriggerGears)
+            {
+                if (InGearGroup(block.EntityId))
+                    return;
+            }
+            else if (InConnectorGroup(block.EntityId))
+                return;
 
             string line = ic.DockTriggerTag ?? "";
             if (line.Length == 0)
@@ -1074,17 +1084,13 @@ namespace IngameScript
             }
 
             StaticConnectorStamp.RemoveLine(block, pad);
-            if (trigger.Length > 0 && ConnectorInTriggerGroup(gc, ic, block.EntityId))
-                StaticConnectorStamp.AppendLine(block, trigger);
         }
 
         bool BlockMarked(IMyTerminalBlock block, IniContext ic)
         {
             if (dockKind == DockBlockKind.PadConnectors)
-                return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
-            if (dockKind == DockBlockKind.TriggerGears)
-                return InGearGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
-            return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
+                return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
+            return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
         }
 
         void FillShown(GridContext gc, IniContext ic)
@@ -1104,6 +1110,8 @@ namespace IngameScript
                     IMyLandingGear gear = gearScan[i];
                     if (!TakeBlock(gear, gc, ignore))
                         continue;
+                    if (InGearGroup(gear.EntityId))
+                        continue;
                     shownBlocks.Add(gear);
                 }
                 return;
@@ -1117,6 +1125,8 @@ namespace IngameScript
             {
                 IMyShipConnector connector = connectorScan[i];
                 if (!TakeBlock(connector, gc, ignore))
+                    continue;
+                if (InConnectorGroup(connector.EntityId))
                     continue;
                 shownBlocks.Add(connector);
             }
@@ -1183,12 +1193,6 @@ namespace IngameScript
                     return true;
             }
             return false;
-        }
-
-        bool ConnectorInTriggerGroup(GridContext gc, IniContext ic, long entityId)
-        {
-            FillConnectorGroup(gc, ic.DockTriggerGroup);
-            return InConnectorGroup(entityId);
         }
 
         public void ReleaseScreenMarker()

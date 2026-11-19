@@ -1912,9 +1912,10 @@ namespace IngameScript
             string pad = ic.LandingPadTag ?? "";
             bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
 
-            // Group name is not stamped on the gear. The next reload uses whatever the ini says now.
-            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
+            if (!stripPrevious && !stripPad)
+                return;
 
+            // Group membership is not written onto the gear. A menu tag stays when the gear leaves the group.
             gc.GetSameConstructBlocks(constructGears, "");
             for (int i = 0; i < constructGears.Count; i++)
             {
@@ -1924,26 +1925,8 @@ namespace IngameScript
 
                 if (stripPrevious)
                     RemoveExactLine(gear, previous);
-                // A gear is not in the landing-pad group, so a changed pad line is rewritten only where it already was.
                 if (stripPad)
                     RetagExactLine(gear, padPrevious, pad);
-
-                bool inGroup = false;
-                for (int g = 0; g < dockTriggerGroup.Count; g++)
-                {
-                    IMyLandingGear member = dockTriggerGroup[g];
-                    if (member != null && !member.Closed && member.EntityId == gear.EntityId)
-                    {
-                        inGroup = true;
-                        break;
-                    }
-                }
-
-                bool wasInGroup = IdInList(lastTriggerGearIds, gear.EntityId);
-                if (inGroup && !GearIgnored(gear) && current.Length > 0)
-                    AppendExactLine(gear, current);
-                else if (!inGroup && wasInGroup && current.Length > 0)
-                    RemoveExactLine(gear, current);
             }
         }
 
@@ -1975,32 +1958,6 @@ namespace IngameScript
                 if (stripPad)
                     RemoveExactLine(connector, padPrevious);
                 StaticConnectorStamp.StripLegacyLines(connector);
-                if (ConnectorIgnored(connector))
-                    continue;
-
-                bool inTrigger = ConnectorInList(dockTriggerConnectors, connector.EntityId);
-                bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
-                bool wasInTrigger = IdInList(lastTriggerConnectorIds, connector.EntityId);
-                bool wasInPad = IdInList(lastPadConnectorIds, connector.EntityId);
-                if (inPad)
-                {
-                    // Pad wins. Equal spellings are one line, so the trigger line is not written as well.
-                    if (current.Length > 0 && current != pad)
-                        RemoveExactLine(connector, current);
-                    if (pad.Length > 0)
-                        AppendExactLine(connector, pad);
-                }
-                else
-                {
-                    // Menu lines stay on a block that was never in the group. Leaving the group still clears the line.
-                    if (wasInPad && pad.Length > 0)
-                        RemoveExactLine(connector, pad);
-                    bool hasPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(connector.CustomData, pad);
-                    if (inTrigger && current.Length > 0 && !hasPad)
-                        AppendExactLine(connector, current);
-                    else if (!inTrigger && wasInTrigger && current.Length > 0)
-                        RemoveExactLine(connector, current);
-                }
             }
 
             WriteOwnConnectorStatic();
@@ -2059,16 +2016,6 @@ namespace IngameScript
             }
         }
 
-        static bool IdInList(List<long> ids, long id)
-        {
-            for (int i = 0; i < ids.Count; i++)
-            {
-                if (ids[i] == id)
-                    return true;
-            }
-            return false;
-        }
-
         static bool SameIds(List<long> last, List<long> current)
         {
             if (last.Count != current.Count)
@@ -2111,17 +2058,6 @@ namespace IngameScript
                     return true;
             }
             return false;
-        }
-
-        bool ConnectorIgnored(IMyShipConnector connector)
-        {
-            string tag = ic.IgnoreTag;
-            if (string.IsNullOrEmpty(tag))
-                return false;
-            if (connector.CustomName != null && connector.CustomName.Contains(tag))
-                return true;
-            string data = connector.CustomData;
-            return data != null && data.Contains(tag);
         }
 
         // Own grid only. A rotor or hinge arm is not this grid, so it keeps whatever the player wrote.
@@ -2191,29 +2127,41 @@ namespace IngameScript
             return data != null && data.Contains(tag);
         }
 
-        // Dock Mode off still writes the line. An empty tag cannot lock the ship into dock mode.
+        // A locked gear counts when it is in the Dock trigger group, or it is not in that group and still has the tag.
         // A static grid does not auto-dock from its own gears.
         bool GearDocking()
         {
             if (ic == null || !ic.AllowDockMode || gc == null || GridIsStatic())
                 return false;
-            string line = ic.DockTriggerTag;
-            if (string.IsNullOrEmpty(line))
-                return false;
 
+            string line = ic.DockTriggerTag ?? "";
+            FillGearGroup(dockTriggerGroup, ic.DockTriggerGroup);
             for (int i = 0; i < gc.Gears.Count; i++)
             {
                 IMyLandingGear gear = gc.Gears[i];
                 if (gear == null || gear.Closed || !gear.IsLocked || GearIgnored(gear))
                     continue;
-                if (StaticConnectorStamp.HasExactLine(gear.CustomData, line))
+                if (GearInTriggerGroup(gear.EntityId))
+                    return true;
+                if (line.Length > 0 && StaticConnectorStamp.HasExactLine(gear.CustomData, line))
                     return true;
             }
             return false;
         }
 
-        // Connected trigger tag without [FS_pad], or the other connector is a pad or Static=true.
-        // AllowDockMode and the static-grid gate are applied by the caller. This is also the suppress cause.
+        bool GearInTriggerGroup(long entityId)
+        {
+            for (int g = 0; g < dockTriggerGroup.Count; g++)
+            {
+                IMyLandingGear member = dockTriggerGroup[g];
+                if (member != null && !member.Closed && member.EntityId == entityId)
+                    return true;
+            }
+            return false;
+        }
+
+        // Own connector is a trigger by group or by tag. A pad group wins over the trigger group.
+        // The other connector is a pad by its group, its tag, or Static=true.
         bool ConnectorSafeToDock()
         {
             if (gc == null || ic == null)
@@ -2221,6 +2169,8 @@ namespace IngameScript
 
             string trigger = ic.DockTriggerTag ?? "";
             string pad = ic.LandingPadTag ?? "";
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
             for (int i = 0; i < gc.Connectors.Count; i++)
             {
                 IMyShipConnector connector = gc.Connectors[i];
@@ -2228,23 +2178,39 @@ namespace IngameScript
                     continue;
                 if (connector.Status != MyShipConnectorStatus.Connected)
                     continue;
-
-                string ownData = connector.CustomData;
-                bool ownPad = pad.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, pad);
-                if (!ownPad && trigger.Length > 0 && StaticConnectorStamp.HasExactLine(ownData, trigger))
+                if (ConnectorIsTrigger(connector, trigger, pad))
                     return true;
 
                 IMyShipConnector other = connector.OtherConnector;
                 if (other == null || other.Closed)
                     continue;
-
-                string otherData = other.CustomData;
-                if (pad.Length > 0 && StaticConnectorStamp.HasExactLine(otherData, pad))
-                    return true;
-                if (StaticConnectorStamp.ReadsStatic(otherData))
+                if (ConnectorIsPad(other, pad))
                     return true;
             }
             return false;
+        }
+
+        bool ConnectorIsTrigger(IMyShipConnector connector, string trigger, string pad)
+        {
+            bool inPad = ConnectorInList(landingPadConnectors, connector.EntityId);
+            bool inTrigger = ConnectorInList(dockTriggerConnectors, connector.EntityId);
+            if (inPad)
+                return false;
+            if (inTrigger)
+                return true;
+            if (pad.Length > 0 && StaticConnectorStamp.HasExactLine(connector.CustomData, pad))
+                return false;
+            return trigger.Length > 0 && StaticConnectorStamp.HasExactLine(connector.CustomData, trigger);
+        }
+
+        bool ConnectorIsPad(IMyShipConnector connector, string pad)
+        {
+            if (ConnectorInList(landingPadConnectors, connector.EntityId))
+                return true;
+            string data = connector.CustomData;
+            if (pad.Length > 0 && StaticConnectorStamp.HasExactLine(data, pad))
+                return true;
+            return StaticConnectorStamp.ReadsStatic(data);
         }
 
         // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
