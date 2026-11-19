@@ -82,7 +82,7 @@ namespace IngameScript
 
         void DrawList(IniContext ic, GridContext gc, GpsStore store, Action lockInput)
         {
-            int total = store.Count + 1;
+            int total = store.Count + 2;
             Clamp(1, total);
 
             if (spacePressed)
@@ -90,6 +90,8 @@ namespace IngameScript
                 lockInput();
                 if (row == total)
                     Close();
+                else if (row == total - 1)
+                    ic.CreateGpsHere(gc);
                 else
                 {
                     selectedIndex = row - 1;
@@ -113,7 +115,13 @@ namespace IngameScript
             for (int i = start; i < end; i++)
             {
                 int displayRow = i + 1;
-                string label = i < store.Count ? store.Get(i).Name : MenuScreens.BackLabel;
+                string label;
+                if (i < store.Count)
+                    label = store.Get(i).Name;
+                else if (i == store.Count)
+                    label = "Create here";
+                else
+                    label = MenuScreens.BackLabel;
                 spt.Add(label, RowColor(displayRow, ic.SpriteBackgroundColor), RowColor(displayRow, ic.SpriteFontColor));
             }
 
@@ -129,7 +137,7 @@ namespace IngameScript
                 return;
             }
 
-            Clamp(1, 2);
+            Clamp(1, 3);
 
             if (spacePressed)
             {
@@ -145,6 +153,14 @@ namespace IngameScript
                     return;
                 }
 
+                if (row == 2)
+                {
+                    ic.DeleteGpsPoint(selectedIndex);
+                    view = GpsView.List;
+                    row = 1;
+                    return;
+                }
+
                 view = GpsView.List;
                 row = selectedIndex + 1;
             }
@@ -153,6 +169,7 @@ namespace IngameScript
             spt.Add(wp.Name);
             int r = 1;
             spt.Add("Fly to GPS", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
+            spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }

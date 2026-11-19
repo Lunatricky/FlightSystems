@@ -10,6 +10,7 @@ namespace IngameScript.Domain
         readonly GridContext gc;
         readonly IniSnapshot snapshot = new IniSnapshot();
         readonly GpsStore gps = new GpsStore();
+        string markerOverride;
 
         bool iniChanged;
 
@@ -632,11 +633,61 @@ namespace IngameScript.Domain
             WriteCustomData();
         }
 
+        public bool CreateGpsHere(GridContext grid)
+        {
+            if (grid == null || grid.Controller == null || grid.Controller.Closed || gc.Me == null)
+                return false;
+
+            Vector3D here = grid.Controller.GetPosition();
+            int x = GpsStore.NearestMeter(here.X);
+            int y = GpsStore.NearestMeter(here.Y);
+            int z = GpsStore.NearestMeter(here.Z);
+            Vector3D rounded = new Vector3D(x, y, z);
+            if (gps.Near(here) || gps.Near(rounded))
+                return false;
+
+            string line = "GPS:" + gps.NextMarkName() + ":" + x + ":" + y + ":" + z + ":#FF75C9F1:";
+            string old = gc.Me.CustomData ?? "";
+            string block;
+            if (!GpsStore.TryMarkerBlock(old, out block))
+                return false;
+            string updated = GpsStore.WithPoint(block, line);
+            if (updated == null)
+                return false;
+            ReplaceMarkerBlock(updated);
+            return true;
+        }
+
+        public bool DeleteGpsPoint(int index)
+        {
+            if (gc.Me == null)
+                return false;
+            string old = gc.Me.CustomData ?? "";
+            string block;
+            if (!GpsStore.TryMarkerBlock(old, out block))
+                return false;
+            string updated = GpsStore.WithoutPoint(block, index);
+            if (updated == null)
+                return false;
+            ReplaceMarkerBlock(updated);
+            return true;
+        }
+
+        void ReplaceMarkerBlock(string block)
+        {
+            markerOverride = block;
+            WriteCustomData();
+            markerOverride = null;
+            gps.LoadBlock(gc.Me.CustomData ?? "");
+        }
+
         void WriteCustomData()
         {
             string old = gc.Me.CustomData ?? "";
             string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
+            if (markerOverride != null)
+                block = markerOverride;
+            else if (!GpsStore.TryMarkerBlock(old, out block))
                 return;
 
             string body = ini.ToString();
