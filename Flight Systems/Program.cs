@@ -1788,7 +1788,7 @@ namespace IngameScript
         bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
         {
             if (gc.ShipType != ShipType.Atmo)
-                if (pc.NetDecel - 1 < 0)
+                if (pc.NetDecel - 0.5 < 0)
                 {
                     AbortShipContext(gc);
                     this.command.State = MainState.Orbit;
@@ -1809,7 +1809,7 @@ namespace IngameScript
         bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
         {
             if (gc.ShipType != ShipType.Atmo)
-                if (pc.NetDecel - 0.5 < 0)
+                if (pc.NetDecel - 0.25 < 0)
                 {
                     AbortShipContext(gc);
                     this.command.State = MainState.Orbit;
