@@ -357,20 +357,18 @@ namespace IngameScript
                 if (stack == null)
                     continue;
 
-                int rows = stack.LineCount;
-                if (rows < 1)
+                int lineCount = stack.LineCount;
+                if (lineCount < 1)
                     continue;
 
                 int pitchRows = MenuScaleRows(stack);
-                if (rows > pitchRows)
-                    rows = pitchRows;
-
                 float rowPitch = surfaceSize.Y / pitchRows;
                 float barH = rowPitch - pad;
                 if (barH < 4f)
                     barH = rowPitch * 0.85f;
 
-                // A capped scale must not sit in a bar that grew to fill the screen.
+                int rows = lineCount;
+                // Each menu surface shows as many rows as fit at this pitch. The scale stays put.
                 if (IsMenu(stack))
                 {
                     float glyphBar = baseScale * DebugLineHeight / 0.7f;
@@ -378,13 +376,15 @@ namespace IngameScript
                     {
                         barH = glyphBar;
                         rowPitch = barH + pad;
-                        int fit = (int)(surfaceSize.Y / rowPitch);
-                        if (fit < 1)
-                            fit = 1;
-                        if (rows > fit)
-                            rows = fit;
                     }
+                    int fit = (int)(surfaceSize.Y / rowPitch + 0.01f);
+                    if (fit < 1)
+                        fit = 1;
+                    if (rows > fit)
+                        rows = fit;
                 }
+                else if (rows > pitchRows)
+                    rows = pitchRows;
 
                 float barX = originX + s * colW + pad;
                 float barW = colW - 2f * pad;
