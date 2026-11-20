@@ -69,6 +69,8 @@ namespace IngameScript
         string textModeEcho;
 
         double planetRadius = 0;
+        bool homeHold;
+        Vector3D homeAt;
 
         SystemBools sb;
 
@@ -363,7 +365,14 @@ namespace IngameScript
             {
                 case 0:
                     task = Task.PhysicsUpdate;
-                    pc.NewRun(timeSinceLastRun, command.Param.TargetCoordinates, command);
+                    Vector3D aimAt = command.Param.TargetCoordinates;
+                    if (command.State == MainState.Gps)
+                    {
+                        Vector3D moved;
+                        if (HomeAim(gc, aimAt, out moved))
+                            aimAt = moved;
+                    }
+                    pc.NewRun(timeSinceLastRun, aimAt, command);
                     break;
                 case 1:
                     task = Task.FlightSystems;
@@ -1006,8 +1015,28 @@ namespace IngameScript
             }
         }
 
+        // Moved point is where the remote must sit for the tagged connector to be on the GPS. Not saved.
+        bool HomeAim(GridContext grid, Vector3D gps, out Vector3D at)
+        {
+            at = gps;
+            if (grid == null || grid.Controller == null)
+                return false;
+            IMyShipConnector home = IniContext.HomeConnector(grid);
+            if (home == null)
+                return false;
+            at = gps + grid.Controller.GetPosition() - home.GetPosition();
+            return true;
+        }
+
         void GPSStateSwitch(GridContext gc, IniContext ic, Command command)
         {
+            Vector3D gps = command.Param.TargetCoordinates;
+            Vector3D at;
+            bool home = HomeAim(gc, gps, out at);
+            double reach = ic.DistanceToGPS + pc.StopZDist;
+            if (home)
+                reach = pc.StopZDist;
+
             switch (command.Param.Step)
             {
                 case Step.Toggle:
@@ -1017,7 +1046,14 @@ namespace IngameScript
                 case Step.On:
                     if (pc.Gravity == 0)
                     {
-                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - command.Param.TargetCoordinates))
+                        Vector3D fwd = gc.Controller.WorldMatrix.Forward;
+                        if (home)
+                        {
+                            IMyShipConnector tagged = IniContext.HomeConnector(gc);
+                            if (tagged != null)
+                                fwd = tagged.WorldMatrix.Forward;
+                        }
+                        if (VectorAlignedOverride(gc, fwd, false, gc.Controller.GetPosition() - at))
                             command.Param.Step = Step.Cruise;
                     }
                     else if (GravityAlignedOverride(gc))
@@ -1033,10 +1069,10 @@ namespace IngameScript
                         return;
                     }
 
-                    if (AimHorizonToGps(gc, command.Param.TargetCoordinates))
+                    if (AimHorizonToGps(gc, gps))
                     {
-                        if (GetGravityRadius(planetRadius) < Vector3D.Distance(pc.PlanetCenter, command.Param.TargetCoordinates) &&
-                            VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), command.Param.TargetCoordinates, 40))
+                        if (GetGravityRadius(planetRadius) < Vector3D.Distance(pc.PlanetCenter, gps) &&
+                            VectorHelper.IsWithinAngle(pc.PlanetCenter, gc.Controller.GetPosition(), gps, 40))
                         {
                             command.Param.Step = Step.Orbit;
                             return;
@@ -1046,7 +1082,7 @@ namespace IngameScript
                     break;
 
                 case Step.Cruise:
-                    if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                    if (sb.GpsToggle && pc.DistanceToGPS < reach)
                     {
                         AbortShipContext(gc);
                         if (pc.Gravity > 0)
@@ -1054,6 +1090,11 @@ namespace IngameScript
                             command.State = MainState.Land;
                             sb.GpsToggle = false;
                             previousRate = PREV_RATE;
+                            if (home)
+                            {
+                                homeHold = true;
+                                homeAt = gps;
+                            }
                         }
                         return;
                     }
@@ -1075,7 +1116,7 @@ namespace IngameScript
                     break;
 
                 case Step.Orbit:
-                    if (sb.GpsToggle && pc.DistanceToGPS < ic.DistanceToGPS + pc.StopZDist)
+                    if (sb.GpsToggle && pc.DistanceToGPS < reach)
                     {
                         SoftAbort(gc);
                         return;
@@ -1641,6 +1682,7 @@ namespace IngameScript
             integral = 0;
             lastError = 0;
             gearLockNote = null;
+            homeHold = false;
             ClearClimbBoost(gc);
 
             if (gc.Controller != null)
@@ -1744,7 +1786,14 @@ namespace IngameScript
             Vector3D levelAxis = shipUp.Cross(gDown);
             double levelErr = levelAxis.Length();
 
-            Vector3D toTarget = targetGps - gc.Controller.GetPosition(); // toward GPS
+            Vector3D aimed;
+            if (HomeAim(gc, targetGps, out aimed))
+            {
+                IMyShipConnector home = IniContext.HomeConnector(gc);
+                if (home != null)
+                    shipFwd = home.WorldMatrix.Forward;
+            }
+            Vector3D toTarget = aimed - gc.Controller.GetPosition(); // connector on the GPS, remote when no tag
             Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
             Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
 
@@ -1837,15 +1886,34 @@ namespace IngameScript
             double agl = DescentAgl(gc);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
+            if (homeHold)
+                stopReach = 0.5;
             // ease to about -2 m/s as AGL approaches one ship-height
             double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
+            if (homeHold && agl < stopReach)
+            {
+                gc.Controller.DampenersOverride = true;
+                VectorHelper.MatchVerticalSpeed(gc, pc, 0, true);
+                return false;
+            }
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
+            if (homeHold)
+                return false;
             return agl < stopReach;
         }
 
         // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
         double DescentAgl(GridContext grid)
         {
+            if (homeHold && pc != null && pc.Gravity > 0 && grid != null && grid.Controller != null)
+            {
+                Vector3D from = grid.Controller.GetPosition();
+                IMyShipConnector home = IniContext.HomeConnector(grid);
+                if (home != null)
+                    from = home.GetPosition();
+                return (homeAt - from).Dot(Vector3D.Normalize(pc.NaturalGravity));
+            }
+
             double planet = pc.GroundLevel;
             if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
                 return planet;
