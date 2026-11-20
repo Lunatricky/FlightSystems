@@ -2,7 +2,6 @@
 using IngameScript.UseCases;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -486,7 +485,7 @@ namespace IngameScript.Domain
             double parsedCruise;
             if (cruiseMissing)
                 cruiseWarn = "No " + CRUISE_SPEED;
-            else if (!double.TryParse(cruiseText, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedCruise))
+            else if (!double.TryParse(cruiseText, out parsedCruise))
                 cruiseWarn = "Bad " + CRUISE_SPEED;
             else
             {
