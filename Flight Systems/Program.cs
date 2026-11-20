@@ -1431,7 +1431,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.Drop:
-                    if (AutoLand(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (AutoLand(gc, pc)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
@@ -1466,7 +1466,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.Drop:
-                    if (SuicideBurn(gc, pc, command)) command.Param.AutoLandState = AutoLandState.LockGear;
+                    if (SuicideBurn(gc, pc)) command.Param.AutoLandState = AutoLandState.LockGear;
                     break;
 
                 case AutoLandState.LockGear:
@@ -1854,7 +1854,34 @@ namespace IngameScript
         ////////////////////////////////////////////////////////
         /// SAFE DEscENT
         ////////////////////////////////////////////////////////
-        bool SuicideBurn(GridContext gc, PhysicsContext pc, Command command)
+        double SafeFall(double decel, double altitude)
+        {
+            if (decel <= 0 || altitude <= 0)
+                return 0;
+            return Math.Sqrt(2.0 * decel * altitude);
+        }
+
+        double LandFall(double decel, double altitude)
+        {
+            double safe = SafeFall(decel, altitude);
+            if (safe <= 0)
+                return 0;
+            double speed = 0.35 * safe;
+            if (speed < 2)
+                speed = 2;
+            if (speed > ic.CruiseSpeed)
+                speed = ic.CruiseSpeed;
+            if (speed > safe)
+                speed = safe;
+            return -speed;
+        }
+
+        bool FallSettled(GridContext gc, double target)
+        {
+            return VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc) >= target;
+        }
+
+        bool SuicideBurn(GridContext gc, PhysicsContext pc)
         {
             if (gc.ShipType != ShipType.Atmo)
                 if (pc.NetDecel - 0.5 < 0)
@@ -1867,10 +1894,12 @@ namespace IngameScript
             GravityAlignedOverride(gc);
             double agl = DescentAgl(gc);
             double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            return agl < stopReach;
+            double target = -0.75 * SafeFall(pc.MaxYDecel, agl);
+            VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
+            return agl < stopReach && FallSettled(gc, target);
         }
 
-        bool AutoLand(GridContext gc, PhysicsContext pc, Command command)
+        bool AutoLand(GridContext gc, PhysicsContext pc)
         {
             if (gc.ShipType != ShipType.Atmo)
                 if (pc.NetDecel - 0.25 < 0)
@@ -1882,24 +1911,21 @@ namespace IngameScript
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
 
-            double speedFromAlt = (ic.CruiseSpeed + pc.GroundLevel) * 0.08;
-
             double agl = DescentAgl(gc);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
             if (homeHold)
                 stopReach = 0.5;
-            // ease to about -2 m/s as AGL approaches one ship-height
-            double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
             if (homeHold && agl < stopReach)
             {
                 HoldHome(gc);
                 return false;
             }
-            VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
+            double target = LandFall(pc.MaxYDecel, agl);
+            VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 0.5);
             if (homeHold)
                 return false;
-            return agl < stopReach;
+            return agl < stopReach && FallSettled(gc, target);
         }
 
         // Gear lock every tick. Connect at most once, and only on the tagged connector.
