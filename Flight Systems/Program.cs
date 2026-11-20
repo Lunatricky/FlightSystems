@@ -8,7 +8,6 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using VRageMath;
 
 namespace IngameScript
