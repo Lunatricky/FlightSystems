@@ -586,8 +586,13 @@ namespace IngameScript
                         textOut.Append('\n');
                     any = true;
                     string line = stack.texts[i];
+                    bool mark = IsMenu(stack) && stack.followLine == i;
+                    if (mark)
+                        textOut.Append(TextMark);
                     if (line != null)
                         textOut.Append(line);
+                    if (mark)
+                        textOut.Append(TextMark);
                 }
             }
 
@@ -786,6 +791,7 @@ namespace IngameScript
         const int MenuBarRows = 7;
         const int MenuCapRows = 10;
         const float MenuFitFloor = 0.8f;
+        const string TextMark = "-";
         const string SelectThisScreen = "Press space to select this screen";
         const string SelectLineTop = "Press space to";
         const string SelectLineBottom = "select this screen";

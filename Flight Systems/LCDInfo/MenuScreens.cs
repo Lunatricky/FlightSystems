@@ -589,6 +589,7 @@ namespace IngameScript
             if (ic.WarnCount > 0)
                 spt.Add(ic.WarnLine(0), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -599,6 +600,7 @@ namespace IngameScript
             for (int i = 0; i < ic.WarnCount; i++)
                 spt.Add(ic.WarnLine(i), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow - 1);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -606,6 +608,7 @@ namespace IngameScript
         {
             Sprites spt = new Sprites(ic);
             AddFlightRows(spt, ic, gc, includeClose);
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -657,6 +660,7 @@ namespace IngameScript
             spt.Add(IniContext.DISTANCE_TO_GPS + ": " + ic.DistanceToGPS, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.MINIMUM_ACCEPTED_FUEL + ": " + ic.MinimumAcceptedFuel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -673,6 +677,7 @@ namespace IngameScript
             spt.Add("Confirm", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Cancel", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -691,6 +696,11 @@ namespace IngameScript
             spt.Add("B: " + edited.B, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Sample", sampleBg, sampleFg);
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            // Sample is not a choice, so Back is one line below its row number.
+            int mark = SelectedRow;
+            if (mark > 3)
+                mark++;
+            spt.KeepVisible(mark);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -1059,6 +1069,7 @@ namespace IngameScript
             spt.Add("Landing pad connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Home connector", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -1346,6 +1357,7 @@ namespace IngameScript
             spt.Add("LCD 2", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Menu", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
