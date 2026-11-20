@@ -1,21 +1,10 @@
-﻿using Sandbox.Game.EntityComponents;
-using Sandbox.ModAPI.Ingame;
-using Sandbox.ModAPI.Interfaces;
+﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
-using VRage;
-using VRage.Collections;
-using VRage.Game;
-using VRage.Game.Components;
 using VRage.Game.GUI.TextPanel;
-using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
-using VRage.Game.ObjectBuilders.Definitions;
 using VRageMath;
 
 namespace IngameScript
@@ -70,7 +59,7 @@ namespace IngameScript
         // VRage.Game.ModAPI.Ingame.Utilities, VRageMath.
 
         const string Section = "DockPad";
-        const string DefaultTag = "dock";
+        const string DefaultTag = "gear dock";
 
         static readonly Color ColLocked = new Color(32, 170, 40);
         static readonly Color ColReady = new Color(210, 175, 16);
@@ -186,7 +175,7 @@ namespace IngameScript
             var sp = p as IMyTextSurfaceProvider;
             if (sp == null || sp.SurfaceCount < 1) return false;
             if (ContainsTag(p.CustomName, _tag)) return true;
-            return HasDockPadSection(p.CustomData);
+            return false;
         }
 
         bool AcceptAnyLcdPanel(IMyButtonPanel p)
@@ -194,14 +183,6 @@ namespace IngameScript
             if (_sameConstruct && !p.IsSameConstructAs(Me)) return false;
             var sp = p as IMyTextSurfaceProvider;
             return sp != null && sp.SurfaceCount > 0;
-        }
-
-        bool HasDockPadSection(string data)
-        {
-            if (string.IsNullOrEmpty(data)) return false;
-            _ini.Clear();
-            if (!_ini.TryParse(data)) return false;
-            return _ini.ContainsSection(Section);
         }
 
         void BindPanel(IMyButtonPanel panel, HashSet<long> used)
