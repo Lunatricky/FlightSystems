@@ -71,6 +71,9 @@ namespace IngameScript
         bool homeHold;
         bool homeTried;
         Vector3D homeAt;
+        bool haveFall;
+        double fallAlt;
+        double fallDecel;
 
         SystemBools sb;
 
@@ -1684,6 +1687,7 @@ namespace IngameScript
             gearLockNote = null;
             homeHold = false;
             homeTried = false;
+            haveFall = false;
             ClearClimbBoost(gc);
 
             if (gc.Controller != null)
@@ -1881,10 +1885,36 @@ namespace IngameScript
             return VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc) >= target;
         }
 
+        // Half of the rise to the ground for the burn. The abort uses the full rise.
+        void ProjectFall(double decel, double altitude, out double projected, out double burnDecel)
+        {
+            projected = decel;
+            burnDecel = decel;
+            if (haveFall && altitude < fallAlt && decel > fallDecel)
+            {
+                double drop = fallAlt - altitude;
+                if (drop > 1)
+                {
+                    double rise = (decel - fallDecel) / drop * altitude;
+                    if (rise > 0)
+                    {
+                        projected = decel + rise;
+                        burnDecel = decel + 0.5 * rise;
+                    }
+                }
+            }
+            fallAlt = altitude;
+            fallDecel = decel;
+            haveFall = true;
+        }
+
         bool SuicideBurn(GridContext gc, PhysicsContext pc)
         {
+            double projected;
+            double burnDecel;
+            ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out burnDecel);
             if (gc.ShipType != ShipType.Atmo)
-                if (pc.NetDecel - 0.5 < 0)
+                if (projected - 0.5 < 0)
                 {
                     AbortShipContext(gc);
                     this.command.State = MainState.Orbit;
@@ -1894,15 +1924,23 @@ namespace IngameScript
             GravityAlignedOverride(gc);
             double agl = DescentAgl(gc);
             double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            double target = -0.75 * SafeFall(pc.MaxYDecel, agl);
+            double target = -0.75 * SafeFall(burnDecel, agl);
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
             return agl < stopReach && FallSettled(gc, target);
         }
 
         bool AutoLand(GridContext gc, PhysicsContext pc)
         {
+            double gate = pc.NetDecel;
+            if (!homeHold)
+            {
+                double projected;
+                double ignored;
+                ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out ignored);
+                gate = projected;
+            }
             if (gc.ShipType != ShipType.Atmo)
-                if (pc.NetDecel - 0.25 < 0)
+                if (gate - 0.25 < 0)
                 {
                     AbortShipContext(gc);
                     this.command.State = MainState.Orbit;
