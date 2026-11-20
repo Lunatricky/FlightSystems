@@ -17,17 +17,20 @@ namespace IngameScript
         Toggles,
         Numbers,
         Colors,
+        ColorChannels,
         DockKinds,
         DockBlocks,
         ScreenSlots,
-        ScreenSurfaces
+        ScreenSurfaces,
+        Warnings
     }
 
     enum DockBlockKind
     {
         TriggerGears,
         TriggerConnectors,
-        PadConnectors
+        PadConnectors,
+        HomeConnector
     }
 
     enum ScreenSlot
@@ -45,12 +48,23 @@ namespace IngameScript
         MenuView view = MenuView.Home;
         bool spaceWasDown;
         bool spaceEdge;
+        bool cWasDown;
+        bool cEdge;
+        bool qWasDown;
+        bool qEdge;
+        bool eWasDown;
+        bool eEdge;
 
-        const int HomeRows = 7;
-        const int ToggleValueRows = 8;
+        public const string BackLabel = "Back (C)";
+
+        static int HomeCount(IniContext ic)
+        {
+            return ic.WarnCount > 0 ? 8 : 7;
+        }
+        const int ToggleValueRows = 9;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
-        const int DockKindRows = 3;
+        const int DockKindRows = 4;
         DockBlockKind dockKind = DockBlockKind.TriggerGears;
         int dockKindRow = 1;
         readonly List<IMyTerminalBlock> shownBlocks = new List<IMyTerminalBlock>();
@@ -67,11 +81,12 @@ namespace IngameScript
         IMyTextSurface markedSurface;
         long markedBlockId;
         int markedIndex = -1;
-        string savedLcdBackground;
-        string savedLcdFont;
-        string savedSpriteMenu;
-        string savedSpriteBackground;
-        string savedSpriteFont;
+        Color draftLcdBg;
+        Color draftLcdFg;
+        Color draftPlate;
+        Color draftBar;
+        Color draftText;
+        int colorRow = 1;
 
         public void ShowHome()
         {
@@ -82,20 +97,37 @@ namespace IngameScript
             // A new open has not seen Space down, so the first press counts.
             spaceWasDown = false;
             spaceEdge = false;
+            // C already held must not close the menu on the open tick.
+            cWasDown = true;
+            cEdge = false;
+            qWasDown = false;
+            qEdge = false;
+            eWasDown = false;
+            eEdge = false;
         }
 
         public void NoteSpace(PlayerInput pi)
         {
-            bool down = pi.Space();
-            spaceEdge = down && !spaceWasDown;
-            spaceWasDown = down;
+            spaceEdge = Rising(pi.Space(), ref spaceWasDown);
+            cEdge = Rising(pi.C(), ref cWasDown);
+            qEdge = Rising(pi.Q(), ref qWasDown);
+            eEdge = Rising(pi.E(), ref eWasDown);
         }
 
-        public bool ShouldClose()
+        static bool Rising(bool down, ref bool wasDown)
+        {
+            bool edge = down && !wasDown;
+            wasDown = down;
+            return edge;
+        }
+
+        public bool ShouldClose(IniContext ic)
         {
             if (gpsMenu.IsOpen || view != MenuView.Home)
                 return false;
-            return SelectedRow == HomeRows && spaceEdge;
+            if (cEdge)
+                return true;
+            return SelectedRow == HomeCount(ic) && spaceEdge;
         }
 
         public void Handle(
@@ -117,9 +149,16 @@ namespace IngameScript
                 return;
             }
 
+            if (view == MenuView.Warnings && ic.WarnCount == 0)
+            {
+                view = MenuView.Home;
+                SelectedRow = 1;
+                spaceEdge = false;
+            }
+
             if (gpsMenu.IsOpen)
             {
-                if (pi.Q())
+                if (cEdge)
                 {
                     lockInput();
                     gpsMenu.Back();
@@ -151,22 +190,21 @@ namespace IngameScript
                 SelectedRow++;
             }
 
-            // Q on the home list is not a page key.
+            // Q and E change the sibling page. They do not move the row and they do not go back.
             bool backed = false;
-            if (pi.Q() && view != MenuView.Home)
+            if (cEdge && view != MenuView.Home)
             {
                 lockInput();
-                if (view == MenuView.DockBlocks)
-                    BackToDockKinds();
-                else if (view == MenuView.ScreenSurfaces)
-                    BackToScreenSlots();
-                else
-                {
-                    if (view == MenuView.Colors)
-                        RestoreColors(ic);
-                    ReturnHome();
-                }
+                GoBack();
                 backed = true;
+            }
+            else if (qEdge || eEdge)
+            {
+                if (CycleSibling(qEdge ? -1 : 1, ic))
+                {
+                    lockInput();
+                    backed = true;
+                }
             }
 
             ClampFor(gc, ic);
@@ -261,6 +299,22 @@ namespace IngameScript
                     SelectedRow = 1;
                     return true;
                 }
+                if (ic.WarnCount > 0 && SelectedRow == 7)
+                {
+                    view = MenuView.Warnings;
+                    SelectedRow = 1;
+                    return true;
+                }
+                return false;
+            }
+
+            if (view == MenuView.Warnings)
+            {
+                if (ic.WarnCount == 0 || SelectedRow > ic.WarnCount)
+                {
+                    ReturnHome();
+                    return true;
+                }
                 return false;
             }
 
@@ -291,20 +345,58 @@ namespace IngameScript
                 return true;
             }
 
-            if (view == MenuView.Colors && SelectedRow == ColorValueRows + 1)
+            if (view == MenuView.ColorChannels)
+                return ActivateColorChannel();
+
+            if (view == MenuView.Colors)
+                return ActivateColors(ic);
+
+            return false;
+        }
+
+        bool ActivateColors(IniContext ic)
+        {
+            if (SelectedRow >= 1 && SelectedRow <= ColorValueRows)
             {
+                colorRow = SelectedRow;
+                view = MenuView.ColorChannels;
+                SelectedRow = 1;
+                return true;
+            }
+
+            if (SelectedRow == ColorValueRows + 1)
+            {
+                ApplyColors(ic);
                 ReturnHome();
                 return true;
             }
 
-            if (view == MenuView.Colors && SelectedRow == ColorValueRows + 2)
+            if (SelectedRow == ColorValueRows + 2 || SelectedRow == ColorValueRows + 3)
             {
-                RestoreColors(ic);
                 ReturnHome();
                 return true;
             }
 
             return false;
+        }
+
+        bool ActivateColorChannel()
+        {
+            if (SelectedRow != 4)
+                return false;
+
+            view = MenuView.Colors;
+            SelectedRow = colorRow < 1 ? 1 : colorRow;
+            return true;
+        }
+
+        void ApplyColors(IniContext ic)
+        {
+            ic.LcdBackgroundColor = draftLcdBg;
+            ic.LcdFontColor = draftLcdFg;
+            ic.SpriteMenuColor = draftPlate;
+            ic.SpriteBackgroundColor = draftBar;
+            ic.SpriteFontColor = draftText;
         }
 
         bool ActivateFlight(
@@ -360,29 +452,71 @@ namespace IngameScript
                 AdjustToggles(ic, pi, lockInput);
             else if (view == MenuView.Numbers)
                 AdjustNumbers(ic, pi, lockInput);
-            else if (view == MenuView.Colors)
-                AdjustColors(ic, pi, lockInput);
+            else if (view == MenuView.ColorChannels)
+                AdjustColorChannel(pi, lockInput);
         }
 
-        void AdjustColors(IniContext ic, PlayerInput pi, Action lockInput)
+        void AdjustColorChannel(PlayerInput pi, Action lockInput)
         {
-            if (!pi.A() && !pi.D())
+            if (SelectedRow < 1 || SelectedRow > 3)
                 return;
-            if (SelectedRow < 1 || SelectedRow > ColorValueRows)
+
+            int delta = 0;
+            if (pi.D())
+                delta += 15;
+            if (pi.A())
+                delta -= 15;
+            if (delta == 0)
                 return;
 
             lockInput();
-            bool next = pi.D();
+            Color edited = DraftColor();
+            int r = edited.R;
+            int g = edited.G;
+            int b = edited.B;
             if (SelectedRow == 1)
-                ic.LcdBackgroundColor = ic.CycleAvailableColor(ic.LcdBackgroundColor, next);
+                r = ClampChannel(r + delta);
             else if (SelectedRow == 2)
-                ic.LcdFontColor = ic.CycleAvailableColor(ic.LcdFontColor, next);
-            else if (SelectedRow == 3)
-                ic.SetSpriteMenuColor(ic.CycleAvailableColor(ic.SpriteMenuColorName, next));
-            else if (SelectedRow == 4)
-                ic.SetSpriteBackgroundColor(ic.CycleAvailableColor(ic.SpriteBackgroundColorName, next));
-            else if (SelectedRow == 5)
-                ic.SetSpriteFontColor(ic.CycleAvailableColor(ic.SpriteFontColorName, next));
+                g = ClampChannel(g + delta);
+            else
+                b = ClampChannel(b + delta);
+            SetDraft(new Color(r, g, b));
+        }
+
+        static int ClampChannel(int value)
+        {
+            if (value < 0)
+                return 0;
+            if (value > 255)
+                return 255;
+            return value;
+        }
+
+        Color DraftColor()
+        {
+            if (colorRow == 2)
+                return draftLcdFg;
+            if (colorRow == 3)
+                return draftPlate;
+            if (colorRow == 4)
+                return draftBar;
+            if (colorRow == 5)
+                return draftText;
+            return draftLcdBg;
+        }
+
+        void SetDraft(Color color)
+        {
+            if (colorRow == 2)
+                draftLcdFg = color;
+            else if (colorRow == 3)
+                draftPlate = color;
+            else if (colorRow == 4)
+                draftBar = color;
+            else if (colorRow == 5)
+                draftText = color;
+            else
+                draftLcdBg = color;
         }
 
         void AdjustToggles(IniContext ic, PlayerInput pi, Action lockInput)
@@ -402,6 +536,7 @@ namespace IngameScript
             else if (SelectedRow == row++) ic.RenameSubgrids = !ic.RenameSubgrids;
             else if (SelectedRow == row++) ic.PaintSurfaces = !ic.PaintSurfaces;
             else if (SelectedRow == row++) ic.TransparentLCD = !ic.TransparentLCD;
+            else if (SelectedRow == row++) ic.TextPanels = !ic.TextPanels;
         }
 
         void AdjustNumbers(IniContext ic, PlayerInput pi, Action lockInput)
@@ -426,6 +561,8 @@ namespace IngameScript
                 PaintNumbers(ic, gc);
             else if (view == MenuView.Colors)
                 PaintColors(ic, gc);
+            else if (view == MenuView.ColorChannels)
+                PaintColorChannels(ic, gc);
             else if (view == MenuView.DockKinds)
                 PaintDockKinds(ic, gc);
             else if (view == MenuView.DockBlocks)
@@ -434,6 +571,8 @@ namespace IngameScript
                 PaintScreenSlots(ic, gc);
             else if (view == MenuView.ScreenSurfaces)
                 PaintScreenSurfaces(ic, gc);
+            else if (view == MenuView.Warnings)
+                PaintWarnings(ic, gc);
         }
 
         void PaintHome(IniContext ic, GridContext gc)
@@ -447,7 +586,21 @@ namespace IngameScript
             spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock blocks", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Screens", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            if (ic.WarnCount > 0)
+                spt.Add(ic.WarnLine(0), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void PaintWarnings(IniContext ic, GridContext gc)
+        {
+            Sprites spt = new Sprites(ic);
+            int row = 1;
+            for (int i = 0; i < ic.WarnCount; i++)
+                spt.Add(ic.WarnLine(i), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow - 1);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -455,6 +608,7 @@ namespace IngameScript
         {
             Sprites spt = new Sprites(ic);
             AddFlightRows(spt, ic, gc, includeClose);
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -471,7 +625,7 @@ namespace IngameScript
             spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             if (includeClose)
-                spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+                spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
         }
 
         void PaintToggles(IniContext ic, GridContext gc)
@@ -488,7 +642,9 @@ namespace IngameScript
             spt.Add(IniContext.RENAME_SUBGRIDS, BoolSpriteColor(SelectedRow == row++, ic.RenameSubgrids), Color.Black);
             spt.Add(IniContext.PAINT_SURFACES, BoolSpriteColor(SelectedRow == row++, ic.PaintSurfaces), Color.Black);
             spt.Add(IniContext.TRANSPARENTLCD, BoolSpriteColor(SelectedRow == row++, ic.TransparentLCD), Color.Black);
-            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(IniContext.TEXT_PANELS, BoolSpriteColor(SelectedRow == row++, ic.TextPanels), Color.Black);
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -503,7 +659,8 @@ namespace IngameScript
             spt.Add(IniContext.CNAV_ALTITUDE + ": " + ic.SafeAltitude, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.DISTANCE_TO_GPS + ": " + ic.DistanceToGPS, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(IniContext.MINIMUM_ACCEPTED_FUEL + ": " + ic.MinimumAcceptedFuel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Back", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -512,38 +669,219 @@ namespace IngameScript
             Sprites spt = new Sprites(ic);
             int row = 1;
             spt.Add(IniContext.SurfaceColorsSection);
-            AddColorRow(spt, ic, ref row, IniContext.LCDBACKGROUNDCOLOR, ic.LcdBackgroundColor);
-            AddColorRow(spt, ic, ref row, IniContext.LCDFONTCOLOR, ic.LcdFontColor);
-            AddColorRow(spt, ic, ref row, IniContext.SPRITEMENUCOLOR, ic.SpriteMenuColorName);
-            AddColorRow(spt, ic, ref row, IniContext.SPRITEBACKGROUNDCOLOR, ic.SpriteBackgroundColorName);
-            AddColorRow(spt, ic, ref row, IniContext.SPRITEFONTCOLOR, ic.SpriteFontColorName);
+            AddColorRow(spt, ic, ref row, IniContext.LCDBACKGROUNDCOLOR, draftLcdBg);
+            AddColorRow(spt, ic, ref row, IniContext.LCDFONTCOLOR, draftLcdFg);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEMENUCOLOR, draftPlate);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEBACKGROUNDCOLOR, draftBar);
+            AddColorRow(spt, ic, ref row, IniContext.SPRITEFONTCOLOR, draftText);
             spt.Add("Confirm", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Cancel", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void PaintColorChannels(IniContext ic, GridContext gc)
+        {
+            Color edited = DraftColor();
+            Color sampleBg;
+            Color sampleFg;
+            SamplePair(out sampleBg, out sampleFg);
+
+            Sprites spt = new Sprites(ic);
+            spt.Add(ColorKey());
+            int row = 1;
+            spt.Add("R: " + edited.R, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("G: " + edited.G, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("B: " + edited.B, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Sample", sampleBg, sampleFg);
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            // Sample is not a choice, so Back is one line below its row number.
+            int mark = SelectedRow;
+            if (mark > 3)
+                mark++;
+            spt.KeepVisible(mark);
+            spt.DrawTo(gc.LcdsMenu);
+        }
+
+        void SamplePair(out Color background, out Color text)
+        {
+            if (colorRow <= 2)
+            {
+                background = draftLcdBg;
+                text = draftLcdFg;
+                return;
+            }
+
+            if (colorRow == 3)
+            {
+                background = draftPlate;
+                text = draftText;
+                return;
+            }
+
+            background = draftBar;
+            text = draftText;
+        }
+
+        string ColorKey()
+        {
+            if (colorRow == 2)
+                return IniContext.LCDFONTCOLOR;
+            if (colorRow == 3)
+                return IniContext.SPRITEMENUCOLOR;
+            if (colorRow == 4)
+                return IniContext.SPRITEBACKGROUNDCOLOR;
+            if (colorRow == 5)
+                return IniContext.SPRITEFONTCOLOR;
+            return IniContext.LCDBACKGROUNDCOLOR;
         }
 
         void CopyColors(IniContext ic)
         {
-            savedLcdBackground = ic.LcdBackgroundColor;
-            savedLcdFont = ic.LcdFontColor;
-            savedSpriteMenu = ic.SpriteMenuColorName;
-            savedSpriteBackground = ic.SpriteBackgroundColorName;
-            savedSpriteFont = ic.SpriteFontColorName;
+            draftLcdBg = ic.LcdBackgroundColor;
+            draftLcdFg = ic.LcdFontColor;
+            draftPlate = ic.SpriteMenuColor;
+            draftBar = ic.SpriteBackgroundColor;
+            draftText = ic.SpriteFontColor;
         }
 
-        void RestoreColors(IniContext ic)
+        void AddColorRow(Sprites spt, IniContext ic, ref int row, string key, Color color)
         {
-            ic.LcdBackgroundColor = savedLcdBackground;
-            ic.LcdFontColor = savedLcdFont;
-            ic.SetSpriteMenuColor(savedSpriteMenu);
-            ic.SetSpriteBackgroundColor(savedSpriteBackground);
-            ic.SetSpriteFontColor(savedSpriteFont);
-        }
-
-        void AddColorRow(Sprites spt, IniContext ic, ref int row, string key, string name)
-        {
-            spt.Add(key + ": " + name, RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
+            spt.Add(key + ": " + IniContext.FormatRgb(color), RowColor(row, ic.SpriteBackgroundColor), RowColor(row, ic.SpriteFontColor));
             row++;
+        }
+
+        void GoBack()
+        {
+            if (view == MenuView.DockBlocks)
+                BackToDockKinds();
+            else if (view == MenuView.ScreenSurfaces)
+                BackToScreenSlots();
+            else if (view == MenuView.ColorChannels)
+            {
+                view = MenuView.Colors;
+                SelectedRow = colorRow < 1 ? 1 : colorRow;
+            }
+            else
+                ReturnHome();
+        }
+
+        bool CycleSibling(int dir, IniContext ic)
+        {
+            if (view == MenuView.ColorChannels)
+            {
+                colorRow += dir;
+                if (colorRow < 1)
+                    colorRow = ColorValueRows;
+                else if (colorRow > ColorValueRows)
+                    colorRow = 1;
+                return true;
+            }
+
+            if (view == MenuView.DockBlocks)
+            {
+                CycleDockKind(dir);
+                return true;
+            }
+
+            if (view == MenuView.ScreenSurfaces)
+            {
+                CycleScreenSlot(dir);
+                return true;
+            }
+
+            int index = SectionIndex();
+            if (index < 0)
+                return false;
+
+            index += dir;
+            if (index < 0)
+                index = 5;
+            else if (index > 5)
+                index = 0;
+            OpenSection(index, ic);
+            return true;
+        }
+
+        int SectionIndex()
+        {
+            if (view == MenuView.Flight) return 0;
+            if (view == MenuView.Toggles) return 1;
+            if (view == MenuView.Numbers) return 2;
+            if (view == MenuView.Colors) return 3;
+            if (view == MenuView.DockKinds) return 4;
+            if (view == MenuView.ScreenSlots) return 5;
+            return -1;
+        }
+
+        void OpenSection(int index, IniContext ic)
+        {
+            if (index == 0)
+                view = MenuView.Flight;
+            else if (index == 1)
+                view = MenuView.Toggles;
+            else if (index == 2)
+                view = MenuView.Numbers;
+            else if (index == 3)
+            {
+                CopyColors(ic);
+                view = MenuView.Colors;
+            }
+            else if (index == 4)
+                view = MenuView.DockKinds;
+            else
+                view = MenuView.ScreenSlots;
+        }
+
+        void CycleDockKind(int dir)
+        {
+            int index = 0;
+            if (dockKind == DockBlockKind.TriggerConnectors)
+                index = 1;
+            else if (dockKind == DockBlockKind.PadConnectors)
+                index = 2;
+            else if (dockKind == DockBlockKind.HomeConnector)
+                index = 3;
+
+            index += dir;
+            if (index < 0)
+                index = 3;
+            else if (index > 3)
+                index = 0;
+
+            if (index == 0)
+                dockKind = DockBlockKind.TriggerGears;
+            else if (index == 1)
+                dockKind = DockBlockKind.TriggerConnectors;
+            else if (index == 2)
+                dockKind = DockBlockKind.PadConnectors;
+            else
+                dockKind = DockBlockKind.HomeConnector;
+            dockKindRow = index + 1;
+        }
+
+        void CycleScreenSlot(int dir)
+        {
+            int index = 0;
+            if (screenSlot == ScreenSlot.Lcd2)
+                index = 1;
+            else if (screenSlot == ScreenSlot.Menu)
+                index = 2;
+
+            index += dir;
+            if (index < 0)
+                index = 2;
+            else if (index > 2)
+                index = 0;
+
+            if (index == 0)
+                screenSlot = ScreenSlot.Lcd1;
+            else if (index == 1)
+                screenSlot = ScreenSlot.Lcd2;
+            else
+                screenSlot = ScreenSlot.Menu;
+            screenSlotRow = index + 1;
         }
 
         void ReturnHome()
@@ -560,6 +898,8 @@ namespace IngameScript
                 SelectedRow = 5;
             else if (view == MenuView.ScreenSlots)
                 SelectedRow = 6;
+            else if (view == MenuView.Warnings)
+                SelectedRow = 7;
             else
                 SelectedRow = 1;
             view = MenuView.Home;
@@ -567,7 +907,7 @@ namespace IngameScript
 
         void ClampFor(GridContext gc, IniContext ic)
         {
-            int max = HomeRows;
+            int max = HomeCount(ic);
             if (view == MenuView.Flight)
                 max = FlightGpsRow(gc) + 1;
             else if (view == MenuView.Toggles)
@@ -575,7 +915,9 @@ namespace IngameScript
             else if (view == MenuView.Numbers)
                 max = NumberValueRows + 1;
             else if (view == MenuView.Colors)
-                max = ColorValueRows + 2;
+                max = ColorValueRows + 3;
+            else if (view == MenuView.ColorChannels)
+                max = 4;
             else if (view == MenuView.DockKinds)
                 max = DockKindRows + 1;
             else if (view == MenuView.DockBlocks)
@@ -590,6 +932,8 @@ namespace IngameScript
                 FillSurfaces(gc);
                 max = surfaceBlocks.Count + 1;
             }
+            else if (view == MenuView.Warnings)
+                max = ic.WarnCount + 1;
             ClampRow(1, max);
         }
 
@@ -666,8 +1010,8 @@ namespace IngameScript
         static Color BoolSpriteColor(bool isSelected, bool toggle)
         {
             return (isSelected ?
-                toggle ? Color.Green : Color.Red :
-                toggle ? Color.LightGreen : Color.OrangeRed);
+                toggle ? Color.LightGreen : Color.Orange :
+                toggle ? Color.Green : Color.Red);
         }
 
         bool ActivateDockKinds()
@@ -684,6 +1028,8 @@ namespace IngameScript
                 dockKind = DockBlockKind.TriggerConnectors;
             else if (SelectedRow == 3)
                 dockKind = DockBlockKind.PadConnectors;
+            else if (SelectedRow == 4)
+                dockKind = DockBlockKind.HomeConnector;
             else
                 return false;
 
@@ -721,7 +1067,9 @@ namespace IngameScript
             spt.Add("Dock trigger gears", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock trigger connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Landing pad connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Home connector", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -739,7 +1087,8 @@ namespace IngameScript
                 spt.Add(name, BoolSpriteColor(SelectedRow == row, marked), Color.Black);
                 row++;
             }
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -749,6 +1098,8 @@ namespace IngameScript
                 return "Dock trigger connectors";
             if (kind == DockBlockKind.PadConnectors)
                 return "Landing pad connectors";
+            if (kind == DockBlockKind.HomeConnector)
+                return "Home connector";
             return "Dock trigger gears";
         }
 
@@ -757,11 +1108,27 @@ namespace IngameScript
             if (block == null || block.Closed)
                 return;
 
+            if (dockKind == DockBlockKind.HomeConnector)
+            {
+                ToggleHome(block as IMyShipConnector, gc);
+                return;
+            }
+
             if (dockKind == DockBlockKind.PadConnectors)
             {
+                if (InConnectorGroup(block.EntityId))
+                    return;
                 TogglePad(block, ic, gc);
                 return;
             }
+
+            if (dockKind == DockBlockKind.TriggerGears)
+            {
+                if (InGearGroup(block.EntityId))
+                    return;
+            }
+            else if (InConnectorGroup(block.EntityId))
+                return;
 
             string line = ic.DockTriggerTag ?? "";
             if (line.Length == 0)
@@ -789,17 +1156,36 @@ namespace IngameScript
             }
 
             StaticConnectorStamp.RemoveLine(block, pad);
-            if (trigger.Length > 0 && ConnectorInTriggerGroup(gc, ic, block.EntityId))
-                StaticConnectorStamp.AppendLine(block, trigger);
+        }
+
+        void ToggleHome(IMyShipConnector chosen, GridContext gc)
+        {
+            if (chosen == null || chosen.Closed || gc == null || gc.GridTS == null || gc.Me == null)
+                return;
+
+            string line = IniContext.HomeConnectorTag;
+            bool clear = StaticConnectorStamp.HasExactLine(chosen.CustomData ?? "", line);
+            connectorScan.Clear();
+            gc.GridTS.GetBlocksOfType(connectorScan);
+            for (int i = 0; i < connectorScan.Count; i++)
+            {
+                IMyShipConnector connector = connectorScan[i];
+                if (connector == null || connector.Closed || !connector.IsSameConstructAs(gc.Me))
+                    continue;
+                if (clear || connector.EntityId != chosen.EntityId)
+                    StaticConnectorStamp.RemoveLine(connector, line);
+            }
+            if (!clear)
+                StaticConnectorStamp.AppendLine(chosen, line);
         }
 
         bool BlockMarked(IMyTerminalBlock block, IniContext ic)
         {
+            if (dockKind == DockBlockKind.HomeConnector)
+                return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", IniContext.HomeConnectorTag);
             if (dockKind == DockBlockKind.PadConnectors)
-                return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
-            if (dockKind == DockBlockKind.TriggerGears)
-                return InGearGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
-            return InConnectorGroup(block.EntityId) || StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
+                return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
+            return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
         }
 
         void FillShown(GridContext gc, IniContext ic)
@@ -819,6 +1205,8 @@ namespace IngameScript
                     IMyLandingGear gear = gearScan[i];
                     if (!TakeBlock(gear, gc, ignore))
                         continue;
+                    if (InGearGroup(gear.EntityId))
+                        continue;
                     shownBlocks.Add(gear);
                 }
                 return;
@@ -826,12 +1214,16 @@ namespace IngameScript
 
             connectorScan.Clear();
             gc.GridTS.GetBlocksOfType(connectorScan);
+            bool home = dockKind == DockBlockKind.HomeConnector;
             string groupName = dockKind == DockBlockKind.PadConnectors ? ic.LandingPadGroup : ic.DockTriggerGroup;
-            FillConnectorGroup(gc, groupName);
+            if (!home)
+                FillConnectorGroup(gc, groupName);
             for (int i = 0; i < connectorScan.Count; i++)
             {
                 IMyShipConnector connector = connectorScan[i];
                 if (!TakeBlock(connector, gc, ignore))
+                    continue;
+                if (!home && InConnectorGroup(connector.EntityId))
                     continue;
                 shownBlocks.Add(connector);
             }
@@ -900,22 +1292,16 @@ namespace IngameScript
             return false;
         }
 
-        bool ConnectorInTriggerGroup(GridContext gc, IniContext ic, long entityId)
-        {
-            FillConnectorGroup(gc, ic.DockTriggerGroup);
-            return InConnectorGroup(entityId);
-        }
-
         public void ReleaseScreenMarker()
         {
             IMyTextSurface previous = markedSurface;
             markedSurface = null;
             markedBlockId = 0;
             markedIndex = -1;
+            Sprites.SetMarked(null);
             if (previous == null)
                 return;
-            Sprites.ClearFrame(previous);
-            Sprites.PaintHud();
+            Sprites.RestoreUnmarked(previous);
         }
 
         bool ActivateScreenSlots()
@@ -970,7 +1356,8 @@ namespace IngameScript
             spt.Add("LCD 1", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("LCD 2", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Menu", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
 
@@ -986,7 +1373,8 @@ namespace IngameScript
                 string name = block == null || block.CustomName == null ? "" : block.CustomName;
                 spt.Add(SurfaceLabel(name, surfaceIndexes[i]), RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             }
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.KeepVisible(SelectedRow);
 
             IMyTextSurface current = null;
             long blockId = 0;
@@ -1004,16 +1392,15 @@ namespace IngameScript
             }
 
             bool moved = markedIndex != surfaceIndex || markedBlockId != blockId;
-            if (moved && markedSurface != null)
-                Sprites.ClearFrame(markedSurface);
-
-            spt.DrawTo(gc.LcdsMenu);
-            if (moved)
-                Sprites.PaintHud();
-
+            IMyTextSurface previous = markedSurface;
             markedSurface = current;
             markedBlockId = blockId;
             markedIndex = surfaceIndex;
+            Sprites.SetMarked(current);
+            if (moved && previous != null && previous != current)
+                Sprites.RestoreUnmarked(previous);
+
+            spt.DrawTo(gc.LcdsMenu);
             if (current != null)
                 spt.DrawPlainMarker(current);
         }

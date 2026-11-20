@@ -12,20 +12,6 @@ namespace IngameScript.Enums
             }
         }
 
-        public static string PlanetKind(PlanetType t)
-        {
-            switch (t)
-            {
-                case PlanetType.EarthFamily: return "EarthFamily";
-                case PlanetType.Mars: return "Mars";
-                case PlanetType.Alien: return "Alien";
-                case PlanetType.Triton: return "Triton";
-                case PlanetType.Pertam: return "Pertam";
-                case PlanetType.MoonFamily: return "MoonFamily";
-                default: return "Unknown";
-            }
-        }
-
         public static string State(MainState t)
         {
             switch (t)
@@ -86,136 +72,48 @@ namespace IngameScript.Enums
             }
         }
 
-        public static string Location(LocationType t)
+        public static bool TryState(string text, out MainState state)
         {
-            switch (t)
-            {
-                case LocationType.Planet: return "Planet";
-                case LocationType.Asteroid: return "Asteroid";
-                case LocationType.Station: return "Station/Base";
-                case LocationType.Base: return "Base";
-                case LocationType.OreVein: return "Ore";
-                default: return "PoI";
-            }
+            if (text == State(MainState.Abort)) { state = MainState.Abort; return true; }
+            if (text == State(MainState.Reload)) { state = MainState.Reload; return true; }
+            if (text == State(MainState.Idle)) { state = MainState.Idle; return true; }
+            if (text == State(MainState.Cruise)) { state = MainState.Cruise; return true; }
+            if (text == State(MainState.Orbit)) { state = MainState.Orbit; return true; }
+            if (text == State(MainState.Glide)) { state = MainState.Glide; return true; }
+            if (text == State(MainState.CNav)) { state = MainState.CNav; return true; }
+            if (text == State(MainState.Land)) { state = MainState.Land; return true; }
+            if (text == State(MainState.SBurn)) { state = MainState.SBurn; return true; }
+            if (text == State(MainState.Gps)) { state = MainState.Gps; return true; }
+            state = MainState.Idle;
+            return false;
         }
 
-        public static string RegionName(Region t)
+        public static bool TryLand(string text, out AutoLandState state)
         {
-            switch (t)
-            {
-                case Region.Orbit: return "Orbit";
-                case Region.Vicinity: return "Vicinity";
-                case Region.Void: return "Void";
-                default: return "Surface";
-            }
+            if (text == Land(AutoLandState.Abort)) { state = AutoLandState.Abort; return true; }
+            if (text == Land(AutoLandState.Align)) { state = AutoLandState.Align; return true; }
+            if (text == Land(AutoLandState.Drop)) { state = AutoLandState.Drop; return true; }
+            if (text == Land(AutoLandState.Cushion)) { state = AutoLandState.Cushion; return true; }
+            if (text == Land(AutoLandState.LockGear)) { state = AutoLandState.LockGear; return true; }
+            if (text == Land(AutoLandState.Idle)) { state = AutoLandState.Idle; return true; }
+            state = AutoLandState.Idle;
+            return false;
         }
 
-        public static string Planet(PlanetName t)
+        public static bool TryStep(string text, out Step step)
         {
-            switch (t)
-            {
-                case PlanetName.Earth: return "Earth";
-                case PlanetName.Mars: return "Mars";
-                case PlanetName.Europa: return "Europa";
-                case PlanetName.Alien: return "Alien";
-                case PlanetName.Titan: return "Titan";
-                case PlanetName.Triton: return "Triton";
-                case PlanetName.Pertam: return "Pertam";
-                default: return "";
-            }
+            if (text == StepName(Step.On)) { step = Step.On; return true; }
+            if (text == StepName(Step.Off)) { step = Step.Off; return true; }
+            if (text == StepName(Step.AimToGPS)) { step = Step.AimToGPS; return true; }
+            if (text == StepName(Step.Cruise)) { step = Step.Cruise; return true; }
+            if (text == StepName(Step.Preclimb)) { step = Step.Preclimb; return true; }
+            if (text == StepName(Step.Lift)) { step = Step.Lift; return true; }
+            if (text == StepName(Step.Climb)) { step = Step.Climb; return true; }
+            if (text == StepName(Step.Orbit)) { step = Step.Orbit; return true; }
+            if (text == StepName(Step.Toggle)) { step = Step.Toggle; return true; }
+            step = Step.Toggle;
+            return false;
         }
 
-        public static string Ore(OreType t)
-        {
-            switch (t)
-            {
-                case OreType.Fe: return "Fe";
-                case OreType.Ni: return "Ni";
-                case OreType.Si: return "Si";
-                case OreType.Co: return "Co";
-                case OreType.Ag: return "Ag";
-                case OreType.Au: return "Au";
-                case OreType.Pt: return "Pt";
-                case OreType.Ur: return "Ur";
-                default: return "Ice";
-            }
-        }
-
-        public static string FactionName(Faction t)
-        {
-            switch (t)
-            {
-                case Faction.Friendly: return "Friendly";
-                case Faction.Enemy: return "Enemy";
-                default: return "Neutral";
-            }
-        }
-
-        public static string Station(StationType t)
-        {
-            switch (t)
-            {
-                case StationType.Comps: return "Comps";
-                case StationType.Ships: return "Ships";
-                default: return "Ingots";
-            }
-        }
-
-        public static LocationType ParseLocation(string s)
-        {
-            if (s == "Planet") return LocationType.Planet;
-            if (s == "Asteroid") return LocationType.Asteroid;
-            if (s == "Station" || s == "Station/Base") return LocationType.Station;
-            if (s == "Base") return LocationType.Base;
-            if (s == "Ore" || s == "OreVein") return LocationType.OreVein;
-            return LocationType.PoI;
-        }
-
-        public static Region ParseRegion(string s)
-        {
-            if (s == "Orbit") return Region.Orbit;
-            if (s == "Vicinity") return Region.Vicinity;
-            if (s == "Void") return Region.Void;
-            return Region.Surface;
-        }
-
-        public static PlanetName ParsePlanet(string s)
-        {
-            if (s == "Earth") return PlanetName.Earth;
-            if (s == "Mars") return PlanetName.Mars;
-            if (s == "Europa") return PlanetName.Europa;
-            if (s == "Alien") return PlanetName.Alien;
-            if (s == "Titan") return PlanetName.Titan;
-            if (s == "Triton") return PlanetName.Triton;
-            if (s == "Pertam") return PlanetName.Pertam;
-            return PlanetName.None;
-        }
-
-        public static OreType ParseOre(string s)
-        {
-            if (s == "Fe") return OreType.Fe;
-            if (s == "Ni") return OreType.Ni;
-            if (s == "Si") return OreType.Si;
-            if (s == "Co") return OreType.Co;
-            if (s == "Ag") return OreType.Ag;
-            if (s == "Au") return OreType.Au;
-            if (s == "Pt") return OreType.Pt;
-            if (s == "Ur") return OreType.Ur;
-            return OreType.Ice;
-        }
-
-        public static Faction ParseFaction(string s)
-        {
-            if (s == "Friendly") return Faction.Friendly;
-            if (s == "Enemy") return Faction.Enemy;
-            return Faction.Neutral;
-        }
-
-        public static StationType ParseStation(string s)
-        {
-            if (s == "Comps") return StationType.Comps;
-            if (s == "Ships") return StationType.Ships;
-            return StationType.Ingots;
-        }
     }
 }

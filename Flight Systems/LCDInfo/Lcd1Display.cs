@@ -16,9 +16,7 @@ namespace IngameScript
             IniContext ic,
             GridContext gc,
             PhysicsContext pc,
-            Command command,
-            PlanetType planet,
-            double planetRadius)
+            Command command)
         {
             if (spt == null || pc == null)
                 return;
@@ -26,7 +24,6 @@ namespace IngameScript
             spt.Clear();
             spt.Add(gc.GridName ?? "");
             spt.Add("Type: " + EnumLabels.Ship(gc.ShipType));
-            spt.Add($"Planet: {EnumLabels.PlanetKind(planet)} | {planetRadius / 1000:F0}km");
 
             stateLine.Clear();
             stateLine.Append("State: ");

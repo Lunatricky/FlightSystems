@@ -48,11 +48,9 @@
     <Compile Include="Domain\GpsStore.cs" />
     <Compile Include="Domain\IniContext.cs" />
     <Compile Include="Enums\ShipType.cs" />
-    <Compile Include="Enums\GpsTypes.cs" />
     <Compile Include="Enums\EnumLabels.cs" />
     <Compile Include="Enums\Task.cs" />
     <Compile Include="Enums\Step.cs" />
-    <Compile Include="Enums\PlanetType.cs" />
     <Compile Include="LCDInfo\Sprites.cs" />
     <Compile Include="LCDInfo\Lcd1Display.cs" />
     <Compile Include="LCDInfo\Lcd2Display.cs" />

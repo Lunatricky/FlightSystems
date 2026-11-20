@@ -12,6 +12,9 @@ namespace IngameScript.Domain
 {
     public class GridContext
     {
+        // While text panels are on, reload must not put a painted surface back on script.
+        public static bool PaintAsText;
+
         IMyGridTerminalSystem gridTS;
         IMyProgrammableBlock me;
 
@@ -39,7 +42,6 @@ namespace IngameScript.Domain
         ShipType shipType;
 
         List<IMyTerminalBlock> unfilteredBlocks = new List<IMyTerminalBlock>();
-        readonly List<IMyTerminalBlock> tokenRenameBlocks = new List<IMyTerminalBlock>();
         List<IMyFunctionalBlock> controlledBlocks = new List<IMyFunctionalBlock>();
         List<IMyFunctionalBlock> controlledToolBlocks = new List<IMyFunctionalBlock>();
         List<IMyShipConnector> connectors = new List<IMyShipConnector>();
@@ -241,6 +243,27 @@ namespace IngameScript.Domain
                 rayCamera = forward;
             if (rayCamera != null)
                 rayCamera.Enabled = true;
+        }
+
+        // Same ray tag. Already facing gravity, within RaycastConeLimit radians. Do not aim the forward camera.
+        public IMyCameraBlock FindDownCamera(string tag, Vector3D gravity)
+        {
+            if (string.IsNullOrEmpty(tag) || gravity.LengthSquared() < 1e-6)
+                return null;
+
+            Vector3D down = Vector3D.Normalize(gravity);
+            for (int i = 0; i < cameras.Count; i++)
+            {
+                IMyCameraBlock cam = cameras[i];
+                if (cam == null || cam.Closed || !cam.Enabled || !cam.IsFunctional)
+                    continue;
+                string name = cam.CustomName ?? "";
+                if (!name.Contains(tag))
+                    continue;
+                if (cam.WorldMatrix.Forward.Dot(down) + 1e-3 >= Math.Cos(cam.RaycastConeLimit))
+                    return cam;
+            }
+            return null;
         }
 
         public bool IsOwnGrid(long entityId)
@@ -503,8 +526,8 @@ namespace IngameScript.Domain
             string n = s.Name ?? "";
             Color bg = (ic.TransparentLCD && n.ToLower().Contains("transparent"))
                 ? Color.Black
-                : ColorMap.GetColorFromString(ic.LcdBackgroundColor);
-            Color fg = ColorMap.GetColorFromString(ic.LcdFontColor);
+                : ic.LcdBackgroundColor;
+            Color fg = ic.LcdFontColor;
 
             // Do not toggle ContentType: TEXT→SCRIPT→restore blanks cockpit/PB sprite surfaces.
             s.BackgroundColor = bg;
@@ -530,6 +553,13 @@ namespace IngameScript.Domain
 
         public static IMyTextSurface SetupSurface(IMyTextSurface surface, float fontSize = 1.7f)
         {
+            if (PaintAsText)
+            {
+                if (surface.ContentType != ContentType.TEXT_AND_IMAGE)
+                    surface.ContentType = ContentType.TEXT_AND_IMAGE;
+                return surface;
+            }
+
             surface.ContentType = ContentType.SCRIPT;
             surface.Script = "";
             surface.Font = "DEBUG";
@@ -827,39 +857,6 @@ namespace IngameScript.Domain
             );
         }
 
-        // One pass while an old default tag is still the saved value. Later parses see the new value and do not call this.
-        public void ReplaceNameTokens(List<string> oldTokens, List<string> newTokens)
-        {
-            if (oldTokens == null || newTokens == null || oldTokens.Count == 0 || newTokens.Count < oldTokens.Count || GridTS == null || Me == null)
-                return;
-
-            int count = oldTokens.Count;
-            GetSameConstructBlocks(tokenRenameBlocks, "");
-            for (int i = 0; i < tokenRenameBlocks.Count; i++)
-            {
-                IMyTerminalBlock block = tokenRenameBlocks[i];
-                if (block == null || block.Closed)
-                    continue;
-
-                string name = block.CustomName;
-                if (string.IsNullOrEmpty(name))
-                    continue;
-
-                string updated = name;
-                for (int t = 0; t < count; t++)
-                {
-                    string oldToken = oldTokens[t];
-                    if (string.IsNullOrEmpty(oldToken))
-                        continue;
-                    if (updated.Contains(oldToken))
-                        updated = updated.Replace(oldToken, newTokens[t] ?? "");
-                }
-
-                if (updated != name)
-                    block.CustomName = updated;
-            }
-        }
-
         public void GetOwnGridBlocks<T>(List<T> list, string __ignoreTag = "") where T : class, IMyTerminalBlock
         {
             list.Clear();
@@ -953,6 +950,9 @@ namespace IngameScript.Domain
         public void CleanSurfaces() => CleanSurfaces(surfaces);
         public void CleanSurfaces(List<IMyTextSurface> lcds)
         {
+            if (PaintAsText)
+                return;
+
             foreach (IMyTextSurface lcd in lcds)
             {
                 lcd.ContentType = ContentType.SCRIPT;

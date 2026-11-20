@@ -1,5 +1,6 @@
 using IngameScript.Domain;
 using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using VRage.Game.GUI.TextPanel;
@@ -20,6 +21,11 @@ namespace IngameScript
         static Sprites flightHud2;
         static Sprites flightMenu;
         static readonly List<IMyTextSurface> painted = new List<IMyTextSurface>();
+        static readonly StringBuilder textOut = new StringBuilder();
+        static IMyTextSurface markedPanel;
+        static int spriteTicks;
+        static bool leadEmptySprite;
+        static bool leadArmed;
 
         readonly IniContext ic;
         readonly StringBuilder measure = new StringBuilder();
@@ -29,6 +35,7 @@ namespace IngameScript
         readonly List<string> texts = new List<string>();
         readonly List<Color> BackgroundColors = new List<Color>();
         readonly List<Color> FontColors = new List<Color>();
+        int followLine = -1;
 
         public Sprites(IniContext ic)
         {
@@ -40,6 +47,7 @@ namespace IngameScript
             texts.Clear();
             BackgroundColors.Clear();
             FontColors.Clear();
+            followLine = -1;
         }
 
         public void CopyFrom(Sprites src)
@@ -54,6 +62,7 @@ namespace IngameScript
                 BackgroundColors.Add(src.BackgroundColors[i]);
                 FontColors.Add(src.FontColors[i]);
             }
+            followLine = src.followLine;
         }
 
         public void Add(string s)
@@ -82,6 +91,12 @@ namespace IngameScript
             texts.Add(s);
             BackgroundColors.Add(b);
             FontColors.Add(f);
+        }
+
+        // Line index that must stay on screen. Title is 0. The last line stays put.
+        public void KeepVisible(int line)
+        {
+            followLine = line;
         }
 
         public static void BindFlight(
@@ -165,6 +180,8 @@ namespace IngameScript
             {
                 IMyTextSurface panel = list[i];
                 if (panel == null)
+                    continue;
+                if (panel == markedPanel)
                     continue;
                 if (Contains(painted, panel))
                     continue;
@@ -254,10 +271,45 @@ namespace IngameScript
             return n;
         }
 
+        public static void SetMarked(IMyTextSurface panel)
+        {
+            markedPanel = panel;
+        }
+
+        // A flight surface gets its HUD back. A menu surface is left for the menu draw.
+        public static void RestoreUnmarked(IMyTextSurface panel)
+        {
+            if (panel == null || panel == markedPanel || flightHud1 == null)
+                return;
+            if (!Contains(flight1, panel) && !Contains(flight2, panel))
+                return;
+            flightHud1.PaintOneHud(panel);
+        }
+
+        void PaintOneHud(IMyTextSurface panel)
+        {
+            if (panel == null || panel == markedPanel)
+                return;
+            bool onSettings = Contains(flightSettings, panel);
+            if (onSettings && flightSettingsOpen)
+                return;
+
+            int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
+            bool in1 = Contains(flight1, panel);
+            Sprites settings = onSettings ? null : flightMenu;
+            PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+        }
+
         public void DrawPlainMarker(IMyTextSurface panel)
         {
             if (panel == null)
                 return;
+
+            if (ic.TextPanels)
+            {
+                WriteMarkerText(panel);
+                return;
+            }
 
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
@@ -271,32 +323,59 @@ namespace IngameScript
                 return;
             }
 
-            // TEXTURE LEFT is the top-left. One square in the visible area, nothing else.
-            float originX = (textureSize.X - surfaceSize.X) * 0.5f;
-            float originY = (textureSize.Y - surfaceSize.Y) * 0.5f;
-            float side = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
-            side = side * 0.45f;
-            if (side < 1f)
-                side = 1f;
-            float x = originX + (surfaceSize.X - side) * 0.5f;
-            float y = originY + (surfaceSize.Y - side) * 0.5f;
-            spriteBuf.Add(MakeRectSprite(new Vector2(x, y), new Vector2(side, side), ic.SpriteMenuColor));
-            Flush(panel);
-        }
+            // One sprite covers the visible area. The sentence stays at a cockpit-readable size.
+            float centerX = (textureSize.X - surfaceSize.X) * 0.5f + surfaceSize.X * 0.5f;
+            float centerY = (textureSize.Y - surfaceSize.Y) * 0.5f + surfaceSize.Y * 0.5f;
+            spriteBuf.Add(MakeRectSprite(new Vector2(centerX, centerY), surfaceSize, ic.SpriteBackgroundColor));
 
-        public static void ClearFrame(IMyTextSurface panel)
-        {
-            if (panel == null)
-                return;
-            panel.ContentType = ContentType.SCRIPT;
-            panel.Script = "";
-            using (var frame = panel.DrawFrame())
+            float pad = Pad(surfaceSize);
+            float textMaxW = surfaceSize.X - 2f * pad;
+            if (textMaxW < 1f)
+                textMaxW = 1f;
+
+            float scale = 1.3f;
+            float floor = scale * MenuFitFloor;
+            string line = SelectThisScreen;
+            string line2 = null;
+            if (WidthOf(panel, line, scale) > textMaxW)
             {
+                line = SelectLineTop;
+                line2 = SelectLineBottom;
+                float w1 = WidthOf(panel, line, scale);
+                float w2 = WidthOf(panel, line2, scale);
+                float widest = w1 > w2 ? w1 : w2;
+                if (widest > textMaxW && widest > 1f)
+                {
+                    float fit = scale * textMaxW / widest;
+                    if (fit < floor)
+                        fit = floor;
+                    scale = fit;
+                }
             }
+
+            float lineH = scale * DebugLineHeight;
+            float blockH = line2 == null ? lineH : lineH * 2f;
+            float top = centerY - blockH * 0.5f;
+            float wLine = WidthOf(panel, line, scale);
+            spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine * 0.5f, top), ic.SpriteFontColor, line, scale));
+            if (line2 != null)
+            {
+                float wLine2 = WidthOf(panel, line2, scale);
+                spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine2 * 0.5f, top + lineH), ic.SpriteFontColor, line2, scale));
+            }
+            Flush(panel);
         }
 
         void Blank(IMyTextSurface panel)
         {
+            if (ic.TextPanels)
+            {
+                PrepareText(panel, TextAlignment.LEFT);
+                textOut.Clear();
+                panel.WriteText(textOut);
+                return;
+            }
+
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
             spriteBuf.Clear();
@@ -305,6 +384,12 @@ namespace IngameScript
 
         void PaintShown(IMyTextSurface panel, int cols)
         {
+            if (ic.TextPanels)
+            {
+                WriteStackedText(panel, cols);
+                return;
+            }
+
             panel.ContentType = ContentType.SCRIPT;
             panel.Script = "";
             spriteBuf.Clear();
@@ -337,7 +422,7 @@ namespace IngameScript
                 Sprites stack = shown[s];
                 if (stack == null || stack.LineCount < 1)
                     continue;
-                float hs = HeightScale(surfaceSize.Y, stack.LineCount, pad);
+                float hs = HeightScale(surfaceSize.Y, MenuScaleRows(stack), pad);
                 if (hs < baseScale)
                     baseScale = hs;
             }
@@ -348,14 +433,34 @@ namespace IngameScript
                 if (stack == null)
                     continue;
 
-                int rows = stack.LineCount;
-                if (rows < 1)
+                int lineCount = stack.LineCount;
+                if (lineCount < 1)
                     continue;
 
-                float rowPitch = surfaceSize.Y / rows;
+                int pitchRows = MenuScaleRows(stack);
+                float rowPitch = surfaceSize.Y / pitchRows;
                 float barH = rowPitch - pad;
                 if (barH < 4f)
                     barH = rowPitch * 0.85f;
+
+                int rows = lineCount;
+                // Each menu surface shows as many rows as fit at this pitch. The scale stays put.
+                if (IsMenu(stack))
+                {
+                    float glyphBar = baseScale * DebugLineHeight / 0.7f;
+                    if (barH > glyphBar)
+                    {
+                        barH = glyphBar;
+                        rowPitch = barH + pad;
+                    }
+                    int fit = (int)(surfaceSize.Y / rowPitch + 0.01f);
+                    if (fit < 1)
+                        fit = 1;
+                    if (rows > fit)
+                        rows = fit;
+                }
+                else if (rows > pitchRows)
+                    rows = pitchRows;
 
                 float barX = originX + s * colW + pad;
                 float barW = colW - 2f * pad;
@@ -366,17 +471,49 @@ namespace IngameScript
                 if (textMaxW < 1f)
                     textMaxW = 1f;
 
+                bool window = IsMenu(stack) && stack.followLine >= 0 && stack.LineCount > rows && rows >= 3;
+                int winStart = 1;
+                if (window)
+                {
+                    int middle = rows - 2;
+                    int sel = stack.followLine;
+                    if (sel < 1)
+                        sel = 1;
+                    if (sel > stack.LineCount - 2)
+                        sel = stack.LineCount - 2;
+                    winStart = sel - middle / 2;
+                    if (winStart < 1)
+                        winStart = 1;
+                    int maxStart = stack.LineCount - 1 - middle;
+                    if (winStart > maxStart)
+                        winStart = maxStart;
+                    if (winStart < 1)
+                        winStart = 1;
+                }
+
                 for (int i = 0; i < rows; i++)
                 {
-                    float centerY = originY + i * rowPitch + rowPitch * 0.5f;
-                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[i]));
-
-                    string line = stack.texts[i] ?? "";
-                    float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
-                    if (scaleLine < DebugMinScale)
+                    int src = i;
+                    if (window)
                     {
-                        line = Truncate(panel, line, DebugMinScale, textMaxW);
-                        scaleLine = DebugMinScale;
+                        if (i == 0)
+                            src = 0;
+                        else if (i == rows - 1)
+                            src = stack.LineCount - 1;
+                        else
+                            src = winStart + i - 1;
+                    }
+
+                    float centerY = originY + i * rowPitch + rowPitch * 0.5f;
+                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[src]));
+
+                    string line = stack.texts[src] ?? "";
+                    float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
+                    float minScale = MenuMinScale(stack, baseScale);
+                    if (scaleLine < minScale)
+                    {
+                        line = Truncate(panel, line, minScale, textMaxW);
+                        scaleLine = minScale;
                     }
 
                     float lineH = scaleLine * DebugLineHeight;
@@ -388,17 +525,117 @@ namespace IngameScript
                     // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
                     float textX = barX + textPad;
                     float textY = barTop + extra * 0.22f;
-                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[i], line, scaleLine));
+                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[src], line, scaleLine));
                 }
             }
 
             Flush(panel);
         }
 
+        // Update1 is 60 Hz. Hold the flag until a sprite frame is drawn, because that tick may not paint.
+        public static void NoteSpriteTick()
+        {
+            if (leadArmed)
+            {
+                leadEmptySprite = false;
+                leadArmed = false;
+            }
+            if (leadEmptySprite)
+                return;
+
+            spriteTicks++;
+            if (spriteTicks >= 180)
+            {
+                spriteTicks = 0;
+                leadEmptySprite = true;
+            }
+        }
+
+        void PrepareText(IMyTextSurface panel, TextAlignment align)
+        {
+            if (panel.ContentType != ContentType.TEXT_AND_IMAGE)
+                panel.ContentType = ContentType.TEXT_AND_IMAGE;
+            if (panel.Alignment != align)
+                panel.Alignment = align;
+
+            string name = panel.Name;
+            bool transparent = ic.TransparentLCD && name != null && name.IndexOf("transparent", StringComparison.OrdinalIgnoreCase) >= 0;
+            panel.BackgroundColor = transparent ? Color.Black : ic.LcdBackgroundColor;
+            panel.FontColor = ic.LcdFontColor;
+        }
+
+        void WriteStackedText(IMyTextSurface panel, int cols)
+        {
+            PrepareText(panel, TextAlignment.LEFT);
+            textOut.Clear();
+            if (cols < 1)
+                cols = 1;
+            if (cols > shown.Length)
+                cols = shown.Length;
+
+            bool any = false;
+            for (int s = 0; s < cols; s++)
+            {
+                Sprites stack = shown[s];
+                if (stack == null)
+                    continue;
+
+                for (int i = 0; i < stack.texts.Count; i++)
+                {
+                    if (any)
+                        textOut.Append('\n');
+                    any = true;
+                    string line = stack.texts[i];
+                    bool mark = IsMenu(stack) && stack.followLine == i;
+                    if (mark)
+                        textOut.Append(TextMark);
+                    if (line != null)
+                        textOut.Append(line);
+                    if (mark)
+                        textOut.Append(TextMark);
+                }
+            }
+
+            panel.WriteText(textOut);
+        }
+
+        void WriteMarkerText(IMyTextSurface panel)
+        {
+            PrepareText(panel, TextAlignment.CENTER);
+
+            string font = panel.Font;
+            if (string.IsNullOrEmpty(font))
+                font = "DEBUG";
+            measure.Clear();
+            measure.Append('A');
+            Vector2 size = panel.MeasureStringInPixels(measure, font, panel.FontSize);
+            float lineH = size.Y;
+            if (lineH < 1f)
+                lineH = panel.FontSize * DebugLineHeight;
+            if (lineH < 1f)
+                lineH = DebugLineHeight;
+
+            int fit = (int)(panel.SurfaceSize.Y / lineH);
+            if (fit < 1)
+                fit = 1;
+            int pad = (fit - 1) / 2;
+
+            textOut.Clear();
+            for (int i = 0; i < pad; i++)
+                textOut.Append('\n');
+            textOut.Append(SelectThisScreen);
+            panel.WriteText(textOut);
+        }
+
         void Flush(IMyTextSurface panel)
         {
             using (var frame = panel.DrawFrame())
             {
+                if (leadEmptySprite)
+                {
+                    frame.Add(new MySprite());
+                    leadArmed = true;
+                }
                 for (int i = 0; i < spriteBuf.Count; i++)
                     frame.Add(spriteBuf[i]);
             }
@@ -549,6 +786,42 @@ namespace IngameScript
         const float DebugLineHeight = 28.8f;
         const float DebugCharWidth = 15f;
         const float DebugMinScale = 0.35f;
+        // Home, Flight, and the other short pages stay on their own line count.
+        // A shorter page uses the 7-row bars. A longer list does not shrink past 10.
+        const int MenuBarRows = 7;
+        const int MenuCapRows = 10;
+        const float MenuFitFloor = 0.8f;
+        const string TextMark = "-";
+        const string SelectThisScreen = "Press space to select this screen";
+        const string SelectLineTop = "Press space to";
+        const string SelectLineBottom = "select this screen";
+
+        static bool IsMenu(Sprites stack)
+        {
+            return stack != flightHud1 && stack != flightHud2;
+        }
+
+        static int MenuScaleRows(Sprites stack)
+        {
+            int rows = stack.LineCount;
+            if (!IsMenu(stack))
+                return rows;
+            if (rows < MenuBarRows)
+                return MenuBarRows;
+            if (rows > MenuCapRows)
+                return MenuCapRows;
+            return rows;
+        }
+
+        static float MenuMinScale(Sprites stack, float baseScale)
+        {
+            if (!IsMenu(stack))
+                return DebugMinScale;
+            float floor = baseScale * MenuFitFloor;
+            if (floor < DebugMinScale)
+                return DebugMinScale;
+            return floor;
+        }
 
         float FitWidth(IMyTextSurface panel, string text, float scale, float maxW)
         {
