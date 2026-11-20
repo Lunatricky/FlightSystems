@@ -1,5 +1,6 @@
 ﻿using IngameScript.Enums;
 using IngameScript.UseCases;
+using Sandbox.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame.Utilities;
@@ -55,6 +56,7 @@ namespace IngameScript.Domain
         public const string PAINT_SURFACES = "Change Screen Colors";
         public const string TRANSPARENTLCD = "Keep LCD Transparency";
         public const string TEXT_PANELS = "Text Panels";
+        public const string HomeConnectorTag = "[FS_home]";
 
         const bool DefaultFlightSystems = true;
         const bool DefaultAnalogThrotle = false;
@@ -1048,6 +1050,9 @@ namespace IngameScript.Domain
                 return false;
 
             Vector3D here = grid.Controller.GetPosition();
+            IMyShipConnector home = HomeConnector(grid);
+            if (home != null)
+                here = home.GetPosition();
             int x = GpsStore.NearestMeter(here.X);
             int y = GpsStore.NearestMeter(here.Y);
             int z = GpsStore.NearestMeter(here.Z);
@@ -1065,6 +1070,22 @@ namespace IngameScript.Domain
                 return false;
             ReplaceMarkerBlock(updated);
             return true;
+        }
+
+        public static IMyShipConnector HomeConnector(GridContext grid)
+        {
+            if (grid == null)
+                return null;
+            List<IMyShipConnector> list = grid.Connectors;
+            for (int i = 0; i < list.Count; i++)
+            {
+                IMyShipConnector connector = list[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (StaticConnectorStamp.HasExactLine(connector.CustomData, HomeConnectorTag))
+                    return connector;
+            }
+            return null;
         }
 
         public bool DeleteGpsPoint(int index)

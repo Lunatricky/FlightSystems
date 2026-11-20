@@ -29,7 +29,8 @@ namespace IngameScript
     {
         TriggerGears,
         TriggerConnectors,
-        PadConnectors
+        PadConnectors,
+        HomeConnector
     }
 
     enum ScreenSlot
@@ -63,7 +64,7 @@ namespace IngameScript
         const int ToggleValueRows = 9;
         const int NumberValueRows = 5;
         const int ColorValueRows = 5;
-        const int DockKindRows = 3;
+        const int DockKindRows = 4;
         DockBlockKind dockKind = DockBlockKind.TriggerGears;
         int dockKindRow = 1;
         readonly List<IMyTerminalBlock> shownBlocks = new List<IMyTerminalBlock>();
@@ -830,19 +831,23 @@ namespace IngameScript
                 index = 1;
             else if (dockKind == DockBlockKind.PadConnectors)
                 index = 2;
+            else if (dockKind == DockBlockKind.HomeConnector)
+                index = 3;
 
             index += dir;
             if (index < 0)
-                index = 2;
-            else if (index > 2)
+                index = 3;
+            else if (index > 3)
                 index = 0;
 
             if (index == 0)
                 dockKind = DockBlockKind.TriggerGears;
             else if (index == 1)
                 dockKind = DockBlockKind.TriggerConnectors;
-            else
+            else if (index == 2)
                 dockKind = DockBlockKind.PadConnectors;
+            else
+                dockKind = DockBlockKind.HomeConnector;
             dockKindRow = index + 1;
         }
 
@@ -1013,6 +1018,8 @@ namespace IngameScript
                 dockKind = DockBlockKind.TriggerConnectors;
             else if (SelectedRow == 3)
                 dockKind = DockBlockKind.PadConnectors;
+            else if (SelectedRow == 4)
+                dockKind = DockBlockKind.HomeConnector;
             else
                 return false;
 
@@ -1050,6 +1057,7 @@ namespace IngameScript
             spt.Add("Dock trigger gears", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock trigger connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Landing pad connectors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Home connector", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
         }
@@ -1079,6 +1087,8 @@ namespace IngameScript
                 return "Dock trigger connectors";
             if (kind == DockBlockKind.PadConnectors)
                 return "Landing pad connectors";
+            if (kind == DockBlockKind.HomeConnector)
+                return "Home connector";
             return "Dock trigger gears";
         }
 
@@ -1086,6 +1096,12 @@ namespace IngameScript
         {
             if (block == null || block.Closed)
                 return;
+
+            if (dockKind == DockBlockKind.HomeConnector)
+            {
+                ToggleHome(block as IMyShipConnector, gc);
+                return;
+            }
 
             if (dockKind == DockBlockKind.PadConnectors)
             {
@@ -1131,8 +1147,31 @@ namespace IngameScript
             StaticConnectorStamp.RemoveLine(block, pad);
         }
 
+        void ToggleHome(IMyShipConnector chosen, GridContext gc)
+        {
+            if (chosen == null || chosen.Closed || gc == null || gc.GridTS == null || gc.Me == null)
+                return;
+
+            string line = IniContext.HomeConnectorTag;
+            bool clear = StaticConnectorStamp.HasExactLine(chosen.CustomData ?? "", line);
+            connectorScan.Clear();
+            gc.GridTS.GetBlocksOfType(connectorScan);
+            for (int i = 0; i < connectorScan.Count; i++)
+            {
+                IMyShipConnector connector = connectorScan[i];
+                if (connector == null || connector.Closed || !connector.IsSameConstructAs(gc.Me))
+                    continue;
+                if (clear || connector.EntityId != chosen.EntityId)
+                    StaticConnectorStamp.RemoveLine(connector, line);
+            }
+            if (!clear)
+                StaticConnectorStamp.AppendLine(chosen, line);
+        }
+
         bool BlockMarked(IMyTerminalBlock block, IniContext ic)
         {
+            if (dockKind == DockBlockKind.HomeConnector)
+                return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", IniContext.HomeConnectorTag);
             if (dockKind == DockBlockKind.PadConnectors)
                 return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.LandingPadTag);
             return StaticConnectorStamp.HasExactLine(block.CustomData ?? "", ic.DockTriggerTag);
@@ -1164,14 +1203,16 @@ namespace IngameScript
 
             connectorScan.Clear();
             gc.GridTS.GetBlocksOfType(connectorScan);
+            bool home = dockKind == DockBlockKind.HomeConnector;
             string groupName = dockKind == DockBlockKind.PadConnectors ? ic.LandingPadGroup : ic.DockTriggerGroup;
-            FillConnectorGroup(gc, groupName);
+            if (!home)
+                FillConnectorGroup(gc, groupName);
             for (int i = 0; i < connectorScan.Count; i++)
             {
                 IMyShipConnector connector = connectorScan[i];
                 if (!TakeBlock(connector, gc, ignore))
                     continue;
-                if (InConnectorGroup(connector.EntityId))
+                if (!home && InConnectorGroup(connector.EntityId))
                     continue;
                 shownBlocks.Add(connector);
             }
