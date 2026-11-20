@@ -70,6 +70,7 @@ namespace IngameScript
 
         double planetRadius = 0;
         bool homeHold;
+        bool homeTried;
         Vector3D homeAt;
 
         SystemBools sb;
@@ -1683,6 +1684,7 @@ namespace IngameScript
             lastError = 0;
             gearLockNote = null;
             homeHold = false;
+            homeTried = false;
             ClearClimbBoost(gc);
 
             if (gc.Controller != null)
@@ -1892,14 +1894,29 @@ namespace IngameScript
             double target = -Math.Max(2.0, Math.Min(ic.CruiseSpeed, agl * 0.15));
             if (homeHold && agl < stopReach)
             {
-                gc.Controller.DampenersOverride = true;
-                VectorHelper.MatchVerticalSpeed(gc, pc, 0, true);
+                HoldHome(gc);
                 return false;
             }
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false);
             if (homeHold)
                 return false;
             return agl < stopReach;
+        }
+
+        // Gear lock every tick. Connect at most once, and only on the tagged connector.
+        void HoldHome(GridContext grid)
+        {
+            TryLock(grid);
+            if (grid.Controller != null)
+                grid.Controller.DampenersOverride = true;
+            VectorHelper.MatchVerticalSpeed(grid, pc, 0, true);
+            if (homeTried)
+                return;
+            IMyShipConnector home = IniContext.HomeConnector(grid);
+            if (home == null || home.Status != MyShipConnectorStatus.Connectable)
+                return;
+            homeTried = true;
+            home.Connect();
         }
 
         // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
