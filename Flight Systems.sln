@@ -26,6 +26,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skid Steering Suspensions",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RotorSkid", "RotorSkid\RotorSkid.csproj", "{89CCB552-0D44-49C6-9205-233181A9F837}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Landing gear dock", "Landing gear dock\Landing gear dock.csproj", "{164E82F9-53C9-445C-8A87-95E9A3679E8B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -49,9 +51,14 @@ Global
 		{C2B6C830-D537-4888-B833-33647131289F}.Debug|x64.Build.0 = Debug|x64
 		{89CCB552-0D44-49C6-9205-233181A9F837}.Debug|x64.ActiveCfg = Debug|x64
 		{89CCB552-0D44-49C6-9205-233181A9F837}.Debug|x64.Build.0 = Debug|x64
+		{164E82F9-53C9-445C-8A87-95E9A3679E8B}.Debug|x64.ActiveCfg = Debug|x64
+		{164E82F9-53C9-445C-8A87-95E9A3679E8B}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{164E82F9-53C9-445C-8A87-95E9A3679E8B} = {6F8E2505-C8DD-416D-8B64-B63B7B71972B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9CE75DB8-33D8-4283-9073-229E5B37529A}
