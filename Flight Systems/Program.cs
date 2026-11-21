@@ -1870,7 +1870,7 @@ namespace IngameScript
             double safe = SafeFall(decel, altitude);
             if (safe <= 0)
                 return 0;
-            double speed = 0.35 * safe;
+            double speed = 0.60 * safe;
             if (speed < 2)
                 speed = 2;
             if (speed > ic.CruiseSpeed)
@@ -1924,7 +1924,7 @@ namespace IngameScript
             GravityAlignedOverride(gc);
             double agl = DescentAgl(gc);
             double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            double target = -0.75 * SafeFall(burnDecel, agl);
+            double target = -0.80 * SafeFall(burnDecel, agl);
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
             return agl < stopReach && FallSettled(gc, target);
         }
@@ -2383,7 +2383,7 @@ namespace IngameScript
         // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
         void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
         {
-            if (!GearHolding(gc) && pc.GroundLevel > 3 * gc.GridHeight && pc.ClimbRate > 2)
+            if (!GearHolding(gc) && pc.GroundLevel > 1.5 * pc.StopZDist)
             {
                 if (leaveToLand)
                     command.State = MainState.Land;
