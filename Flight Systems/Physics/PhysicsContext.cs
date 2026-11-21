@@ -94,6 +94,8 @@ namespace IngameScript.Physics
 
             if (Gravity > 0)
             {
+                netDecel = ComputeNetDecel(gc);
+
                 if (double.IsNaN(peakGravity) || Gravity > peakGravity)
                     peakGravity = Gravity;
 
@@ -123,8 +125,6 @@ namespace IngameScript.Physics
             {
                 peakGravity = double.NaN;
             }
-
-            netDecel = ComputeNetDecel(gc);
 
             if (command.State == MainState.Gps)
             {
@@ -326,8 +326,7 @@ namespace IngameScript.Physics
             double maxThrustUp = 0;
             foreach (var t in gc.UpwardThrusters) maxThrustUp += t.MaxEffectiveThrust;
 
-            double thrustAccel = maxThrustUp / Mass.TotalMass;
-
+            double thrustAccel = maxThrustUp / Mass.PhysicalMass;
             return thrustAccel - Gravity;  // positive = can decelerate
         }
 
