@@ -36,10 +36,6 @@ namespace IngameScript.Domain
         int savedX;
         int savedY;
         int savedZ;
-        string warnWord;
-        string warnKey;
-        string cruiseWarn;
-        string maxSpeedWarn;
         string warnA;
         string warnB;
         string warnEcho;
@@ -176,13 +172,7 @@ namespace IngameScript.Domain
         {
             this.gc = gc;
         }
-        internal int WarnCount { get { return warnCount; } }
-        internal string WarnEcho { get { return warnEcho; } }
 
-        internal string WarnLine(int index)
-        {
-            return index == 0 ? warnA : warnB;
-        }
         public string DockGroupTag => dockGroup;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
@@ -485,34 +475,17 @@ namespace IngameScript.Domain
             string speedText = ini.Get(ParamsSection, MAX_SPEED).ToString("");
             maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
             double parsedSpeed;
-            if (speedMissing)
-                maxSpeedWarn = "No " + MAX_SPEED;
-            else if (speedText == "Infinity" || speedText == "Infinite" || speedText == "" || speedText == "00")
+            if (speedText == "Infinity" || speedText == "Infinite" || speedText == "" || speedText == "00")
             {
                 maxSpeed = double.PositiveInfinity;
-                maxSpeedWarn = null;
             }
-            else if (!double.TryParse(speedText, out parsedSpeed))
-                maxSpeedWarn = "Bad " + MAX_SPEED;
-            else
-            {
-                maxSpeed = parsedSpeed;
-                maxSpeedWarn = null;
-            }
+            else if (!double.TryParse(speedText, out parsedSpeed)) maxSpeed = parsedSpeed;
 
             bool cruiseMissing = !ini.ContainsKey(ParamsSection, CRUISE_SPEED);
             string cruiseText = ini.Get(ParamsSection, CRUISE_SPEED).ToString("");
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
-            double parsedCruise;
-            if (cruiseMissing)
-                cruiseWarn = "No " + CRUISE_SPEED;
-            else if (!double.TryParse(cruiseText, out parsedCruise))
-                cruiseWarn = "Bad " + CRUISE_SPEED;
-            else
-            {
-                cruiseSpeed = parsedCruise;
-                cruiseWarn = null;
-            }
+            double parsedCruise;if (!double.TryParse(cruiseText, out parsedCruise)) cruiseSpeed = parsedCruise;
+
             cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(SafeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
@@ -805,7 +778,6 @@ namespace IngameScript.Domain
             MainState state;
             if (!EnumLabels.TryState(ini.Get(CommandSection, KeyState).ToString(""), out state))
             {
-                WarnCommand(KeyState);
                 return;
             }
             if (state == MainState.Idle || state == MainState.Abort || state == MainState.Reload)
@@ -817,7 +789,6 @@ namespace IngameScript.Domain
                 Step parsed;
                 if (!EnumLabels.TryStep(ini.Get(CommandSection, KeyStep).ToString(""), out parsed))
                 {
-                    WarnCommand(KeyStep);
                     return;
                 }
                 step = parsed == Step.Toggle ? Step.On : parsed;
@@ -829,7 +800,6 @@ namespace IngameScript.Domain
                 AutoLandState parsedLand;
                 if (!EnumLabels.TryLand(ini.Get(CommandSection, KeyLand).ToString(""), out parsedLand))
                 {
-                    WarnCommand(KeyLand);
                     return;
                 }
                 land = parsedLand;
@@ -841,7 +811,6 @@ namespace IngameScript.Domain
                 double parsedNumber;
                 if (!double.TryParse(ini.Get(CommandSection, KeyNumber).ToString(""), out parsedNumber))
                 {
-                    WarnCommand(KeyNumber);
                     return;
                 }
                 number = parsedNumber;
@@ -852,7 +821,6 @@ namespace IngameScript.Domain
             bool hasZ = ini.ContainsKey(CommandSection, KeyZ);
             if (state == MainState.Gps && (!hasX || !hasY || !hasZ))
             {
-                WarnCommand(KeyX);
                 return;
             }
 
@@ -864,7 +832,6 @@ namespace IngameScript.Domain
             {
                 if (!hasX || !hasY || !hasZ)
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
                 double dx;
@@ -872,17 +839,14 @@ namespace IngameScript.Domain
                 double dz;
                 if (!double.TryParse(ini.Get(CommandSection, KeyX).ToString(""), out dx))
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
                 if (!double.TryParse(ini.Get(CommandSection, KeyY).ToString(""), out dy))
                 {
-                    WarnCommand(KeyY);
                     return;
                 }
                 if (!double.TryParse(ini.Get(CommandSection, KeyZ).ToString(""), out dz))
                 {
-                    WarnCommand(KeyZ);
                     return;
                 }
                 x = GpsStore.NearestMeter(dx);
@@ -891,7 +855,6 @@ namespace IngameScript.Domain
                 target = x != 0 || y != 0 || z != 0;
                 if (state == MainState.Gps && !target)
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
             }
@@ -905,12 +868,6 @@ namespace IngameScript.Domain
             savedY = y;
             savedZ = z;
             restoreHold = true;
-        }
-
-        void WarnCommand(string key)
-        {
-            warnWord = "Bad";
-            warnKey = key;
         }
 
         void WriteCommand()
@@ -1005,7 +962,7 @@ namespace IngameScript.Domain
                 string section = snapSection[i];
                 if (OwnedSection(section))
                     continue;
-                if (section.StartsWith("Flight Systems:", StringComparison.OrdinalIgnoreCase))
+                if (section.StartsWith(FLIGHT_SYSTEMS + ": ", StringComparison.OrdinalIgnoreCase))
                     continue;
                 ini.Set(section, snapKey[i], snapValue[i]);
             }
@@ -1076,7 +1033,7 @@ namespace IngameScript.Domain
             string body = ini.ToString();
             if (body.Length == 0 || body[body.Length - 1] != '\n')
                 body += "\n";
-            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body;
+            string written = $"[{FLIGHT_SYSTEMS}: {gc.Me.EntityId} ]\n\n" + body;
             if (old != written)
                 gc.Me.CustomData = written;
             seenCustomData = written;
