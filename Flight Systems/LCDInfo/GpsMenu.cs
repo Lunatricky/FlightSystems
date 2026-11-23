@@ -160,7 +160,6 @@ namespace IngameScript
                     command.Empty(MainState.Gps);
                     command.Param.TargetCoordinates = wp.Position;
                     command.Param.Type = ParamType.Vector3D;
-                    command.Param.Dock = wp.Dock;
                     Close();
                     close();
                     return;

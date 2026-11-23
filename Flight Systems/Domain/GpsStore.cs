@@ -116,19 +116,6 @@ namespace IngameScript.Domain
             return false;
         }
 
-        public bool DockAt(int x, int y, int z)
-        {
-            for (int i = 0; i < items.Count; i++)
-            {
-                GpsWaypoint wp = items[i];
-                if (!wp.Dock)
-                    continue;
-                if (NearestMeter(wp.Position.X) == x && NearestMeter(wp.Position.Y) == y && NearestMeter(wp.Position.Z) == z)
-                    return true;
-            }
-            return false;
-        }
-
         public string NextMarkName()
         {
             if (!HasName("New GPS"))

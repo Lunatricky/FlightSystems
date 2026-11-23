@@ -827,7 +827,6 @@ namespace IngameScript.Domain
             command.Param.AutoLandState = savedLand;
             command.Param.Number = savedNumber;
             command.Param.TargetCoordinates = savedTarget ? new Vector3D(savedX, savedY, savedZ) : new Vector3D();
-            command.Param.Dock = savedState == MainState.Gps && gps.DockAt(savedX, savedY, savedZ);
             modes.SetModeOn(savedState);
         }
 

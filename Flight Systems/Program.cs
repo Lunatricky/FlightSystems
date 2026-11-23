@@ -68,9 +68,6 @@ namespace IngameScript
         string textModeEcho;
 
         double planetRadius = 0;
-        bool homeHold;
-        bool homeTried;
-        Vector3D homeAt;
         bool haveFall;
         double fallAlt;
         double fallDecel;
@@ -370,12 +367,6 @@ namespace IngameScript
                 case 0:
                     task = Task.PhysicsUpdate;
                     Vector3D aimAt = command.Param.TargetCoordinates;
-                    if (command.State == MainState.Gps)
-                    {
-                        Vector3D moved;
-                        if (HomeAim(gc, aimAt, out moved))
-                            aimAt = moved;
-                    }
                     pc.NewRun(timeSinceLastRun, aimAt, command);
                     break;
                 case 1:
@@ -1000,29 +991,10 @@ namespace IngameScript
             }
         }
 
-        // Dock point only. Moved point is where the remote must sit so the tagged connector is on the GPS. Not saved.
-        bool HomeAim(GridContext grid, Vector3D gps, out Vector3D at)
-        {
-            at = gps;
-            if (command == null || command.Param == null || !command.Param.Dock)
-                return false;
-            if (grid == null || grid.Controller == null)
-                return false;
-            IMyShipConnector home = IniContext.HomeConnector(grid);
-            if (home == null)
-                return false;
-            at = gps + grid.Controller.GetPosition() - home.GetPosition();
-            return true;
-        }
-
         void GPSStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             Vector3D gps = command.Param.TargetCoordinates;
-            Vector3D at;
-            bool home = HomeAim(gc, gps, out at);
             double reach = ic.DistanceToGPS + pc.StopZDist;
-            if (home)
-                reach = pc.StopZDist;
 
             switch (command.Param.Step)
             {
@@ -1033,7 +1005,7 @@ namespace IngameScript
                 case Step.On:
                     if (pc.Gravity == 0)
                     {
-                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - at))
+                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - gps))
                             command.Param.Step = Step.Cruise;
                     }
                     else if (GravityAlignedOverride(gc))
@@ -1070,11 +1042,6 @@ namespace IngameScript
                             command.State = MainState.Land;
                             sb.GpsToggle = false;
                             previousRate = PREV_RATE;
-                            if (home)
-                            {
-                                homeHold = true;
-                                homeAt = gps;
-                            }
                         }
                         return;
                     }
@@ -1632,8 +1599,6 @@ namespace IngameScript
             integral = 0;
             lastError = 0;
             gearLockNote = null;
-            homeHold = false;
-            homeTried = false;
             haveFall = false;
             ClearClimbBoost(gc);
 
@@ -1738,9 +1703,7 @@ namespace IngameScript
             Vector3D levelAxis = shipUp.Cross(gDown);
             double levelErr = levelAxis.Length();
 
-            Vector3D aimed;
-            HomeAim(gc, targetGps, out aimed);
-            Vector3D toTarget = aimed - gc.Controller.GetPosition();
+            Vector3D toTarget = targetGps - gc.Controller.GetPosition();
             Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
             Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
 
@@ -1847,13 +1810,9 @@ namespace IngameScript
 
         bool AutoLand(GridContext gc, PhysicsContext pc)
         {
-            double gate = pc.NetDecel;
-            if (!homeHold)
-            {
-                double projected;
-                ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected);
-                gate = projected;
-            }
+            double projected;
+            ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected);
+            double gate = projected;
             if (gc.ShipType != ShipType.Atmo)
                 if (gate - 0.25 < 0)
                 {
@@ -1868,36 +1827,11 @@ namespace IngameScript
             double above = SurfaceLeft(gc, agl);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
-            if (homeHold)
-                stopReach = 0.5;
-            if (homeHold && above < stopReach)
-            {
-                HoldHome(gc);
-                return false;
-            }
             double target = LandFall(pc.MaxYDecel, above);
             if (above <= SlowToTwo(gc))
                 target = -2;
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 0.5);
-            if (homeHold)
-                return false;
             return agl < stopReach && FallSettled(gc, target);
-        }
-
-        // Gear lock every tick. Connect at most once, and only on the tagged connector.
-        void HoldHome(GridContext grid)
-        {
-            TryLock(grid);
-            if (grid.Controller != null)
-                grid.Controller.DampenersOverride = true;
-            VectorHelper.MatchVerticalSpeed(grid, pc, 0, true);
-            if (homeTried)
-                return;
-            IMyShipConnector home = IniContext.HomeConnector(grid);
-            if (home == null || home.Status != MyShipConnectorStatus.Connectable)
-                return;
-            homeTried = true;
-            home.Connect();
         }
 
         // Remote altitude minus the block that touches first. Not written down.
@@ -1955,9 +1889,6 @@ namespace IngameScript
         // Land and the GPS handoff into Land. No camera leaves planet altitude.
         double DescentAgl(GridContext grid)
         {
-            if (homeHold && pc != null && pc.Gravity > 0 && grid != null && grid.Controller != null)
-                return (homeAt - grid.Controller.GetPosition()).Dot(Vector3D.Normalize(pc.NaturalGravity));
-
             double planet = pc.GroundLevel;
             if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
                 return planet;
