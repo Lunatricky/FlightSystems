@@ -471,20 +471,13 @@ namespace IngameScript.Domain
             landingPadTag = ReadMoved(DockSection, INI_LANDING_PAD_TAG, "[FS_pad]");
 
             //ParamsSection
-            bool speedMissing = !ini.ContainsKey(ParamsSection, MAX_SPEED);
+            // Infinity, Infinite, blank, and 00 are no limit. Any other non-number keeps ToDouble's default.
             string speedText = ini.Get(ParamsSection, MAX_SPEED).ToString("");
             maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
-            double parsedSpeed;
             if (speedText == "Infinity" || speedText == "Infinite" || speedText == "" || speedText == "00")
-            {
                 maxSpeed = double.PositiveInfinity;
-            }
-            else if (!double.TryParse(speedText, out parsedSpeed)) maxSpeed = parsedSpeed;
 
-            bool cruiseMissing = !ini.ContainsKey(ParamsSection, CRUISE_SPEED);
-            string cruiseText = ini.Get(ParamsSection, CRUISE_SPEED).ToString("");
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
-            double parsedCruise;if (!double.TryParse(cruiseText, out parsedCruise)) cruiseSpeed = parsedCruise;
 
             cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(SafeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
