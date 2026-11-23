@@ -448,7 +448,7 @@ namespace IngameScript
             }
 
             Lcd1Display.Fill(hudStack1, ic, gc, pc, command);
-            Lcd2Display.Fill(hudStack2, pc, command, sb);
+            Lcd2Display.Fill(hudStack2, pc, command, sb, isDocked);
             Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
 

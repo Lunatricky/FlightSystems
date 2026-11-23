@@ -46,22 +46,23 @@ namespace IngameScript
             }
 
             spt.Add(stateLine.ToString());
-            spt.Add2(Mass(pc.Mass.PhysicalMass), "E " + Mass(pc.Mass.BaseMass));
 
             if (pc.H2Cache.Capacity > 0)
-                AddResource(spt, ic, "H2", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
+                AddResource(spt, ic, "H2: ", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
             if (pc.BatCache.Capacity > 0)
-                AddResource(spt, ic, "Bat", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
+                AddResource(spt, ic, "Bat: ", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
+
+            spt.Add2(Mass(pc.Mass.PhysicalMass), "E: " + Mass(pc.Mass.BaseMass));
         }
 
         static string Mass(double kg)
         {
             double t = kg / 1000.0;
             if (t < 1000)
-                return string.Format("{0:0} t", t);
+                return string.Format("M: {0:0} t", t);
             if (t < 1000000)
-                return string.Format("{0:0} Kt", t / 1000.0);
-            return string.Format("{0:0} Mt", t / 1000000.0);
+                return string.Format("M: {0:0} Kt", t / 1000.0);
+            return string.Format("M: {0:0} Mt", t / 1000000.0);
         }
 
         static void AddResource(Sprites spt, IniContext ic, string label, double percent, string time, double rate)
@@ -82,7 +83,7 @@ namespace IngameScript
                 return;
             }
 
-            spt.Add2(label, time ?? "");
+            spt.Add(label + time ?? "");
             spt.AddBar(percent, BarColor(rate, percent, ic.SpriteBackgroundColor, ic.SpriteFontColor));
         }
 

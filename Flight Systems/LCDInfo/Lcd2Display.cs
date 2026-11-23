@@ -14,7 +14,8 @@ namespace IngameScript
             Sprites spt,
             PhysicsContext pc,
             Command command,
-            SystemBools sb)
+            SystemBools sb, 
+            bool isDocked)
         {
             if (spt == null || pc == null)
                 return;
@@ -30,11 +31,19 @@ namespace IngameScript
                         ? Color.DarkRed : pc.GroundLevel < 4 * pc.StopYDist
                         ? Color.DarkOrange : new Color();
                 }
+
+                if (grav)
+                    spt.Add2(
+                        string.Format("Accel: {0:0.0} g", pc.Accel.Length() / 9.81),
+                        string.Format("Grav: {0:0.00}", pc.Gravity / 9.81));
+                else
+                    spt.Add(string.Format("Accel: {0:0.0} g", pc.Accel.Length() / 9.81));
+
                 bool warn = !color.Equals(new Color());
-                string ground = string.Format("G {0}", Dist(pc.GroundLevel));
-                string sea = string.Format("Sea {0}", Dist(pc.SeaLevel));
-                string climb = string.Format("Climb {0:0}", pc.ClimbRate);
-                string stopY = string.Format("StopY {0}  {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
+                string ground = string.Format("Grnd: {0}", Dist(pc.GroundLevel));
+                string sea = string.Format("Sea: {0}", Dist(pc.SeaLevel));
+                string climb = string.Format("Climb: {0:0}", pc.ClimbRate);
+                string stopY = isDocked ? "StopY: --" : string.Format("StopY: {0}  {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
                 if (warn)
                 {
                     spt.Add2B(ground, sea, color);
@@ -47,22 +56,14 @@ namespace IngameScript
                 }
             }
 
-            spt.Add(string.Format("StopZ {0}  {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
-            if (grav)
-                spt.Add2(
-                    string.Format("{0:0.0} g", pc.Accel.Length() / 9.81),
-                    string.Format("Grav {0:0.00}", pc.Gravity / 9.81));
-            else
-                spt.Add(string.Format("{0:0.0} g", pc.Accel.Length() / 9.81));
-            spt.Add3(
-                string.Format("L {0:0}", pc.ForwardVelocity),
-                string.Format("Lat {0:0}", pc.RightVelocity),
-                string.Format("V {0:0}", pc.UpVelocity));
+            spt.Add2(string.Format("Long: {0:0}", pc.ForwardVelocity), string.Format("StopZ: {0}  {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
+
+            spt.Add2(string.Format("Lat: {0:0}", pc.RightVelocity), string.Format("V: {0:0}", pc.UpVelocity));
 
             if (sb.GpsToggle)
-                spt.Add("ETA " + UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed));
+                spt.Add("ETA: " + UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed));
             else if (command.State == MainState.Land)
-                spt.Add(pc.TimeToImpact == 0 ? "TTI --" : string.Format("TTI {0:0} s", pc.TimeToImpact));
+                spt.Add(pc.TimeToImpact == 0 ? "TTI: --" : string.Format("TTI: {0:0} s", pc.TimeToImpact));
         }
 
         static string Dist(double meters)
