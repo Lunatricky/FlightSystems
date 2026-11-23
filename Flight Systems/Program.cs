@@ -746,9 +746,15 @@ namespace IngameScript
             if (!dockSeatsHeld)
                 return;
             dockSeatsHeld = false;
-            // Menu or a Space close still owns the seat. Resetting here would thrust up.
+            // Menu or a key close still owns the seat. Resetting here would thrust up.
             if (menuToggle || menuSeatHold)
                 return;
+            if (ControlHeld())
+            {
+                menuSeatHold = true;
+                HoldMenuSeat();
+                return;
+            }
             pi.ResetControllers(gc.Controllers);
         }
 
@@ -1638,7 +1644,7 @@ namespace IngameScript
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            if (pi.Space() || pi.C())
+            if (ControlHeld())
             {
                 menuSeatHold = true;
                 HoldMenuSeat();
@@ -1653,7 +1659,7 @@ namespace IngameScript
         {
             if (!menuSeatHold)
                 return;
-            if (pi.Space() || pi.C())
+            if (ControlHeld())
             {
                 HoldMenuSeat();
                 return;
@@ -1661,6 +1667,11 @@ namespace IngameScript
 
             menuSeatHold = false;
             pi.ResetControllers(gc.Controllers);
+        }
+
+        bool ControlHeld()
+        {
+            return pi.W() || pi.A() || pi.S() || pi.D() || pi.Q() || pi.E() || pi.C() || pi.Space();
         }
 
         void AbortShipContext(GridContext gc)
