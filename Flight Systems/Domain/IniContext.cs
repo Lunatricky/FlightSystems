@@ -40,6 +40,7 @@ namespace IngameScript.Domain
         string warnWord;
         string warnKey;
         string cruiseWarn;
+        string maxSpeedWarn;
         string warnA;
         string warnB;
         string warnEcho;
@@ -496,11 +497,24 @@ namespace IngameScript.Domain
             ApplyFlightSystemsStaticHold();
 
             //ParamsSection
-            string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
-
-            maxSpeed = (s == "Infinity" || s == "Infinite" || s == "" || s == "00")
-                ? double.PositiveInfinity
-                : double.Parse(s);
+            bool speedMissing = !ini.ContainsKey(ParamsSection, MAX_SPEED);
+            string speedText = ini.Get(ParamsSection, MAX_SPEED).ToString("");
+            maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
+            double parsedSpeed;
+            if (speedMissing)
+                maxSpeedWarn = "No " + MAX_SPEED;
+            else if (speedText == "Infinity" || speedText == "Infinite" || speedText == "" || speedText == "00")
+            {
+                maxSpeed = double.PositiveInfinity;
+                maxSpeedWarn = null;
+            }
+            else if (!double.TryParse(speedText, out parsedSpeed))
+                maxSpeedWarn = "Bad " + MAX_SPEED;
+            else
+            {
+                maxSpeed = parsedSpeed;
+                maxSpeedWarn = null;
+            }
 
             bool cruiseMissing = !ini.ContainsKey(ParamsSection, CRUISE_SPEED);
             string cruiseText = ini.Get(ParamsSection, CRUISE_SPEED).ToString("");
@@ -776,6 +790,8 @@ namespace IngameScript.Domain
             warnCount = 0;
             warnA = null;
             warnB = null;
+            if (maxSpeedWarn != null)
+                AddWarn(maxSpeedWarn);
             if (cruiseWarn != null)
                 AddWarn(cruiseWarn);
             if (warnKey != null)
