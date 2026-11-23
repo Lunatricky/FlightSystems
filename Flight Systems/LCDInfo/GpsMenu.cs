@@ -19,9 +19,6 @@ namespace IngameScript
 
         GpsView view;
         bool spacePressed;
-        bool keysReady;
-        bool aWas;
-        bool dWas;
         int row = 1;
         int selectedIndex;
 
@@ -30,7 +27,6 @@ namespace IngameScript
             IsOpen = true;
             view = GpsView.List;
             row = 1;
-            keysReady = false;
         }
 
         public void Close()
@@ -62,22 +58,12 @@ namespace IngameScript
         {
             spacePressed = spaceEdge;
             GpsStore store = ic.Gps;
-            bool aEdge = false;
-            bool dEdge = false;
-            if (keysReady)
-            {
-                aEdge = pi.A() && !aWas;
-                dEdge = pi.D() && !dWas;
-            }
-            aWas = pi.A();
-            dWas = pi.D();
-            keysReady = true;
             MoveRow(pi, lockInput);
 
             if (view == GpsView.Actions)
                 DrawActions(ic, gc, store, command, lockInput, close, softAbort);
             else
-                DrawList(ic, gc, store, lockInput, aEdge || dEdge);
+                DrawList(ic, gc, store, lockInput);
         }
 
         void MoveRow(PlayerInput pi, Action lockInput)
@@ -94,16 +80,10 @@ namespace IngameScript
             }
         }
 
-        void DrawList(IniContext ic, GridContext gc, GpsStore store, Action lockInput, bool dockEdge)
+        void DrawList(IniContext ic, GridContext gc, GpsStore store, Action lockInput)
         {
             int total = store.Count + 2;
             Clamp(1, total);
-
-            if (dockEdge && row <= store.Count)
-            {
-                lockInput();
-                ic.ToggleGpsDock(row - 1);
-            }
 
             if (spacePressed)
             {
@@ -188,8 +168,6 @@ namespace IngameScript
 
         static string PointLabel(GpsWaypoint wp)
         {
-            if (wp != null && wp.Dock)
-                return "[D] " + wp.Name;
             if (wp == null || wp.Name == null)
                 return "";
             return wp.Name;

@@ -18,7 +18,6 @@ namespace IngameScript.Domain
         readonly List<string> snapValue = new List<string>();
         readonly List<string> sectionScratch = new List<string>();
         readonly List<MyIniKey> keyScratch = new List<MyIniKey>();
-        string markerOverride;
         string seenCustomData;
         string pendingSection;
         string pendingKey;
@@ -442,7 +441,9 @@ namespace IngameScript.Domain
 
             string rawCustomData = gc.Me.CustomData ?? "";
             // A missing GPS end must not wipe the lines the player pasted.
-            bool gpsOk = gps.LoadBlock(rawCustomData);
+            gps.LoadText(rawCustomData);
+            string markerBlock;
+            bool gpsOk = GpsStore.TryMarkerBlock(rawCustomData, out markerBlock);
             // GPS lines are not ini. A missing end still leaves the ini above GPS start.
             bool parsed = ini.TryParse(GpsStore.WithoutMarker(rawCustomData));
             if (!parsed)
@@ -545,7 +546,7 @@ namespace IngameScript.Domain
                     || !ini.ContainsKey(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR)
                     || !ini.ContainsKey(SurfaceColorsSection, SPRITEFONTCOLOR);
 
-            if (!gpsOk)
+            if (!gpsOk || markerBlock == null)
                 return false;
             iniChanged = reloadPending || seenCustomData != rawCustomData;
             reloadPending = false;
@@ -1104,25 +1105,19 @@ namespace IngameScript.Domain
                 return false;
 
             Vector3D here = grid.Controller.GetPosition();
-            IMyShipConnector home = HomeConnector(grid);
-            if (home != null)
-                here = home.GetPosition();
-            int x = GpsStore.NearestMeter(here.X);
-            int y = GpsStore.NearestMeter(here.Y);
-            int z = GpsStore.NearestMeter(here.Z);
-            Vector3D rounded = new Vector3D(x, y, z);
-            if (gps.Near(here) || gps.Near(rounded))
+            double x = Math.Round(here.X, 1, MidpointRounding.AwayFromZero);
+            double y = Math.Round(here.Y, 1, MidpointRounding.AwayFromZero);
+            double z = Math.Round(here.Z, 1, MidpointRounding.AwayFromZero);
+            if (gps.Near(here) || gps.Near(new Vector3D(x, y, z)))
                 return false;
 
-            string line = "GPS:" + gps.NextMarkName() + ":" + x + ":" + y + ":" + z + ":#FF75C9F1:";
-            string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
-                return false;
-            string updated = GpsStore.WithPoint(block, line);
+            string line = string.Format("GPS:{0}:{1:0.0}:{2:0.0}:{3:0.0}:#FF75C9F1:", gps.NextMarkName(), x, y, z);
+            string updated = GpsStore.AddPoint(gc.Me.CustomData ?? "", line);
             if (updated == null)
                 return false;
-            ReplaceMarkerBlock(updated);
+            gc.Me.CustomData = updated;
+            seenCustomData = updated;
+            gps.LoadText(updated);
             return true;
         }
 
@@ -1142,51 +1137,20 @@ namespace IngameScript.Domain
             return null;
         }
 
-        public bool ToggleGpsDock(int index)
-        {
-            if (gc.Me == null)
-                return false;
-            string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
-                return false;
-            string updated = GpsStore.ToggleDock(block, index);
-            if (updated == null)
-                return false;
-            ReplaceMarkerBlock(updated);
-            return true;
-        }
-
         public bool DeleteGpsPoint(int index)
         {
             if (gc.Me == null)
                 return false;
-            string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
+            GpsWaypoint wp = gps.Get(index);
+            if (wp == null)
                 return false;
-            string updated = GpsStore.WithoutPoint(block, index);
+            string updated = GpsStore.RemoveKey(gc.Me.CustomData ?? "", wp.Key);
             if (updated == null)
                 return false;
-            ReplaceMarkerBlock(updated);
+            gc.Me.CustomData = updated;
+            seenCustomData = updated;
+            gps.LoadText(updated);
             return true;
-        }
-
-        void ReplaceMarkerBlock(string block)
-        {
-            if (gc.Me == null || block == null)
-                return;
-            string raw = gc.Me.CustomData ?? "";
-            string existing;
-            if (!GpsStore.TryMarkerBlock(raw, out existing))
-                return;
-            ini.Clear();
-            if (!ini.TryParse(raw))
-                return;
-            markerOverride = block;
-            RewriteFromParsed();
-            markerOverride = null;
-            gps.LoadBlock(gc.Me.CustomData ?? "");
         }
 
         void WriteCustomData()
@@ -1195,14 +1159,12 @@ namespace IngameScript.Domain
                 return;
             string old = gc.Me.CustomData ?? "";
             string block;
-            if (markerOverride != null)
-                block = markerOverride;
-            else if (!GpsStore.TryMarkerBlock(old, out block))
+            if (!GpsStore.TryMarkerBlock(old, out block) || block == null)
                 return;
             string body = ini.ToString();
             if (body.Length == 0 || body[body.Length - 1] != '\n')
                 body += "\n";
-            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body + "\n" + block;
+            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body;
             if (old != written)
                 gc.Me.CustomData = written;
             seenCustomData = written;
