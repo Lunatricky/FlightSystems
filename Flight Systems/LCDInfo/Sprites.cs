@@ -228,17 +228,25 @@ namespace IngameScript
 
                 painted.Add(panel);
 
-                bool onSettings = Contains(flightSettings, panel);
-                // Open menu already filled this shared panel, wide or narrow.
-                if (onSettings && flightSettingsOpen)
-                    continue;
-
-                int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
-                bool in1 = Contains(flight1, panel);
-                // A shared panel does not fall back to the idle list when the HUD stacks are empty.
-                Sprites settings = onSettings ? null : flightMenu;
-                PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+                PaintFlightHud(panel);
             }
+        }
+
+        // Both sprites share a surface only when it is in both LCD lists and wide enough.
+        void PaintFlightHud(IMyTextSurface panel)
+        {
+            bool onSettings = Contains(flightSettings, panel);
+            if (onSettings && flightSettingsOpen)
+                return;
+
+            bool in1 = Contains(flight1, panel);
+            bool in2 = Contains(flight2, panel);
+            Sprites left = in1 ? flightHud1 : null;
+            Sprites right = in2 ? flightHud2 : null;
+            int cols = CountColumns(panel, left, right, null, false);
+            // A shared panel does not fall back to the idle list when the HUD stacks are empty.
+            Sprites settings = onSettings ? null : flightMenu;
+            PaintPanel(panel, cols, false, in1, left, right, settings);
         }
 
         bool TryDrawAsThirdColumn(IMyTextSurface panel)
@@ -330,14 +338,7 @@ namespace IngameScript
         {
             if (panel == null || panel == markedPanel)
                 return;
-            bool onSettings = Contains(flightSettings, panel);
-            if (onSettings && flightSettingsOpen)
-                return;
-
-            int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
-            bool in1 = Contains(flight1, panel);
-            Sprites settings = onSettings ? null : flightMenu;
-            PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+            PaintFlightHud(panel);
         }
 
         public void DrawPlainMarker(IMyTextSurface panel)
