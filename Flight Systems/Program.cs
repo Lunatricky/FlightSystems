@@ -1913,7 +1913,7 @@ namespace IngameScript
         {
             double projected;
             double burnDecel;
-            ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out burnDecel);
+            ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected, out burnDecel);
             if (gc.ShipType != ShipType.Atmo)
                 if (projected - 0.5 < 0)
                 {
@@ -1924,8 +1924,11 @@ namespace IngameScript
             gc.Controller.DampenersOverride = false;
             GravityAlignedOverride(gc);
             double agl = DescentAgl(gc);
+            double above = SurfaceLeft(gc, agl);
             double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            double target = -0.80 * SafeFall(burnDecel, agl);
+            double target = -0.80 * SafeFall(burnDecel, above);
+            if (above <= SlowToTwo(gc))
+                target = -2;
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
             return agl < stopReach && FallSettled(gc, target);
         }
@@ -1937,7 +1940,7 @@ namespace IngameScript
             {
                 double projected;
                 double ignored;
-                ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out ignored);
+                ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected, out ignored);
                 gate = projected;
             }
             if (gc.ShipType != ShipType.Atmo)
@@ -1951,16 +1954,19 @@ namespace IngameScript
             GravityAlignedOverride(gc);
 
             double agl = DescentAgl(gc);
+            double above = SurfaceLeft(gc, agl);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
             if (homeHold)
                 stopReach = 0.5;
-            if (homeHold && agl < stopReach)
+            if (homeHold && above < stopReach)
             {
                 HoldHome(gc);
                 return false;
             }
-            double target = LandFall(pc.MaxYDecel, agl);
+            double target = LandFall(pc.MaxYDecel, above);
+            if (above <= SlowToTwo(gc))
+                target = -2;
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 0.5);
             if (homeHold)
                 return false;
@@ -1983,17 +1989,63 @@ namespace IngameScript
             home.Connect();
         }
 
+        // Remote altitude minus the block that touches first. Not written down.
+        double SurfaceLeft(GridContext grid, double agl)
+        {
+            double above = agl - TouchDrop(grid);
+            if (above < 0)
+                return 0;
+            return above;
+        }
+
+        double TouchDrop(GridContext grid)
+        {
+            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
+                return 0;
+            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
+            Vector3D remote = grid.Controller.GetPosition();
+            IMyShipConnector home = IniContext.HomeConnector(grid);
+            if (home != null && !home.Closed)
+            {
+                double drop = (remote - home.GetPosition()).Dot(down);
+                if (drop < 0)
+                    return 0;
+                return drop;
+            }
+
+            double lowest = 0;
+            for (int i = 0; i < grid.Gears.Count; i++)
+            {
+                IMyLandingGear gear = grid.Gears[i];
+                if (gear == null || gear.Closed)
+                    continue;
+                double drop = (remote - gear.GetPosition()).Dot(down);
+                if (drop > lowest)
+                    lowest = drop;
+            }
+            return lowest;
+        }
+
+        double SlowToTwo(GridContext grid)
+        {
+            double early = 0.25 * grid.GridHeight;
+            double speed = -pc.ClimbRate;
+            if (speed <= 2)
+                return early;
+            double net = pc.NetDecel;
+            if (double.IsNaN(net) || net <= 1e-6)
+                return double.PositiveInfinity;
+            double need = (speed * speed - 4.0) / (2.0 * net);
+            if (need > early)
+                return need;
+            return early;
+        }
+
         // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
         double DescentAgl(GridContext grid)
         {
             if (homeHold && pc != null && pc.Gravity > 0 && grid != null && grid.Controller != null)
-            {
-                Vector3D from = grid.Controller.GetPosition();
-                IMyShipConnector home = IniContext.HomeConnector(grid);
-                if (home != null)
-                    from = home.GetPosition();
-                return (homeAt - from).Dot(Vector3D.Normalize(pc.NaturalGravity));
-            }
+                return (homeAt - grid.Controller.GetPosition()).Dot(Vector3D.Normalize(pc.NaturalGravity));
 
             double planet = pc.GroundLevel;
             if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
