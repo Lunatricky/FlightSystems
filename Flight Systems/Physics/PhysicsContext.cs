@@ -196,9 +196,9 @@ namespace IngameScript.Physics
             if (Math.Abs(rate) > 1e-6)
             {
                 if (rate > 0)
-                    time = UtilsHelpder.FormatTime((cap - filled) / rate) + " /\\";
+                    time = UtilsHelpder.FormatTime((cap - filled) / rate);
                 else if (rate < 0)
-                    time = UtilsHelpder.FormatTime(filled / -rate) + " \\/";
+                    time = UtilsHelpder.FormatTime(filled / -rate);
             }
 
             return new H2Totals { Capacity = cap, Filled = filled, Percent = percent, Time = time, Rate = rate };
@@ -225,9 +225,9 @@ namespace IngameScript.Physics
             if (Math.Abs(rate) > 0.01)
             {
                 if (rate > 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / rate) + " /\\";
+                    batTime = UtilsHelpder.FormatTime(3600 * (cap - filled) / rate);
                 else if (rate < 0)
-                    batTime = UtilsHelpder.FormatTime(3600 * filled / -rate) + " \\/";
+                    batTime = UtilsHelpder.FormatTime(3600 * filled / -rate);
             }
 
             return new BatTotals { Capacity = cap, Filled = filled, Percent = percent, Time = batTime, Rate = rate };
