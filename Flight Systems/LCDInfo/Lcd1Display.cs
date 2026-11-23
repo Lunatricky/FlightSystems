@@ -47,12 +47,12 @@ namespace IngameScript
 
             spt.Add(stateLine.ToString());
 
+            spt.Add2(Mass(pc.Mass.PhysicalMass), "E" + Mass(pc.Mass.BaseMass));
+
             if (pc.H2Cache.Capacity > 0)
                 AddResource(spt, ic, "H2: ", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
             if (pc.BatCache.Capacity > 0)
                 AddResource(spt, ic, "Bat: ", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
-
-            spt.Add2(Mass(pc.Mass.PhysicalMass), "E: " + Mass(pc.Mass.BaseMass));
         }
 
         static string Mass(double kg)
