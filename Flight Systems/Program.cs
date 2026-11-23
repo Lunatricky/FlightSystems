@@ -1396,8 +1396,6 @@ namespace IngameScript
                 HoldMenuSeat();
             SyncDockTriggerGears();
             SyncDockConnectors();
-            ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
-            ic.SetLandingPadRestore(ic.LandingPadTag ?? "");
             RememberSyncedGroupIds();
 
             gc.ReloadLCDs()
@@ -1968,14 +1966,7 @@ namespace IngameScript
                 return;
 
             string current = ic.DockTriggerTag ?? "";
-            string previous = ic.DockTriggerRestore ?? "";
-            bool stripPrevious = previous.Length > 0 && previous != current;
-            string padPrevious = ic.LandingPadRestore ?? "";
             string pad = ic.LandingPadTag ?? "";
-            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
-
-            if (!stripPrevious && !stripPad)
-                return;
 
             // Group membership is not written onto the gear. A menu tag stays when the gear leaves the group.
             gc.GetSameConstructBlocks(constructGears, "");
@@ -1984,11 +1975,6 @@ namespace IngameScript
                 IMyLandingGear gear = constructGears[i];
                 if (gear == null || gear.Closed)
                     continue;
-
-                if (stripPrevious)
-                    RemoveExactLine(gear, previous);
-                if (stripPad)
-                    RetagExactLine(gear, padPrevious, pad);
             }
         }
 
@@ -1999,11 +1985,7 @@ namespace IngameScript
                 return;
 
             string current = ic.DockTriggerTag ?? "";
-            string previous = ic.DockTriggerRestore ?? "";
-            bool stripPrevious = previous.Length > 0 && previous != current;
-            string pad = ic.LandingPadTag ?? "";
-            string padPrevious = ic.LandingPadRestore ?? "";
-            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
+            string pad = ic.LandingPadTag ?? "";;
 
             FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
             FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
@@ -2014,11 +1996,6 @@ namespace IngameScript
                 IMyShipConnector connector = constructConnectors[i];
                 if (connector == null || connector.Closed)
                     continue;
-
-                if (stripPrevious)
-                    RemoveExactLine(connector, previous);
-                if (stripPad)
-                    RemoveExactLine(connector, padPrevious);
                 StaticConnectorStamp.StripLegacyLines(connector);
             }
 

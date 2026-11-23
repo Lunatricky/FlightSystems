@@ -76,35 +76,13 @@ namespace IngameScript.Domain
         bool allowLowFuelLand = DefaultLowFuelLand;
         bool allowDockMode = DefaultDockMode;
         bool controlAntennas = DefaultControlAntennas;
-        bool flightRestoreSet;
-        bool flightRestoreValue;
         bool renameSubgrids = DefaultRenameSubgrids;
         bool paintSurfaces = DefaultPaintSurfaces;
         bool transparentLCD = DefaultTransparentLCD;
         bool textPanels = DefaultTextPanels;
         int toggleBits;
 
-        //NamesTagsSection
-        const string NamesTagsSection = "Names & Tags";
-
-        const string INI_GRID_NAME = "Grid Name";
-        const string INI_DOCK_GROUP_TAG = "Dock Group";
-        const string INI_CONTROLLER_TAG = "Controller";
-        const string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks";
-        const string INI_IGNORE_TAG = "Ignore";
-        const string INI_LCD1_TAG = "LCD 1";
-        const string INI_LCD2_TAG = "LCD 2";
-        const string INI_MENU_TAG = "Menu";
-        const string INI_COCKPIT_TAG = "Cockpit";
-        const string INI_RAY_CAMERA_TAG = "Ray Camera";
-        const string BACKUP_BATTERY_TAG = "Backup battery";
-        const string INI_DOCK_TRIGGER_GROUP = "Dock Trigger Group";
-        const string INI_LANDING_PAD_GROUP = "Landing Pad Group";
-        const string INI_DOCK_TRIGGER_TAG = "Dock Trigger Tag";
-        const string INI_LANDING_PAD_TAG = "Landing Pad Tag";
-        const string ScriptTagsSection = "Script Tags";
-        const string GroupsSection = "Groups";
-        const string RestoreSection = "Restore";
+        //Restore state from server restart section
         const string CommandSection = "Command";
         const string KeyState = "State";
         const string KeyStep = "Step";
@@ -114,37 +92,56 @@ namespace IngameScript.Domain
         const string KeyY = "Y";
         const string KeyZ = "Z";
 
-        const string Lcd1 = "[FS_lcd1]";
-        const string Lcd2 = "[FS_lcd2]";
-        const string Menu = "[FS_menu]";
-        const string Cockpit = "[FS_cockpit]";
-        const string Ray = "[FS_ray]";
+        //NamesTagsSection
+        const string GridSection = "Grid tags []";
 
-        string dockGroupTag = "Flight Systems";
+        const string INI_GRID_NAME = "Name";
+
+        const string INI_CONTROLLER_TAG = "RC";
+        const string INI_COCKPIT_TAG = "Cockpit";
+        const string INI_IGNORE_TAG = "Ignore";
+        const string INI_LCD1_TAG = "LCD 1";
+        const string INI_LCD2_TAG = "LCD 2";
+        const string INI_MENU_TAG = "Menu";
+        const string INI_RAY_CAMERA_TAG = "Ray Cam";
+        const string BACKUP_BATTERY_TAG = "Backup batt";
+
         string controllerTag = "[FS_reference]";
-        string overrideBlockTag = "[FS_override]";
+        string cockpitTag = "[FS_cockpit]";
         string ignoreTag = "[FS_ignore]";
         string lcd1Tag = "[FS_lcd1]";
         string lcd2Tag = "[FS_lcd2]";
         string lcdMenuTag = "[FS_menu]";
-        string cockpitTag = "[FS_cockpit]";
         string rayCameraTag = "[FS_ray]";
         string backupBatteryTag = "[FS_backup]";
-        string dockTriggerGroup = "Dock trigger";
-        string landingPadGroup = "Landing pad";
-        string dockTriggerTag = "[FS_trigger]";
-        string dockTriggerRestore = "";
-        string landingPadTag = "[FS_pad]";
-        string landingPadRestore = "";
 
-        //ParamsSection
+        //Dock Mode section
+        const string DockSection = "Dock groups - and tags []";
+
+        const string INI_DOCK_GROUP = "Dock";
+        const string INI_DOCK_TRIGGER_GROUP = "Trigger";
+        const string INI_LANDING_PAD_GROUP = "LPad";
+
+        const string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks";
+        const string INI_DOCK_TRIGGER_TAG = "Trigger Tag";
+        const string INI_LANDING_PAD_TAG = "LPad Tag";
+
+        string dockGroup = "-Dock Mode";
+        string dockTriggerGroup = "-Dock trigger";
+        string landingPadGroup = "-Landing pad";
+
+        string overrideBlockTag = "[FS_override]";
+        string dockTriggerTag = "[FS_trigger]";
+        string landingPadTag = "[FS_pad]";
+
+        //Params section
         public const string ParamsSection = "Params";
 
         public const string MAX_SPEED = "Max Speed";
         public const string CRUISE_SPEED = "Cruise Speed";
         public const string CNAV_ALTITUDE = "Cnav Altitude";
         public const string DISTANCE_TO_GPS = "Distance to GPS";
-        public const string MINIMUM_ACCEPTED_FUEL = "Minimum Fuel";
+        public const string MINIMUM_ACCEPTED_FUEL = "Min Fuel";
 
         public string[] IniParamList = new string[5] { MAX_SPEED, CRUISE_SPEED, CNAV_ALTITUDE, DISTANCE_TO_GPS, MINIMUM_ACCEPTED_FUEL };
 
@@ -154,7 +151,7 @@ namespace IngameScript.Domain
         double distanceToGPS = 500; // m
         double minimumAcceptedFuel = 20; //%
 
-        //SurfaceColorsSection
+        //Surface colors section
         public const string SurfaceColorsSection = "Screen Colors";
 
         public const string LCDBACKGROUNDCOLOR = "LCD Background Color";
@@ -179,10 +176,6 @@ namespace IngameScript.Domain
         {
             this.gc = gc;
         }
-
-        public bool IniChanged => iniChanged;
-        internal string CommandWarnWord { get { return warnWord; } }
-        internal string CommandWarnKey { get { return warnKey; } }
         internal int WarnCount { get { return warnCount; } }
         internal string WarnEcho { get { return warnEcho; } }
 
@@ -190,16 +183,14 @@ namespace IngameScript.Domain
         {
             return index == 0 ? warnA : warnB;
         }
-        public string DockGroupTag => dockGroupTag;
+        public string DockGroupTag => dockGroup;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
         public string IgnoreTag => ignoreTag;
         public string DockTriggerGroup => dockTriggerGroup;
         public string LandingPadGroup => landingPadGroup;
         public string DockTriggerTag => dockTriggerTag;
-        public string DockTriggerRestore => dockTriggerRestore;
         public string LandingPadTag => landingPadTag;
-        public string LandingPadRestore => landingPadRestore;
         public string Lcd1Tag => lcd1Tag;
         public string Lcd2Tag => lcd2Tag;
         public string LcdMenuTag => lcdMenuTag;
@@ -453,7 +444,7 @@ namespace IngameScript.Domain
             }
 
             List<string> sectionsNames = new List<string>();
-            string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
+            string[] array = { GridSection, ParamsSection, ToggleSection };
             sectionsNames.AddArray(array);
 
             foreach (string sectionName in sectionsNames)
@@ -471,31 +462,23 @@ namespace IngameScript.Domain
             ReadToggles(true);
 
             //NamesTagsSection
-            string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
+            string tempGridName = ini.Get(GridSection, INI_GRID_NAME).ToString(gc.GridName);
             gc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? gc.GridName : tempGridName;
 
-            dockGroupTag = ReadMoved(GroupsSection, INI_DOCK_GROUP_TAG, DockGroupTag);
-            controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
-            overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
-            ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
-            lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1);
-            lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2);
-            lcdMenuTag = ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(Menu);
-            cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(Cockpit);
-            rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(Ray);
-            backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
-            dockTriggerGroup = ReadMoved(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
-            landingPadGroup = ReadMoved(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
-            dockTriggerTag = ReadMoved(ScriptTagsSection, INI_DOCK_TRIGGER_TAG, "[FS_trigger]");
-            landingPadTag = ReadMoved(ScriptTagsSection, INI_LANDING_PAD_TAG, "[FS_pad]");
-            // Missing Restore is empty. The in-memory field is wiped by a recompile, so it is not the default.
-            dockTriggerRestore = ini.Get(RestoreSection, INI_DOCK_TRIGGER_TAG).ToString("");
-            landingPadRestore = ini.Get(RestoreSection, INI_LANDING_PAD_TAG).ToString("");
-            // Same key name as the visible toggle. Read it here so a static grid does not store false over the saved value.
-            flightRestoreSet = ini.ContainsKey(RestoreSection, FLIGHT_SYSTEMS);
-            if (flightRestoreSet)
-                flightRestoreValue = ini.Get(RestoreSection, FLIGHT_SYSTEMS).ToBoolean(false);
-            ApplyFlightSystemsStaticHold();
+            dockGroup = ReadMoved(DockSection, INI_DOCK_GROUP, DockGroupTag);
+            controllerTag = ini.Get(GridSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
+            overrideBlockTag = ini.Get(GridSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
+            ignoreTag = ini.Get(GridSection, INI_IGNORE_TAG).ToString(IgnoreTag);
+            lcd1Tag = ini.Get(GridSection, INI_LCD1_TAG).ToString(lcd1Tag);
+            lcd2Tag = ini.Get(GridSection, INI_LCD2_TAG).ToString(lcd2Tag);
+            lcdMenuTag = ini.Get(GridSection, INI_MENU_TAG).ToString(lcdMenuTag);
+            cockpitTag = ini.Get(GridSection, INI_COCKPIT_TAG).ToString(cockpitTag);
+            rayCameraTag = ini.Get(GridSection, INI_RAY_CAMERA_TAG).ToString(rayCameraTag);
+            backupBatteryTag = ini.Get(GridSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
+            dockTriggerGroup = ReadMoved(DockSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
+            landingPadGroup = ReadMoved(DockSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
+            dockTriggerTag = ReadMoved(DockSection, INI_DOCK_TRIGGER_TAG, "[FS_trigger]");
+            landingPadTag = ReadMoved(DockSection, INI_LANDING_PAD_TAG, "[FS_pad]");
 
             //ParamsSection
             bool speedMissing = !ini.ContainsKey(ParamsSection, MAX_SPEED);
@@ -590,44 +573,9 @@ namespace IngameScript.Domain
         {
             if (ini.ContainsKey(section, key))
                 return ini.Get(section, key).ToString(fallback);
-            if (section != NamesTagsSection && ini.ContainsKey(NamesTagsSection, key))
-                return ini.Get(NamesTagsSection, key).ToString(fallback);
+            if (section != GridSection && ini.ContainsKey(GridSection, key))
+                return ini.Get(GridSection, key).ToString(fallback);
             return fallback;
-        }
-
-        void ApplyFlightSystemsStaticHold()
-        {
-            bool gridStatic = gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
-            if (gridStatic)
-            {
-                if (!flightRestoreSet)
-                {
-                    flightRestoreValue = allowFlightSystems;
-                    flightRestoreSet = true;
-                }
-                allowFlightSystems = false;
-            }
-            else if (flightRestoreSet)
-            {
-                allowFlightSystems = flightRestoreValue;
-                flightRestoreSet = false;
-            }
-        }
-
-        public void SetDockTriggerRestore(string current)
-        {
-            dockTriggerRestore = current ?? "";
-            if (!ini.ContainsSection(NamesTagsSection))
-                return;
-            UpdateIni(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore);
-        }
-
-        public void SetLandingPadRestore(string current)
-        {
-            landingPadRestore = current ?? "";
-            if (!ini.ContainsSection(NamesTagsSection))
-                return;
-            UpdateIni(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore);
         }
 
         Color ReadRgb(string key, Color fallback)
@@ -745,28 +693,23 @@ namespace IngameScript.Domain
             SetKept(ToggleSection, TRANSPARENTLCD, TransparentLCD.ToString());
             SetKept(ToggleSection, TEXT_PANELS, TextPanels.ToString());
 
-            SetKept(NamesTagsSection, INI_GRID_NAME, gc.GridName ?? "");
-            SetKept(NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag ?? "");
-            SetKept(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag ?? "");
-            SetKept(NamesTagsSection, INI_IGNORE_TAG, IgnoreTag ?? "");
-            SetKept(NamesTagsSection, INI_LCD1_TAG, Lcd1Tag ?? "");
-            SetKept(NamesTagsSection, INI_LCD2_TAG, Lcd2Tag ?? "");
-            SetKept(NamesTagsSection, INI_MENU_TAG, LcdMenuTag ?? "");
-            SetKept(NamesTagsSection, INI_COCKPIT_TAG, CockpitTag ?? "");
-            SetKept(NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag ?? "");
-            SetKept(NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag ?? "");
+            SetKept(GridSection, INI_GRID_NAME, gc.GridName ?? "");
+            SetKept(GridSection, INI_CONTROLLER_TAG, ControllerTag ?? "");
+            SetKept(GridSection, INI_IGNORE_TAG, IgnoreTag ?? "");
+            SetKept(GridSection, INI_LCD1_TAG, Lcd1Tag ?? "");
+            SetKept(GridSection, INI_LCD2_TAG, Lcd2Tag ?? "");
+            SetKept(GridSection, INI_MENU_TAG, LcdMenuTag ?? "");
+            SetKept(GridSection, INI_COCKPIT_TAG, CockpitTag ?? "");
+            SetKept(GridSection, INI_RAY_CAMERA_TAG, RayCameraTag ?? "");
+            SetKept(GridSection, BACKUP_BATTERY_TAG, BackupBatteryTag ?? "");
 
-            SetKept(ScriptTagsSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag ?? "");
-            SetKept(ScriptTagsSection, INI_LANDING_PAD_TAG, LandingPadTag ?? "");
 
-            SetKept(GroupsSection, INI_DOCK_GROUP_TAG, DockGroupTag ?? "");
-            SetKept(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup ?? "");
-            SetKept(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup ?? "");
-
-            SetKept(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore ?? "");
-            SetKept(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore ?? "");
-            if (FindSnap(RestoreSection, FLIGHT_SYSTEMS) >= 0 || flightRestoreSet)
-                SetKept(RestoreSection, FLIGHT_SYSTEMS, flightRestoreValue ? "true" : "false");
+            SetKept(DockSection, INI_DOCK_GROUP, DockGroupTag ?? "");
+            SetKept(DockSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup ?? "");
+            SetKept(DockSection, INI_LANDING_PAD_GROUP, LandingPadGroup ?? "");
+            SetKept(DockSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag ?? "");
+            SetKept(DockSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag ?? "");
+            SetKept(DockSection, INI_LANDING_PAD_TAG, LandingPadTag ?? "");
 
             SetKept(ParamsSection, MAX_SPEED, MaxSpeed.ToString());
             SetKept(ParamsSection, CRUISE_SPEED, CruiseSpeed.ToString());
@@ -783,35 +726,6 @@ namespace IngameScript.Domain
             WriteCommand();
             WriteForeign();
             WriteCustomData();
-            RefreshWarnLines();
-        }
-
-        void RefreshWarnLines()
-        {
-            warnCount = 0;
-            warnA = null;
-            warnB = null;
-            if (maxSpeedWarn != null)
-                AddWarn(maxSpeedWarn);
-            if (cruiseWarn != null)
-                AddWarn(cruiseWarn);
-            if (warnKey != null)
-                AddWarn(warnWord + " " + warnKey);
-            if (warnCount == 0)
-                warnEcho = null;
-            else if (warnCount == 1)
-                warnEcho = "\n" + warnA;
-            else
-                warnEcho = "\n" + warnA + "\n" + warnB;
-        }
-
-        void AddWarn(string line)
-        {
-            if (warnCount == 0)
-                warnA = line;
-            else if (warnCount == 1)
-                warnB = line;
-            warnCount++;
         }
 
         internal void ClearRestoreHold()
@@ -1076,11 +990,9 @@ namespace IngameScript.Domain
 
         static bool OwnedSection(string section)
         {
-            return string.Equals(section, ToggleSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, NamesTagsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, ScriptTagsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, GroupsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, RestoreSection, StringComparison.OrdinalIgnoreCase)
+            return string.Equals(section, GridSection, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(section, DockSection, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(section, ToggleSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, ParamsSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, CommandSection, StringComparison.OrdinalIgnoreCase);
