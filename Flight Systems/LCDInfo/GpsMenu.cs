@@ -19,6 +19,9 @@ namespace IngameScript
 
         GpsView view;
         bool spacePressed;
+        bool keysReady;
+        bool aWas;
+        bool dWas;
         int row = 1;
         int selectedIndex;
 
@@ -27,6 +30,7 @@ namespace IngameScript
             IsOpen = true;
             view = GpsView.List;
             row = 1;
+            keysReady = false;
         }
 
         public void Close()
@@ -58,12 +62,22 @@ namespace IngameScript
         {
             spacePressed = spaceEdge;
             GpsStore store = ic.Gps;
+            bool aEdge = false;
+            bool dEdge = false;
+            if (keysReady)
+            {
+                aEdge = pi.A() && !aWas;
+                dEdge = pi.D() && !dWas;
+            }
+            aWas = pi.A();
+            dWas = pi.D();
+            keysReady = true;
             MoveRow(pi, lockInput);
 
             if (view == GpsView.Actions)
                 DrawActions(ic, gc, store, command, lockInput, close, softAbort);
             else
-                DrawList(ic, gc, store, lockInput);
+                DrawList(ic, gc, store, lockInput, aEdge || dEdge);
         }
 
         void MoveRow(PlayerInput pi, Action lockInput)
@@ -80,10 +94,16 @@ namespace IngameScript
             }
         }
 
-        void DrawList(IniContext ic, GridContext gc, GpsStore store, Action lockInput)
+        void DrawList(IniContext ic, GridContext gc, GpsStore store, Action lockInput, bool dockEdge)
         {
             int total = store.Count + 2;
             Clamp(1, total);
+
+            if (dockEdge && row <= store.Count)
+            {
+                lockInput();
+                ic.ToggleGpsDock(row - 1);
+            }
 
             if (spacePressed)
             {
@@ -108,7 +128,7 @@ namespace IngameScript
                 int displayRow = i + 1;
                 string label;
                 if (i < store.Count)
-                    label = store.Get(i).Name;
+                    label = PointLabel(store.Get(i));
                 else if (i == store.Count)
                     label = "Create here";
                 else
@@ -140,6 +160,7 @@ namespace IngameScript
                     command.Empty(MainState.Gps);
                     command.Param.TargetCoordinates = wp.Position;
                     command.Param.Type = ParamType.Vector3D;
+                    command.Param.Dock = wp.Dock;
                     Close();
                     close();
                     return;
@@ -158,12 +179,21 @@ namespace IngameScript
             }
 
             Sprites spt = new Sprites(ic);
-            spt.Add(wp.Name);
+            spt.Add(PointLabel(wp));
             int r = 1;
             spt.Add("Fly to GPS", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
+        }
+
+        static string PointLabel(GpsWaypoint wp)
+        {
+            if (wp != null && wp.Dock)
+                return "[D] " + wp.Name;
+            if (wp == null || wp.Name == null)
+                return "";
+            return wp.Name;
         }
 
         void Clamp(int min, int max)

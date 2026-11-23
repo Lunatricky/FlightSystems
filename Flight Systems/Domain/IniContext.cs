@@ -811,6 +811,7 @@ namespace IngameScript.Domain
             command.Param.AutoLandState = savedLand;
             command.Param.Number = savedNumber;
             command.Param.TargetCoordinates = savedTarget ? new Vector3D(savedX, savedY, savedZ) : new Vector3D();
+            command.Param.Dock = savedState == MainState.Gps && gps.DockAt(savedX, savedY, savedZ);
             modes.SetModeOn(savedState);
         }
 
@@ -1124,6 +1125,21 @@ namespace IngameScript.Domain
                     return connector;
             }
             return null;
+        }
+
+        public bool ToggleGpsDock(int index)
+        {
+            if (gc.Me == null)
+                return false;
+            string old = gc.Me.CustomData ?? "";
+            string block;
+            if (!GpsStore.TryMarkerBlock(old, out block))
+                return false;
+            string updated = GpsStore.ToggleDock(block, index);
+            if (updated == null)
+                return false;
+            ReplaceMarkerBlock(updated);
+            return true;
         }
 
         public bool DeleteGpsPoint(int index)

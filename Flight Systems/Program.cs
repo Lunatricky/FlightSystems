@@ -1018,10 +1018,12 @@ namespace IngameScript
             }
         }
 
-        // Moved point is where the remote must sit for the tagged connector to be on the GPS. Not saved.
+        // Dock point only. Moved point is where the remote must sit so the tagged connector is on the GPS. Not saved.
         bool HomeAim(GridContext grid, Vector3D gps, out Vector3D at)
         {
             at = gps;
+            if (command == null || command.Param == null || !command.Param.Dock)
+                return false;
             if (grid == null || grid.Controller == null)
                 return false;
             IMyShipConnector home = IniContext.HomeConnector(grid);
@@ -1049,14 +1051,7 @@ namespace IngameScript
                 case Step.On:
                     if (pc.Gravity == 0)
                     {
-                        Vector3D fwd = gc.Controller.WorldMatrix.Forward;
-                        if (home)
-                        {
-                            IMyShipConnector tagged = IniContext.HomeConnector(gc);
-                            if (tagged != null)
-                                fwd = tagged.WorldMatrix.Forward;
-                        }
-                        if (VectorAlignedOverride(gc, fwd, false, gc.Controller.GetPosition() - at))
+                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - at))
                             command.Param.Step = Step.Cruise;
                     }
                     else if (GravityAlignedOverride(gc))
@@ -1792,13 +1787,8 @@ namespace IngameScript
             double levelErr = levelAxis.Length();
 
             Vector3D aimed;
-            if (HomeAim(gc, targetGps, out aimed))
-            {
-                IMyShipConnector home = IniContext.HomeConnector(gc);
-                if (home != null)
-                    shipFwd = home.WorldMatrix.Forward;
-            }
-            Vector3D toTarget = aimed - gc.Controller.GetPosition(); // connector on the GPS, remote when no tag
+            HomeAim(gc, targetGps, out aimed);
+            Vector3D toTarget = aimed - gc.Controller.GetPosition();
             Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
             Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
 

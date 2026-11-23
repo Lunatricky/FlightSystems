@@ -11,6 +11,7 @@ namespace IngameScript.UseCases
         public double Number;
         public Step Step = Step.Toggle;
         public Vector3D TargetCoordinates = new Vector3D();
+        public bool Dock;
 
         // ────────────────────────────────────────────────
         // Constructors — one per type
@@ -48,6 +49,7 @@ namespace IngameScript.UseCases
             Number = 0;
             Step = Step.Toggle;
             TargetCoordinates = new Vector3D();
+            Dock = false;
     }
     }
 }

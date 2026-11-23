@@ -116,6 +116,19 @@ namespace IngameScript.Domain
             return false;
         }
 
+        public bool DockAt(int x, int y, int z)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                GpsWaypoint wp = items[i];
+                if (!wp.Dock)
+                    continue;
+                if (NearestMeter(wp.Position.X) == x && NearestMeter(wp.Position.Y) == y && NearestMeter(wp.Position.Z) == z)
+                    return true;
+            }
+            return false;
+        }
+
         public string NextMarkName()
         {
             if (!HasName("New GPS"))
@@ -187,7 +200,9 @@ namespace IngameScript.Domain
                     int x;
                     int y;
                     int z;
-                    if (TryParsePoint(trimmed, out name, out x, out y, out z))
+                    bool dock;
+                    string color;
+                    if (TryParsePoint(trimmed, out name, out x, out y, out z, out dock, out color))
                     {
                         if (seen == pointIndex)
                         {
@@ -204,6 +219,55 @@ namespace IngameScript.Domain
                 }
             }
             if (!removed)
+                return null;
+            return kept.ToString();
+        }
+
+        public static string ToggleDock(string block, int pointIndex)
+        {
+            if (string.IsNullOrEmpty(block) || pointIndex < 0)
+                return null;
+            StringBuilder kept = new StringBuilder();
+            bool inside = false;
+            int seen = 0;
+            bool changed = false;
+            int i = 0;
+            while (i < block.Length)
+            {
+                int contentEnd;
+                string newline;
+                string raw = TakeLine(block, ref i, out contentEnd, out newline);
+                string trimmed = raw.Trim();
+                string write = raw;
+                if (!inside)
+                {
+                    if (trimmed == StartMark)
+                        inside = true;
+                }
+                else if (trimmed == EndMark)
+                    inside = false;
+                else
+                {
+                    string name;
+                    int x;
+                    int y;
+                    int z;
+                    bool dock;
+                    string color;
+                    if (TryParsePoint(trimmed, out name, out x, out y, out z, out dock, out color))
+                    {
+                        if (seen == pointIndex)
+                        {
+                            write = PointLine(name, x, y, z, color, !dock);
+                            changed = true;
+                        }
+                        seen++;
+                    }
+                }
+                kept.Append(write);
+                kept.Append(newline);
+            }
+            if (!changed)
                 return null;
             return kept.ToString();
         }
@@ -230,20 +294,35 @@ namespace IngameScript.Domain
             int x;
             int y;
             int z;
-            if (!TryParsePoint(line, out name, out x, out y, out z))
+            bool dock;
+            string color;
+            if (!TryParsePoint(line, out name, out x, out y, out z, out dock, out color))
                 return;
             GpsWaypoint wp = new GpsWaypoint();
             wp.Name = name;
             wp.Position = new Vector3D(x, y, z);
+            wp.Dock = dock;
             items.Add(wp);
         }
 
-        static bool TryParsePoint(string line, out string name, out int x, out int y, out int z)
+        static string PointLine(string name, int x, int y, int z, string color, bool dock)
+        {
+            if (color == null || color.Length == 0)
+                color = "#FF75C9F1";
+            string line = "GPS:" + name + ":" + x + ":" + y + ":" + z + ":" + color;
+            if (dock)
+                return line + ":D";
+            return line + ":";
+        }
+
+        static bool TryParsePoint(string line, out string name, out int x, out int y, out int z, out bool dock, out string color)
         {
             name = "";
             x = 0;
             y = 0;
             z = 0;
+            dock = false;
+            color = "#FF75C9F1";
             if (string.IsNullOrEmpty(line))
                 return false;
 
@@ -260,6 +339,17 @@ namespace IngameScript.Domain
                 return false;
             if (!int.TryParse(parts[4].Trim(), out z))
                 return false;
+            if (parts.Length > 5)
+            {
+                string rawColor = parts[5].Trim();
+                if (rawColor.Length > 0)
+                    color = rawColor;
+            }
+            for (int p = 6; p < parts.Length; p++)
+            {
+                if (parts[p].Trim() == "D")
+                    dock = true;
+            }
             return true;
         }
 
