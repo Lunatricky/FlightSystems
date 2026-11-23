@@ -540,8 +540,6 @@ namespace IngameScript
                 report = report + "\n" + gearLockNote;
             if (textModeEcho != null)
                 report = report + "\n" + textModeEcho;
-            if (ic.WarnEcho != null)
-                report = report + ic.WarnEcho;
             return report;
         }
 
