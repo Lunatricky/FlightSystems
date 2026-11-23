@@ -428,8 +428,6 @@ namespace IngameScript
             else if (gc.ShipType != ShipType.Atmo && SelectedRow == pick++) ms = MainState.Orbit;
             else if (SelectedRow == pick++) ms = MainState.CNav;
             else if (SelectedRow == pick++) ms = MainState.Land;
-            else if (SelectedRow == pick++) ms = MainState.Glide;
-            else if (SelectedRow == pick++) ms = MainState.SBurn;
 
             if (ms == MainState.Idle)
                 return false;
@@ -621,8 +619,6 @@ namespace IngameScript
                 spt.Add("Fly to orbit", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Circumnavigate", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Vertical land", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Glide to surface", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Suicide burn", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Fly to GPS", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             if (includeClose)
                 spt.Add(BackLabel, RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
@@ -953,10 +949,6 @@ namespace IngameScript
             row++;
             if (selected == 0 && sb.LandToggle) selected = row;
             row++;
-            if (selected == 0 && sb.GlideToggle) selected = row;
-            row++;
-            if (selected == 0 && sb.SBurnToggle) selected = row;
-            row++;
             if (selected == 0 && sb.GpsToggle) selected = row;
             return selected;
         }
@@ -964,8 +956,8 @@ namespace IngameScript
         static int FlightGpsRow(GridContext gc)
         {
             if (gc.ShipType != ShipType.Atmo)
-                return 7;
-            return 6;
+                return 5;
+            return 4;
         }
 
         void ClampRow(int min, int max)

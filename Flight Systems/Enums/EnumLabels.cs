@@ -2,16 +2,6 @@ namespace IngameScript.Enums
 {
     static class EnumLabels
     {
-        public static string Ship(ShipType t)
-        {
-            switch (t)
-            {
-                case ShipType.Atmo: return "Atmo";
-                case ShipType.Space: return "Space";
-                default: return "Interplanetary";
-            }
-        }
-
         public static string State(MainState t)
         {
             switch (t)
@@ -21,10 +11,8 @@ namespace IngameScript.Enums
                 case MainState.Idle: return "Idle";
                 case MainState.Cruise: return "Cruise";
                 case MainState.Orbit: return "Orbit";
-                case MainState.Glide: return "Glide";
                 case MainState.CNav: return "CNav";
                 case MainState.Land: return "Land";
-                case MainState.SBurn: return "SBurn";
                 case MainState.Gps: return "Gps";
                 default: return "Idle";
             }
@@ -79,10 +67,8 @@ namespace IngameScript.Enums
             if (text == State(MainState.Idle)) { state = MainState.Idle; return true; }
             if (text == State(MainState.Cruise)) { state = MainState.Cruise; return true; }
             if (text == State(MainState.Orbit)) { state = MainState.Orbit; return true; }
-            if (text == State(MainState.Glide)) { state = MainState.Glide; return true; }
             if (text == State(MainState.CNav)) { state = MainState.CNav; return true; }
             if (text == State(MainState.Land)) { state = MainState.Land; return true; }
-            if (text == State(MainState.SBurn)) { state = MainState.SBurn; return true; }
             if (text == State(MainState.Gps)) { state = MainState.Gps; return true; }
             state = MainState.Idle;
             return false;

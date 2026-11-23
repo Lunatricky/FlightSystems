@@ -182,7 +182,8 @@ namespace IngameScript
                         pi.ResetControllers(gc.Controllers);
                     }
                 }
-                else command = new Command(argument);
+                else if (!DroppedArg(argument))
+                    command = new Command(argument);
             }
 
             inputLock++;
@@ -576,7 +577,7 @@ namespace IngameScript
                 return;
             }
 
-            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
+            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Land, MainState.Gps };
 
             if (!ic.AllowFlightSystems && allowedStates.Contains(command.State))
             {
@@ -631,10 +632,6 @@ namespace IngameScript
                     gc.Controller.DampenersOverride = true;
                     OrbitStateSwitch(gc, ic, command);
                     break;
-                case MainState.Glide:
-                    gc.Controller.DampenersOverride = true;
-                    GlideStateSwitch(gc, ic, command);
-                    break;
                 case MainState.CNav: // Circumnavigation
                     if (pc.Gravity > 0)
                     {
@@ -656,11 +653,13 @@ namespace IngameScript
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
                     AutoLandStateSwitch(gc, command);
                     break;
-                case MainState.SBurn: // Suicide Burn
-                    if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
-                    SBurnStateSwitch(gc, command);
-                    break;
             }
+        }
+
+        static bool DroppedArg(string argument)
+        {
+            string cmd = argument.Trim().ToLowerInvariant();
+            return cmd == "glide" || cmd == "sburn" || cmd.StartsWith("glide ") || cmd.StartsWith("sburn ");
         }
 
         private void DockToggle(GridContext gc, bool isDocked, bool anyConnected = false)
@@ -947,29 +946,6 @@ namespace IngameScript
                     if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
                         ArmClimbBoost();
                     Climb(gc, ic.CruiseSpeed);
-                    break;
-            }
-        }
-
-        void GlideStateSwitch(GridContext gc, IniContext ic, Command command)
-        {
-            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
-
-            switch (command.Param.Step)
-            {
-                case Step.Toggle:
-                    ToggleCommand(gc, command);
-                    break;
-                case Step.On:
-                    CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.Gravity > 0 && pc.GroundLevel < ic.SafeAltitude + pc.StopYDist)
-                    {
-                        AbortShipContext(gc);
-                        command.State = MainState.Land;
-                    }
-                    break;
-                case Step.Off:
-                    AbortShipContext(gc);
                     break;
             }
         }
@@ -1439,42 +1415,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    HandleLockGear(gc, command, false);
-                    break;
-            }
-        }
-
-        void SBurnStateSwitch(GridContext gc, Command command)
-        {
-            switch (command.Param.Step)
-            {
-                case Step.Toggle:
-                    ToggleCommand(gc, command);
-                    break;
-                case Step.On:
-                    SBurnSwitch(gc, command);
-                    break;
-                case Step.Off:
-                    AbortShipContext(gc);
-                    break;
-            }
-        }
-
-        private void SBurnSwitch(GridContext gc, Command command)
-        {
-            switch (command.Param.AutoLandState)
-            {
-                case AutoLandState.Align:
-                    SoftAbort(gc);
-                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
-                    break;
-
-                case AutoLandState.Drop:
-                    if (SuicideBurn(gc, pc)) command.Param.AutoLandState = AutoLandState.LockGear;
-                    break;
-
-                case AutoLandState.LockGear:
-                    HandleLockGear(gc, command, true);
+                    HandleLockGear(gc);
                     break;
             }
         }
@@ -1886,11 +1827,9 @@ namespace IngameScript
             return VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc) >= target;
         }
 
-        // Half of the rise to the ground for the burn. The abort uses the full rise.
-        void ProjectFall(double decel, double altitude, out double projected, out double burnDecel)
+        void ProjectFall(double decel, double altitude, out double projected)
         {
             projected = decel;
-            burnDecel = decel;
             if (haveFall && altitude < fallAlt && decel > fallDecel)
             {
                 double drop = fallAlt - altitude;
@@ -1898,39 +1837,12 @@ namespace IngameScript
                 {
                     double rise = (decel - fallDecel) / drop * altitude;
                     if (rise > 0)
-                    {
                         projected = decel + rise;
-                        burnDecel = decel + 0.5 * rise;
-                    }
                 }
             }
             fallAlt = altitude;
             fallDecel = decel;
             haveFall = true;
-        }
-
-        bool SuicideBurn(GridContext gc, PhysicsContext pc)
-        {
-            double projected;
-            double burnDecel;
-            ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected, out burnDecel);
-            if (gc.ShipType != ShipType.Atmo)
-                if (projected - 0.5 < 0)
-                {
-                    AbortShipContext(gc);
-                    this.command.State = MainState.Orbit;
-                    return false;
-                }
-            gc.Controller.DampenersOverride = false;
-            GravityAlignedOverride(gc);
-            double agl = DescentAgl(gc);
-            double above = SurfaceLeft(gc, agl);
-            double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            double target = -0.80 * SafeFall(burnDecel, above);
-            if (above <= SlowToTwo(gc))
-                target = -2;
-            VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
-            return agl < stopReach && FallSettled(gc, target);
         }
 
         bool AutoLand(GridContext gc, PhysicsContext pc)
@@ -1939,8 +1851,7 @@ namespace IngameScript
             if (!homeHold)
             {
                 double projected;
-                double ignored;
-                ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected, out ignored);
+                ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected);
                 gate = projected;
             }
             if (gc.ShipType != ShipType.Atmo)
@@ -2041,7 +1952,7 @@ namespace IngameScript
             return early;
         }
 
-        // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
+        // Land and the GPS handoff into Land. No camera leaves planet altitude.
         double DescentAgl(GridContext grid)
         {
             if (homeHold && pc != null && pc.Gravity > 0 && grid != null && grid.Controller != null)
@@ -2433,13 +2344,10 @@ namespace IngameScript
             return StaticConnectorStamp.ReadsStatic(data);
         }
 
-        // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
-        void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
+        void HandleLockGear(GridContext gc)
         {
             if (!GearHolding(gc) && pc.GroundLevel > 1.5 * pc.StopZDist)
             {
-                if (leaveToLand)
-                    command.State = MainState.Land;
                 command.Param.AutoLandState = AutoLandState.Drop;
                 return;
             }

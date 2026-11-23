@@ -61,7 +61,7 @@ namespace IngameScript
 
             if (sb.GpsToggle)
                 spt.Add("ETA " + UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed));
-            else if (command.State == MainState.Land || command.State == MainState.SBurn)
+            else if (command.State == MainState.Land)
                 spt.Add(pc.TimeToImpact == 0 ? "TTI --" : string.Format("TTI {0:0} s", pc.TimeToImpact));
         }
 
