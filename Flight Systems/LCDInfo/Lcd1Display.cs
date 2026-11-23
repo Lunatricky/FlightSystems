@@ -2,6 +2,7 @@ using IngameScript.Domain;
 using IngameScript.Enums;
 using IngameScript.Physics;
 using IngameScript.UseCases;
+using System;
 using System.Text;
 using VRageMath;
 
@@ -48,9 +49,9 @@ namespace IngameScript
             spt.Add2(Mass(pc.Mass.PhysicalMass), "E " + Mass(pc.Mass.BaseMass));
 
             if (pc.H2Cache.Capacity > 0)
-                AddResource(spt, "H2", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate, ic.MinimumAcceptedFuel);
+                AddResource(spt, ic, "H2", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
             if (pc.BatCache.Capacity > 0)
-                AddResource(spt, "Bat", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate, ic.MinimumAcceptedFuel);
+                AddResource(spt, ic, "Bat", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
         }
 
         static string Mass(double kg)
@@ -63,25 +64,41 @@ namespace IngameScript
             return string.Format("{0:0} Mt", t / 1000000.0);
         }
 
-        static void AddResource(Sprites spt, string label, double percent, string time, double rate, double minFuel)
+        static void AddResource(Sprites spt, IniContext ic, string label, double percent, string time, double rate)
         {
-            string line = $"{label}: {percent:0}% - {time}";
-            Color color = ResourceColor(rate, percent, minFuel);
-            if (!color.Equals(new Color()))
-                spt.AddB(line, color);
-            else
-                spt.Add(line);
+            if (double.IsNaN(percent) || percent < 0)
+                percent = 0;
+            if (percent > 100)
+                percent = 100;
+            if (ic.TextPanels)
+            {
+                spt.Add(string.Format("{0,-3}  {1}", label, time));
+                int n = (int)Math.Round(percent / 100.0 * 8.0);
+                if (n < 0)
+                    n = 0;
+                if (n > 8)
+                    n = 8;
+                spt.Add("||||||||        ".Substring(8 - n, 8));
+                return;
+            }
+
+            spt.Add2(label, time ?? "");
+            spt.AddBar(percent, BarColor(rate, percent, ic.SpriteBackgroundColor, ic.SpriteFontColor));
         }
 
-        static Color ResourceColor(double rate, double percent, double minFuel)
+        static Color BarColor(double rate, double percent, Color background, Color font)
         {
             if (rate > 0)
-                return Color.LightBlue;
-            if (percent < minFuel / 2)
-                return Color.DarkRed;
-            if (percent < minFuel)
-                return Color.DarkOrange;
-            return new Color();
+                return Color.Blue;
+            if (percent >= 25)
+                return font;
+            if (percent >= 10)
+                return Color.Orange;
+            if (percent > 5)
+                return Color.Red;
+            if (background.R == 0 && background.G == 0 && background.B == 0)
+                return Color.Gray;
+            return Color.Black;
         }
     }
 }

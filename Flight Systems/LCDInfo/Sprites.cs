@@ -35,6 +35,7 @@ namespace IngameScript
         readonly List<string> texts = new List<string>();
         readonly List<string> boxB = new List<string>();
         readonly List<string> boxC = new List<string>();
+        readonly List<float> bar = new List<float>();
         readonly List<Color> BackgroundColors = new List<Color>();
         readonly List<Color> FontColors = new List<Color>();
         int followLine = -1;
@@ -49,6 +50,7 @@ namespace IngameScript
             texts.Clear();
             boxB.Clear();
             boxC.Clear();
+            bar.Clear();
             BackgroundColors.Clear();
             FontColors.Clear();
             followLine = -1;
@@ -65,6 +67,7 @@ namespace IngameScript
                 texts.Add(src.texts[i]);
                 boxB.Add(src.boxB[i]);
                 boxC.Add(src.boxC[i]);
+                bar.Add(src.bar[i]);
                 BackgroundColors.Add(src.BackgroundColors[i]);
                 FontColors.Add(src.FontColors[i]);
             }
@@ -76,8 +79,23 @@ namespace IngameScript
             texts.Add(a);
             boxB.Add(b);
             boxC.Add(c);
+            bar.Add(-1f);
             BackgroundColors.Add(back);
             FontColors.Add(font);
+        }
+
+        public void AddBar(double percent, Color color)
+        {
+            if (double.IsNaN(percent) || percent < 0)
+                percent = 0;
+            if (percent > 100)
+                percent = 100;
+            texts.Add("");
+            boxB.Add(null);
+            boxC.Add(null);
+            bar.Add((float)percent / 100f);
+            BackgroundColors.Add(color);
+            FontColors.Add(ic.SpriteFontColor);
         }
 
         public void Add(string s)
@@ -523,6 +541,14 @@ namespace IngameScript
                     }
 
                     float centerY = originY + i * rowPitch + rowPitch * 0.5f;
+                    float fill = stack.bar[src];
+                    if (fill >= 0f)
+                    {
+                        spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), ic.SpriteBackgroundColor));
+                        if (fill > 0.004f)
+                            spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW * fill, barH), stack.BackgroundColors[src]));
+                        continue;
+                    }
                     string rawB = stack.boxB[src];
                     string rawC = stack.boxC[src];
                     int n = rawB == null ? 1 : rawC == null ? 2 : 3;
