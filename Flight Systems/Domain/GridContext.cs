@@ -71,6 +71,13 @@ namespace IngameScript.Domain
         List<IMyTextSurface> lcds1 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcds2 = new List<IMyTextSurface>();
         List<IMyTextSurface> lcdsMenu = new List<IMyTextSurface>();
+        IniContext screenIni;
+        bool sawMenuColor;
+        bool sawLcd1Color;
+        Color menuFont;
+        Color menuBack;
+        Color lcd1Font;
+        Color lcd1Back;
 
         List<IMyTextSurface> surfaces = new List<IMyTextSurface>();
 
@@ -88,6 +95,7 @@ namespace IngameScript.Domain
 
         public void Setup(IniContext ic)
         {
+            screenIni = ic;
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
 
             Controllers.Clear();
@@ -399,6 +407,8 @@ namespace IngameScript.Domain
             Lcds1.Clear();
             Lcds2.Clear();
             lcdsMenu.Clear();
+            sawMenuColor = false;
+            sawLcd1Color = false;
             cockpitIniChanged = false;
 
             FetchLcdProviders();
@@ -436,6 +446,14 @@ namespace IngameScript.Domain
             PruneCockpitSpriteInis(seenCockpits);
 
             lcdsMenu.Add(Me.GetSurface(0));
+
+            if (screenIni != null)
+            {
+                if (sawMenuColor)
+                    screenIni.SeedScreenColors(menuFont, menuBack);
+                else if (sawLcd1Color)
+                    screenIni.SeedScreenColors(lcd1Font, lcd1Back);
+            }
 
             CleanSurfaces(Lcds1);
             CleanSurfaces(Lcds2);
@@ -546,6 +564,22 @@ namespace IngameScript.Domain
         {
             IMyTextSurface surface = provider.GetSurface(index);
             if (surface == null) return;
+
+            if (screenIni != null && screenIni.NeedsColorSeed)
+            {
+                if (dest == lcdsMenu && !sawMenuColor)
+                {
+                    menuFont = surface.FontColor;
+                    menuBack = surface.BackgroundColor;
+                    sawMenuColor = true;
+                }
+                else if (dest == lcds1 && !sawLcd1Color)
+                {
+                    lcd1Font = surface.FontColor;
+                    lcd1Back = surface.BackgroundColor;
+                    sawLcd1Color = true;
+                }
+            }
 
             if (setupSurface) SetupSurface(surface);
             dest.Add(surface);

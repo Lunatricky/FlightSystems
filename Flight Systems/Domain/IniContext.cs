@@ -26,6 +26,9 @@ namespace IngameScript.Domain
         bool reloadPending;
         bool commandRead;
         bool restoreHold;
+        bool colorSeed;
+        bool colorRead;
+        bool forceColorWrite;
         MainState savedState = MainState.Idle;
         Step savedStep = Step.Toggle;
         AutoLandState savedLand = AutoLandState.Idle;
@@ -409,6 +412,24 @@ namespace IngameScript.Domain
             return color.R + "," + color.G + "," + color.B;
         }
 
+        public bool NeedsColorSeed { get { return colorSeed && !colorRead; } }
+
+        public void SeedScreenColors(Color font, Color background)
+        {
+            if (!colorSeed || colorRead)
+                return;
+            colorRead = true;
+            colorSeed = false;
+            lcdBackgroundColor = background;
+            lcdFontColor = font;
+            spriteBackgroundColor = background;
+            spriteFontColor = font;
+            spriteMenuColor = background;
+            forceColorWrite = true;
+            UpdateIni(SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(background));
+            forceColorWrite = false;
+        }
+
 
         // ───────────────────────────────────────
         // Load config from CustomData (INI style)
@@ -504,6 +525,11 @@ namespace IngameScript.Domain
             spriteMenuColor = ReadRgb(SPRITEMENUCOLOR, DefaultSpriteMenu);
             spriteBackgroundColor = ReadRgb(SPRITEBACKGROUNDCOLOR, DefaultSpriteBackground);
             spriteFontColor = ReadRgb(SPRITEFONTCOLOR, DefaultSpriteFont);
+            if (!colorRead)
+                colorSeed = !ini.ContainsKey(SurfaceColorsSection, LCDBACKGROUNDCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, LCDFONTCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, SPRITEFONTCOLOR);
 
             if (!gpsOk)
                 return false;
@@ -733,11 +759,11 @@ namespace IngameScript.Domain
             SetKept(ParamsSection, DISTANCE_TO_GPS, DistanceToGPS.ToString());
             SetKept(ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel.ToString());
 
-            SetKept(SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(lcdBackgroundColor));
-            SetKept(SurfaceColorsSection, LCDFONTCOLOR, FormatRgb(lcdFontColor));
+            SetColor(LCDBACKGROUNDCOLOR, lcdBackgroundColor);
+            SetColor(LCDFONTCOLOR, lcdFontColor);
             SetKept(SurfaceColorsSection, SPRITEMENUCOLOR, FormatRgb(spriteMenuColor));
-            SetKept(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
-            SetKept(SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
+            SetColor(SPRITEBACKGROUNDCOLOR, spriteBackgroundColor);
+            SetColor(SPRITEFONTCOLOR, spriteFontColor);
 
             WriteCommand();
             WriteForeign();
@@ -1003,6 +1029,18 @@ namespace IngameScript.Domain
                     return i;
             }
             return -1;
+        }
+
+        void SetColor(string key, Color color)
+        {
+            if (!forceColorWrite && FindSnap(SurfaceColorsSection, key) < 0)
+            {
+                if (pendingSection == null
+                    || !string.Equals(pendingSection, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(pendingKey, key, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+            SetKept(SurfaceColorsSection, key, FormatRgb(color));
         }
 
         void SetKept(string section, string key, string fallback)
