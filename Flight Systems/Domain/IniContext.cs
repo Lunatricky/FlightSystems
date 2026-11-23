@@ -89,7 +89,7 @@ namespace IngameScript.Domain
         const string KeyZ = "Z";
 
         //NamesTagsSection
-        const string GridSection = "Grid tags []";
+        const string GridSection = "Grid tags";
 
         const string INI_GRID_NAME = "Name";
 
@@ -112,7 +112,7 @@ namespace IngameScript.Domain
         string backupBatteryTag = "[FS_backup]";
 
         //Dock Mode section
-        const string DockSection = "Dock groups - and tags []";
+        const string DockSection = "Dock groups and tags";
 
         const string INI_DOCK_GROUP = "Dock";
         const string INI_DOCK_TRIGGER_GROUP = "Trigger";
