@@ -23,7 +23,6 @@ namespace IngameScript
 
             spt.Clear();
             spt.Add(gc.GridName ?? "");
-            spt.Add("Type: " + EnumLabels.Ship(gc.ShipType));
 
             stateLine.Clear();
             stateLine.Append("State: ");
@@ -46,14 +45,22 @@ namespace IngameScript
             }
 
             spt.Add(stateLine.ToString());
-
-            spt.Add($"Mass: {pc.Mass.PhysicalMass / 1000:0.0} t");
-            spt.Add($"Empty Mass: {pc.Mass.BaseMass / 1000:0.0} t");
+            spt.Add2(Mass(pc.Mass.PhysicalMass), "E " + Mass(pc.Mass.BaseMass));
 
             if (pc.H2Cache.Capacity > 0)
                 AddResource(spt, "H2", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate, ic.MinimumAcceptedFuel);
             if (pc.BatCache.Capacity > 0)
                 AddResource(spt, "Bat", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate, ic.MinimumAcceptedFuel);
+        }
+
+        static string Mass(double kg)
+        {
+            double t = kg / 1000.0;
+            if (t < 1000)
+                return string.Format("{0:0} t", t);
+            if (t < 1000000)
+                return string.Format("{0:0} Kt", t / 1000.0);
+            return string.Format("{0:0} Mt", t / 1000000.0);
         }
 
         static void AddResource(Sprites spt, string label, double percent, string time, double rate, double minFuel)

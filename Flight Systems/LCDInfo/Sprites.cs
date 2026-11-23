@@ -33,6 +33,8 @@ namespace IngameScript
         readonly Sprites[] shown = new Sprites[3];
 
         readonly List<string> texts = new List<string>();
+        readonly List<string> boxB = new List<string>();
+        readonly List<string> boxC = new List<string>();
         readonly List<Color> BackgroundColors = new List<Color>();
         readonly List<Color> FontColors = new List<Color>();
         int followLine = -1;
@@ -45,6 +47,8 @@ namespace IngameScript
         public void Clear()
         {
             texts.Clear();
+            boxB.Clear();
+            boxC.Clear();
             BackgroundColors.Clear();
             FontColors.Clear();
             followLine = -1;
@@ -59,38 +63,56 @@ namespace IngameScript
             for (int i = 0; i < src.texts.Count; i++)
             {
                 texts.Add(src.texts[i]);
+                boxB.Add(src.boxB[i]);
+                boxC.Add(src.boxC[i]);
                 BackgroundColors.Add(src.BackgroundColors[i]);
                 FontColors.Add(src.FontColors[i]);
             }
             followLine = src.followLine;
         }
 
+        void Put(string a, string b, string c, Color back, Color font)
+        {
+            texts.Add(a);
+            boxB.Add(b);
+            boxC.Add(c);
+            BackgroundColors.Add(back);
+            FontColors.Add(font);
+        }
+
         public void Add(string s)
         {
-            texts.Add(s);
-            BackgroundColors.Add(ic.SpriteBackgroundColor);
-            FontColors.Add(ic.SpriteFontColor);
+            Put(s, null, null, ic.SpriteBackgroundColor, ic.SpriteFontColor);
         }
 
         public void AddB(string s, Color b)
         {
-            texts.Add(s);
-            BackgroundColors.Add(b);
-            FontColors.Add(ic.SpriteFontColor);
+            Put(s, null, null, b, ic.SpriteFontColor);
         }
 
         public void AddF(string s, Color f)
         {
-            texts.Add(s);
-            BackgroundColors.Add(ic.SpriteBackgroundColor);
-            FontColors.Add(f);
+            Put(s, null, null, ic.SpriteBackgroundColor, f);
         }
 
         public void Add(string s, Color b, Color f)
         {
-            texts.Add(s);
-            BackgroundColors.Add(b);
-            FontColors.Add(f);
+            Put(s, null, null, b, f);
+        }
+
+        public void Add2(string a, string b)
+        {
+            Put(a, b, null, ic.SpriteBackgroundColor, ic.SpriteFontColor);
+        }
+
+        public void Add2B(string a, string b, Color back)
+        {
+            Put(a, b, null, back, ic.SpriteFontColor);
+        }
+
+        public void Add3(string a, string b, string c)
+        {
+            Put(a, b, c, ic.SpriteBackgroundColor, ic.SpriteFontColor);
         }
 
         // Line index that must stay on screen. Title is 0. The last line stays put.
@@ -467,10 +489,6 @@ namespace IngameScript
                 if (barW < 1f)
                     barW = 1f;
 
-                float textMaxW = barW - 2f * textPad;
-                if (textMaxW < 1f)
-                    textMaxW = 1f;
-
                 bool window = IsMenu(stack) && stack.followLine >= 0 && stack.LineCount > rows && rows >= 3;
                 int winStart = 1;
                 if (window)
@@ -505,27 +523,41 @@ namespace IngameScript
                     }
 
                     float centerY = originY + i * rowPitch + rowPitch * 0.5f;
-                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[src]));
-
-                    string line = stack.texts[src] ?? "";
-                    float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
-                    float minScale = MenuMinScale(stack, baseScale);
-                    if (scaleLine < minScale)
+                    string rawB = stack.boxB[src];
+                    string rawC = stack.boxC[src];
+                    int n = rawB == null ? 1 : rawC == null ? 2 : 3;
+                    float gap = n < 2 ? 0f : pad < 2f ? 2f : pad;
+                    float boxW = (barW - gap * (n - 1)) / n;
+                    if (boxW < 1f)
+                        boxW = 1f;
+                    for (int b = 0; b < n; b++)
                     {
-                        line = Truncate(panel, line, minScale, textMaxW);
-                        scaleLine = minScale;
+                        string part = b == 0 ? stack.texts[src] ?? "" : b == 1 ? rawB : rawC;
+                        if (part == null)
+                            part = "";
+                        float x = barX + b * (boxW + gap);
+                        spriteBuf.Add(MakeRectSprite(new Vector2(x, centerY), new Vector2(boxW, barH), stack.BackgroundColors[src]));
+                        float cellMax = boxW - 2f * textPad;
+                        if (cellMax < 1f)
+                            cellMax = 1f;
+                        float scaleLine = FitWidth(panel, part, baseScale, cellMax);
+                        float minScale = MenuMinScale(stack, baseScale);
+                        if (scaleLine < minScale)
+                        {
+                            part = Truncate(panel, part, minScale, cellMax);
+                            scaleLine = minScale;
+                        }
+
+                        float lineH = scaleLine * DebugLineHeight;
+                        float barTop = centerY - barH * 0.5f;
+                        float extra = barH - lineH;
+                        if (extra < 0f)
+                            extra = 0f;
+
+                        // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
+                        float textY = barTop + extra * 0.22f;
+                        spriteBuf.Add(MakeTextSprite(new Vector2(x + textPad, textY), stack.FontColors[src], part, scaleLine));
                     }
-
-                    float lineH = scaleLine * DebugLineHeight;
-                    float barTop = centerY - barH * 0.5f;
-                    float extra = barH - lineH;
-                    if (extra < 0f)
-                        extra = 0f;
-
-                    // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
-                    float textX = barX + textPad;
-                    float textY = barTop + extra * 0.22f;
-                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[src], line, scaleLine));
                 }
             }
 
@@ -586,17 +618,42 @@ namespace IngameScript
                         textOut.Append('\n');
                     any = true;
                     string line = stack.texts[i];
+                    string mid = stack.boxB[i];
+                    string end = stack.boxC[i];
                     bool mark = IsMenu(stack) && stack.followLine == i;
                     if (mark)
                         textOut.Append(TextMark);
-                    if (line != null)
-                        textOut.Append(line);
+                    if (mid == null)
+                    {
+                        if (line != null)
+                            textOut.Append(line);
+                    }
+                    else
+                    {
+                        AppendField(textOut, line, 10);
+                        if (end != null)
+                        {
+                            AppendField(textOut, mid, 10);
+                            textOut.Append(end ?? "");
+                        }
+                        else
+                            textOut.Append(mid);
+                    }
                     if (mark)
                         textOut.Append(TextMark);
                 }
             }
 
             panel.WriteText(textOut);
+        }
+
+        static void AppendField(StringBuilder sb, string text, int width)
+        {
+            if (text == null)
+                text = "";
+            sb.Append(text);
+            for (int i = text.Length; i < width; i++)
+                sb.Append(' ');
         }
 
         void WriteMarkerText(IMyTextSurface panel)

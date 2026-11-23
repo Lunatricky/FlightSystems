@@ -3,6 +3,7 @@ using IngameScript.Enums;
 using IngameScript.Physics;
 using IngameScript.UseCases;
 using IngameScript.Utils;
+using System;
 using VRageMath;
 
 namespace IngameScript
@@ -19,8 +20,8 @@ namespace IngameScript
                 return;
 
             spt.Clear();
-
-            if (pc.Gravity > 0)
+            bool grav = pc.Gravity > 0;
+            if (grav)
             {
                 Color color = new Color();
                 if (pc.ClimbRate < 0)
@@ -29,41 +30,52 @@ namespace IngameScript
                         ? Color.DarkRed : pc.GroundLevel < 4 * pc.StopYDist
                         ? Color.DarkOrange : new Color();
                 }
-
-                if (!color.Equals(new Color()))
+                bool warn = !color.Equals(new Color());
+                string ground = string.Format("G {0}", Dist(pc.GroundLevel));
+                string sea = string.Format("Sea {0}", Dist(pc.SeaLevel));
+                string climb = string.Format("Climb {0:0}", pc.ClimbRate);
+                string stopY = string.Format("StopY {0}  {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
+                if (warn)
                 {
-                    spt.AddB($"Ground: {pc.GroundLevelStr}", color);
-                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.AddB($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s", color);
+                    spt.Add2B(ground, sea, color);
+                    spt.Add2B(climb, stopY, color);
                 }
                 else
                 {
-                    spt.Add($"Ground: {pc.GroundLevelStr}");
-                    spt.Add($"Rate of climb: {pc.ClimbRate:F1} m/s");
-                    spt.Add($"Stop Y: {pc.StopYDist:F1} m | {pc.TimeToStopY:F1} s");
+                    spt.Add2(ground, sea);
+                    spt.Add2(climb, stopY);
                 }
             }
 
-            spt.Add($"Stop Z: {pc.StopZDist:F1} m | {pc.TimeToStopZ:F1} s");
-            if (pc.Gravity > 0)
-                spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g | Grav: {pc.Gravity / 9.81:F2} g ");
+            spt.Add(string.Format("StopZ {0}  {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
+            if (grav)
+                spt.Add2(
+                    string.Format("{0:0.0} g", pc.Accel.Length() / 9.81),
+                    string.Format("Grav {0:0.00}", pc.Gravity / 9.81));
             else
-                spt.Add($"Accel: {pc.Accel.Length() / 9.81:F1} g");
+                spt.Add(string.Format("{0:0.0} g", pc.Accel.Length() / 9.81));
+            spt.Add3(
+                string.Format("L {0:0}", pc.ForwardVelocity),
+                string.Format("Lat {0:0}", pc.RightVelocity),
+                string.Format("V {0:0}", pc.UpVelocity));
 
             if (sb.GpsToggle)
-            {
-                spt.Add($"ETA: {UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed)}");
-            }
+                spt.Add("ETA " + UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed));
             else if (command.State == MainState.Land || command.State == MainState.SBurn)
-            {
-                spt.Add("TTI: " + (pc.TimeToImpact == 0 ? "--" : $"{pc.TimeToImpact:F0}") + " s");
-            }
-            else
-            {
-                spt.Add($"Longitudinal v: {pc.ForwardVelocity:F1} m/s");
-                spt.Add($"Lateral v: {pc.RightVelocity:F1} m/s");
-                spt.Add($"Vertical v: {pc.UpVelocity:F1} m/s");
-            }
+                spt.Add(pc.TimeToImpact == 0 ? "TTI --" : string.Format("TTI {0:0} s", pc.TimeToImpact));
+        }
+
+        static string Dist(double meters)
+        {
+            if (meters < 0)
+                return "-" + Dist(-meters);
+            if (meters < 1000)
+                return string.Format("{0:0} m", meters);
+            long tenths = (long)Math.Round(meters / 100.0);
+            long whole = tenths / 10;
+            if (tenths % 10 == 0)
+                return string.Format("{0:0} km", whole);
+            return string.Format("{0:0}.{1} km", whole, tenths % 10);
         }
     }
 }
