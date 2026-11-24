@@ -53,6 +53,13 @@ namespace IngameScript
                 AddResource(spt, ic, "H2: ", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
             if (pc.BatCache.Capacity > 0)
                 AddResource(spt, ic, "Bat: ", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
+            if (ic.AnalogThrotle)
+            {
+                double pct = 0;
+                if (gc != null && gc.ForwardThrusters.Count > 0)
+                    pct = gc.ForwardThrusters[0].ThrustOverridePercentage * 100.0;
+                AddResource(spt, ic, "Thr: ", pct, null, 0);
+            }
         }
 
         static string Mass(double kg)
@@ -71,6 +78,8 @@ namespace IngameScript
                 percent = 0;
             if (percent > 100)
                 percent = 100;
+            if (time == null)
+                time = string.Format("{0:0}%", percent);
             if (ic.TextPanels)
             {
                 spt.Add(string.Format("{0,-3}  {1}", label, time));
