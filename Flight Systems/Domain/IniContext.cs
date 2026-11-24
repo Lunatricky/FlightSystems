@@ -19,6 +19,7 @@ namespace IngameScript.Domain
         readonly List<string> sectionScratch = new List<string>();
         readonly List<MyIniKey> keyScratch = new List<MyIniKey>();
         string seenCustomData;
+        string parsedText;
         string pendingSection;
         string pendingKey;
         string pendingValue;
@@ -493,8 +494,27 @@ namespace IngameScript.Domain
 
             iniChanged = reloadPending || seenCustomData != rawCustomData;
             reloadPending = false;
+            parsedText = rawCustomData;
             RewriteFromParsed();
             return iniChanged;
+        }
+
+        // A GPS create or delete writes the block first. The rewrite must read that text, not the previous parse.
+        void AcceptBlockText()
+        {
+            if (gc.Me == null)
+                return;
+            string raw = gc.Me.CustomData ?? "";
+            if (raw == parsedText)
+                return;
+            MyIni probe = new MyIni();
+            if (!probe.TryParse(raw))
+                return;
+            ini.Clear();
+            if (!ini.TryParse(raw))
+                return;
+            gps.LoadText(raw);
+            parsedText = raw;
         }
 
         void ReadToggles(bool parsed)
@@ -696,6 +716,8 @@ namespace IngameScript.Domain
         {
             if (!commandRead || command == null || command.Param == null)
                 return;
+
+            AcceptBlockText();
 
             MainState state = command.State;
             if (state == MainState.Abort || state == MainState.Reload)
@@ -1008,6 +1030,7 @@ namespace IngameScript.Domain
             if (old != written)
                 gc.Me.CustomData = written;
             seenCustomData = written;
+            parsedText = written;
         }
     }
 }
