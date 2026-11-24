@@ -1008,8 +1008,10 @@ namespace IngameScript
                     {
                         if (ReachedGps(gc, command, reach))
                             return;
-                        AimAtGps(gc, gps);
-                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                        if (AimAtGps(gc, gps))
+                            CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                        else
+                            ReleaseForwardBurn(gc);
                     }
                     else
                     {
@@ -1045,8 +1047,10 @@ namespace IngameScript
 
                     if (pc.Gravity == 0)
                     {
-                        AimAtGps(gc, gps);
-                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                        if (AimAtGps(gc, gps))
+                            CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                        else
+                            ReleaseForwardBurn(gc);
                         break;
                     }
 
@@ -1693,12 +1697,12 @@ namespace IngameScript
             return true;
         }
 
-        void AimAtGps(GridContext gc, Vector3D gps)
+        bool AimAtGps(GridContext gc, Vector3D gps)
         {
             Vector3D toGps = gps - gc.Controller.GetPosition();
             if (toGps.LengthSquared() < 1e-6)
-                return;
-            VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, Vector3D.Normalize(toGps), true);
+                return true;
+            return VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, Vector3D.Normalize(toGps), true);
         }
 
         bool LeaveClimbForSpace(GridContext gc, Command command)
