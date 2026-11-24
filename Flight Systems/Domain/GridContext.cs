@@ -129,7 +129,8 @@ namespace IngameScript.Domain
                     IMyRemoteControl remote = (IMyRemoteControl)block;
                     remote.ControlThrusters = true;
                     remote.IsMainCockpit = false;
-                    if (Controller == null && remote.CustomName.Contains(ic.ControllerTag.ToLower()))
+                    string remoteName = remote.CustomName;
+                    if (Controller == null && remoteName != null && remoteName.IndexOf(ic.ControllerTag, StringComparison.OrdinalIgnoreCase) >= 0)
                         Controller = remote;
                     Controllers.Add(remote);
                 }
