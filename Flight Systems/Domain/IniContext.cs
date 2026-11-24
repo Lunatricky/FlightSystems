@@ -43,6 +43,8 @@ namespace IngameScript.Domain
         int warnCount;
 
         bool iniChanged;
+        bool badCustomData;
+        public bool BadCustomData => badCustomData;
 
         //ToggleSection
         public const string ToggleSection = "Toggles";
@@ -418,17 +420,19 @@ namespace IngameScript.Domain
         // ───────────────────────────────────────      
         public bool ParseIni()
         {
-            ini.Clear();
-            iniChanged = false;
-
             string rawCustomData = gc.Me.CustomData ?? "";
-            gps.LoadText(rawCustomData);
-            bool parsed = ini.TryParse(rawCustomData);
-            if (!parsed)
+            MyIni probe = new MyIni();
+            if (!probe.TryParse(rawCustomData))
             {
-                ReadToggles(false);
+                badCustomData = true;
                 return false;
             }
+
+            badCustomData = false;
+            ini.Clear();
+            iniChanged = false;
+            ini.TryParse(rawCustomData);
+            gps.LoadText(rawCustomData);
 
             List<string> sectionsNames = new List<string>();
             string[] array = { GridSection, ParamsSection, ToggleSection };
@@ -500,21 +504,28 @@ namespace IngameScript.Domain
         }
 
         // A GPS create or delete writes the block first. The rewrite must read that text, not the previous parse.
-        void AcceptBlockText()
+        bool AcceptBlockText()
         {
-            if (gc.Me == null)
-                return;
+            if (badCustomData || gc.Me == null)
+                return !badCustomData;
             string raw = gc.Me.CustomData ?? "";
             if (raw == parsedText)
-                return;
+                return true;
             MyIni probe = new MyIni();
             if (!probe.TryParse(raw))
-                return;
+            {
+                badCustomData = true;
+                return false;
+            }
             ini.Clear();
             if (!ini.TryParse(raw))
-                return;
+            {
+                badCustomData = true;
+                return false;
+            }
             gps.LoadText(raw);
             parsedText = raw;
+            return true;
         }
 
         void ReadToggles(bool parsed)
@@ -623,12 +634,22 @@ namespace IngameScript.Domain
 
         void UpdateIni(string section, string key, object newVal)
         {
-            if (gc.Me == null)
+            if (gc.Me == null || badCustomData)
                 return;
             string raw = gc.Me.CustomData ?? "";
+            MyIni probe = new MyIni();
+            if (!probe.TryParse(raw))
+            {
+                badCustomData = true;
+                return;
+            }
             ini.Clear();
             if (!ini.TryParse(raw))
+            {
+                badCustomData = true;
                 return;
+            }
+            parsedText = raw;
 
             string text = newVal.ToString();
             bool differ = !ini.ContainsKey(section, key) || ini.Get(section, key).ToString("") != text;
@@ -717,7 +738,8 @@ namespace IngameScript.Domain
             if (!commandRead || command == null || command.Param == null)
                 return;
 
-            AcceptBlockText();
+            if (!AcceptBlockText())
+                return;
 
             MainState state = command.State;
             if (state == MainState.Abort || state == MainState.Reload)

@@ -541,6 +541,8 @@ namespace IngameScript
                 report = report + "\n" + gearLockNote;
             if (textModeEcho != null)
                 report = report + "\n" + textModeEcho;
+            if (ic.BadCustomData)
+                report = report + "\nBad custom data";
             return report;
         }
 
