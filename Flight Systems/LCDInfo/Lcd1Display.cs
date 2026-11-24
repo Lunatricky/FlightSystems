@@ -49,17 +49,17 @@ namespace IngameScript
 
             spt.Add2(Mass(pc.Mass.PhysicalMass), "E" + Mass(pc.Mass.BaseMass));
 
-            if (pc.H2Cache.Capacity > 0)
-                AddResource(spt, ic, "H2: ", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
-            if (pc.BatCache.Capacity > 0)
-                AddResource(spt, ic, "Bat: ", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
             if (ic.AnalogThrotle)
             {
                 double pct = 0;
                 if (gc != null && gc.ForwardThrusters.Count > 0)
                     pct = gc.ForwardThrusters[0].ThrustOverridePercentage * 100.0;
-                AddResource(spt, ic, "Thr: ", pct, null, 0);
+                AddResource(spt, ic, "Thr: ", pct, null, double.NaN);
             }
+            if (pc.H2Cache.Capacity > 0)
+                AddResource(spt, ic, "H2: ", pc.H2Cache.Percent, pc.H2Cache.Time, pc.H2Cache.Rate);
+            if (pc.BatCache.Capacity > 0)
+                AddResource(spt, ic, "Bat: ", pc.BatCache.Percent, pc.BatCache.Time, pc.BatCache.Rate);
         }
 
         static string Mass(double kg)
@@ -98,6 +98,8 @@ namespace IngameScript
 
         static Color BarColor(double rate, double percent, Color background, Color font)
         {
+            if (double.IsNaN(rate))
+                return font;
             if (rate > 0)
                 return Color.Blue;
             if (percent >= 25)

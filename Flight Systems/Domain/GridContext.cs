@@ -522,25 +522,23 @@ namespace IngameScript.Domain
                 IMyTerminalBlock block = (IMyTerminalBlock)provider;
                 string name = block.CustomName ?? "";
                 string data = block.CustomData ?? "";
-                if (!string.IsNullOrEmpty(ignoreTag) &&
-                    (name.Contains(ignoreTag) || data.Contains(ignoreTag)))
+                if (!string.IsNullOrEmpty(ignoreTag) && (name.Contains(ignoreTag) || data.Contains(ignoreTag)) && block != Me)
                     continue;
 
                 IMyTextPanel panel = block as IMyTextPanel;
                 if (panel != null)
                     panel.Enabled = true;
-
                 for (int i = 0; i < provider.SurfaceCount; i++)
                 {
                     IMyTextSurface s = provider.GetSurface(i);
                     if (s == null) continue;
-                    PaintCockpitOrLcd(s, ic);
+                    PaintLCD(s, ic);
                 }
             }
             return this;
         }
 
-        static void PaintCockpitOrLcd(IMyTextSurface s, IniContext ic)
+        static void PaintLCD(IMyTextSurface s, IniContext ic)
         {
             string n = s.Name ?? "";
             Color bg = (ic.TransparentLCD && n.ToLower().Contains("transparent"))
