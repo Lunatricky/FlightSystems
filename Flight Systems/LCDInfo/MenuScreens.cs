@@ -283,6 +283,12 @@ namespace IngameScript
                     SelectedRow = 1;
                     return true;
                 }
+                if (SelectedRow == 7)
+                {
+                    close();
+                    closed = true;
+                    return true;
+                }
                 return false;
             }
 
