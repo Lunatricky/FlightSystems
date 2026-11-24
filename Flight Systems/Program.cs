@@ -1004,12 +1004,17 @@ namespace IngameScript
                 case Step.On:
                     if (pc.Gravity == 0)
                     {
-                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - gps))
-                            command.Param.Step = Step.Cruise;
+                        if (ReachedGps(gc, command, reach))
+                            return;
+                        AimAtGps(gc, gps);
+                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
                     }
-                    else if (GravityAlignedOverride(gc))
+                    else
                     {
-                        command.Param.Step = Step.AimToGPS;
+                        if (currentOverride != 0 || currentBrake != 0)
+                            ReleaseForwardBurn(gc);
+                        if (GravityAlignedOverride(gc))
+                            command.Param.Step = Step.AimToGPS;
                     }
                     break;
 
@@ -1033,19 +1038,17 @@ namespace IngameScript
                     break;
 
                 case Step.Cruise:
-                    if (sb.GpsToggle && pc.DistanceToGPS < reach)
-                    {
-                        AbortShipContext(gc);
-                        if (pc.Gravity > 0)
-                        {
-                            command.State = MainState.Land;
-                            sb.GpsToggle = false;
-                            previousRate = PREV_RATE;
-                        }
+                    if (ReachedGps(gc, command, reach))
                         return;
+
+                    if (pc.Gravity == 0)
+                    {
+                        AimAtGps(gc, gps);
+                        CruiseControl(ic.CruiseSpeed, timeSinceLastRun);
+                        break;
                     }
 
-                    if (pc.GroundLevel < ic.SafeAltitude)
+                    if (pc.Gravity > 0 && pc.GroundLevel < ic.SafeAltitude)
                     {
                         SoftAbort(gc);
                         command.Param.Step = Step.Preclimb;
@@ -1084,15 +1087,21 @@ namespace IngameScript
                     break;
 
                 case Step.Preclimb:
+                    if (LeaveClimbForSpace(gc, command))
+                        break;
                     if (GravityAlignedOverride(gc, pc.ForwardVelocity == 0))
                         BeginClimbOrLift(gc, command);
                     break;
 
                 case Step.Lift:
+                    if (LeaveClimbForSpace(gc, command))
+                        break;
                     LiftClearance(gc, command);
                     break;
 
                 case Step.Climb:
+                    if (LeaveClimbForSpace(gc, command))
+                        break;
                     if (pc.Gravity > 0 && ForwardTerrainClose(gc, ic.CruiseSpeed))
                         ArmClimbBoost();
                     if (pc.GroundLevel > ic.SafeAltitude && !climbBoost && !rayBlocksLevel)
@@ -1668,7 +1677,48 @@ namespace IngameScript
         double PREV_RATE = 0.5;
         double previousRate;
 
-        bool VectorAlignedOverride(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector)
+        bool ReachedGps(GridContext gc, Command command, double reach)
+        {
+            if (!sb.GpsToggle || pc.DistanceToGPS >= reach)
+                return false;
+            AbortShipContext(gc);
+            if (pc.Gravity > 0)
+            {
+                command.State = MainState.Land;
+                sb.GpsToggle = false;
+                previousRate = PREV_RATE;
+            }
+            return true;
+        }
+
+        void AimAtGps(GridContext gc, Vector3D gps)
+        {
+            Vector3D toGps = gps - gc.Controller.GetPosition();
+            if (toGps.LengthSquared() < 1e-6)
+                return;
+            VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, Vector3D.Normalize(toGps), true);
+        }
+
+        bool LeaveClimbForSpace(GridContext gc, Command command)
+        {
+            if (pc.Gravity > 0)
+                return false;
+            ClearClimbBoost(gc);
+            command.Param.Step = Step.Cruise;
+            return true;
+        }
+
+        void ReleaseForwardBurn(GridContext gc)
+        {
+            currentOverride = 0;
+            currentBrake = 0;
+            integral = 0;
+            lastError = 0;
+            gc.ResetThrusters(gc.ForwardThrusters);
+            gc.ResetThrusters(gc.BreakingThrusters);
+        }
+
+        bool VectorAlignedOverride(GridContext gc, Vector3D shipUp, bool checkSpeed, Vector3D desiredUpVector, bool precise = false)
         {
             if (previousRate == 0) previousRate = PREV_RATE;
 
@@ -1676,7 +1726,27 @@ namespace IngameScript
             double angle = axis.Length(); double maxRate; double RESPONSE;
             double angleThreshold;
 
-            if (pc.Gravity > 0)
+            if (precise)
+            {
+                double cosA = shipUp.Dot(desiredUpVector);
+                if (cosA > 1) cosA = 1;
+                else if (cosA < -1) cosA = -1;
+                double sinA = angle;
+                angle = Math.Atan2(sinA, cosA);
+                if (sinA > 1e-8)
+                    axis /= sinA;
+                else if (cosA < 0)
+                {
+                    axis = shipUp.Cross(gc.Controller.WorldMatrix.Right);
+                    if (axis.LengthSquared() < 1e-8)
+                        axis = shipUp.Cross(gc.Controller.WorldMatrix.Up);
+                    double side = axis.Length();
+                    if (side > 1e-8)
+                        axis /= side;
+                }
+            }
+
+            if (pc.Gravity > 0 || precise)
             {
                 angleThreshold = 0.005;
                 maxRate = 1;
@@ -1698,7 +1768,8 @@ namespace IngameScript
 
             previousRate = maxRate;
 
-            axis /= angle;
+            if (!precise)
+                axis /= angle;
 
             Vector3D angVel = gc.Controller.GetShipVelocities().AngularVelocity;
 
