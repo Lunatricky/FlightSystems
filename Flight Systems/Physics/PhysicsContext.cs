@@ -89,7 +89,6 @@ namespace IngameScript.Physics
             stopZDist = MaxZDecel > 1e-6
                 ? Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel))
                 : double.PositiveInfinity;
-            //stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
             timeToStopZ = MaxZDecel > 1e-6 ? Math.Abs(ForwardVelocity / MaxZDecel) : double.PositiveInfinity;
 
             if (Gravity > 0)
@@ -108,7 +107,6 @@ namespace IngameScript.Physics
                 stopYDist = MaxYDecel > 1e-6
                     ? Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel))
                     : double.PositiveInfinity;
-                //stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
 
                 if (command.State == MainState.Land)
                     timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);

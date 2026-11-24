@@ -135,8 +135,8 @@ namespace IngameScript.Domain
 
         public const string MAX_SPEED = "Max Speed";
         public const string CRUISE_SPEED = "Cruise Speed";
-        public const string CNAV_ALTITUDE = "Cnav Altitude";
-        public const string DISTANCE_TO_GPS = "Distance to GPS";
+        public const string CNAV_ALTITUDE = "Cnav Alt";
+        public const string DISTANCE_TO_GPS = "Dist to GPS";
         public const string MINIMUM_ACCEPTED_FUEL = "Min Fuel";
 
         public string[] IniParamList = new string[5] { MAX_SPEED, CRUISE_SPEED, CNAV_ALTITUDE, DISTANCE_TO_GPS, MINIMUM_ACCEPTED_FUEL };
@@ -421,12 +421,8 @@ namespace IngameScript.Domain
             iniChanged = false;
 
             string rawCustomData = gc.Me.CustomData ?? "";
-            // A missing GPS end must not wipe the lines the player pasted.
             gps.LoadText(rawCustomData);
-            string markerBlock;
-            bool gpsOk = GpsStore.TryMarkerBlock(rawCustomData, out markerBlock);
-            // GPS lines are not ini. A missing end still leaves the ini above GPS start.
-            bool parsed = ini.TryParse(GpsStore.WithoutMarker(rawCustomData));
+            bool parsed = ini.TryParse(rawCustomData);
             if (!parsed)
             {
                 ReadToggles(false);
@@ -455,9 +451,8 @@ namespace IngameScript.Domain
             string tempGridName = ini.Get(GridSection, INI_GRID_NAME).ToString(gc.GridName);
             gc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? gc.GridName : tempGridName;
 
-            dockGroup = ReadMoved(DockSection, INI_DOCK_GROUP, DockGroupTag);
+            dockGroup = ini.Get(DockSection, INI_DOCK_GROUP).ToString(DockGroupTag);
             controllerTag = ini.Get(GridSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
-            overrideBlockTag = ini.Get(GridSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
             ignoreTag = ini.Get(GridSection, INI_IGNORE_TAG).ToString(IgnoreTag);
             lcd1Tag = ini.Get(GridSection, INI_LCD1_TAG).ToString(lcd1Tag);
             lcd2Tag = ini.Get(GridSection, INI_LCD2_TAG).ToString(lcd2Tag);
@@ -465,10 +460,11 @@ namespace IngameScript.Domain
             cockpitTag = ini.Get(GridSection, INI_COCKPIT_TAG).ToString(cockpitTag);
             rayCameraTag = ini.Get(GridSection, INI_RAY_CAMERA_TAG).ToString(rayCameraTag);
             backupBatteryTag = ini.Get(GridSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
-            dockTriggerGroup = ReadMoved(DockSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
-            landingPadGroup = ReadMoved(DockSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
-            dockTriggerTag = ReadMoved(DockSection, INI_DOCK_TRIGGER_TAG, "[FS_trigger]");
-            landingPadTag = ReadMoved(DockSection, INI_LANDING_PAD_TAG, "[FS_pad]");
+            dockTriggerGroup = ini.Get(DockSection, INI_DOCK_TRIGGER_GROUP).ToString(DockTriggerGroup);
+            landingPadGroup = ini.Get(DockSection, INI_LANDING_PAD_GROUP).ToString(LandingPadGroup);
+            overrideBlockTag = ini.Get(DockSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
+            dockTriggerTag = ini.Get(DockSection, INI_DOCK_TRIGGER_TAG).ToString(DockTriggerTag);
+            landingPadTag = ini.Get(DockSection, INI_LANDING_PAD_TAG).ToString(LandingPadTag);
 
             //ParamsSection
             // Infinity, Infinite, blank, and 00 are no limit. Any other non-number keeps ToDouble's default.
@@ -495,8 +491,6 @@ namespace IngameScript.Domain
                     || !ini.ContainsKey(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR)
                     || !ini.ContainsKey(SurfaceColorsSection, SPRITEFONTCOLOR);
 
-            if (!gpsOk || markerBlock == null)
-                return false;
             iniChanged = reloadPending || seenCustomData != rawCustomData;
             reloadPending = false;
             RewriteFromParsed();
@@ -532,16 +526,6 @@ namespace IngameScript.Domain
                 return codeDefault;
             toggleBits |= bit;
             return value;
-        }
-
-        // New section wins. A missing key is read from Names & Tags once, then omitted on the write.
-        string ReadMoved(string section, string key, string fallback)
-        {
-            if (ini.ContainsKey(section, key))
-                return ini.Get(section, key).ToString(fallback);
-            if (section != GridSection && ini.ContainsKey(GridSection, key))
-                return ini.Get(GridSection, key).ToString(fallback);
-            return fallback;
         }
 
         Color ReadRgb(string key, Color fallback)
@@ -622,11 +606,8 @@ namespace IngameScript.Domain
             if (gc.Me == null)
                 return;
             string raw = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(raw, out block))
-                return;
             ini.Clear();
-            if (!ini.TryParse(GpsStore.WithoutMarker(raw)))
+            if (!ini.TryParse(raw))
                 return;
 
             string text = newVal.ToString();
@@ -1020,9 +1001,6 @@ namespace IngameScript.Domain
             if (gc.Me == null)
                 return;
             string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block) || block == null)
-                return;
             string body = ini.ToString();
             if (body.Length == 0 || body[body.Length - 1] != '\n')
                 body += "\n";

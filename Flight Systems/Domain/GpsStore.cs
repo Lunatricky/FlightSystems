@@ -8,8 +8,6 @@ namespace IngameScript.Domain
     class GpsStore
     {
         public const string LibrarySection = "GPS Library";
-        public const string StartMark = "GPS start";
-        public const string EndMark = "GPS end";
         const string LibraryHeader = "[GPS Library]";
 
         readonly List<GpsWaypoint> items = new List<GpsWaypoint>();
@@ -99,43 +97,6 @@ namespace IngameScript.Domain
             if (!ScanLibrary(text, keyNumber, out maxKey, out numbered, out haveCount))
                 return null;
             return WriteLibrary(text, haveCount, numbered - 1, 0, null, keyNumber);
-        }
-
-        public static bool TryMarkerBlock(string text, out string block)
-        {
-            block = StartMark + "\n" + EndMark + "\n";
-            if (string.IsNullOrEmpty(text))
-                return true;
-
-            int start = FindLine(text, 0, StartMark);
-            if (start < 0)
-                return true;
-
-            int end = FindLine(text, LinePast(text, start), EndMark);
-            if (end < 0)
-            {
-                block = null;
-                return false;
-            }
-
-            int stop = LinePast(text, end);
-            block = text.Substring(start, stop - start);
-            return true;
-        }
-
-        // GPS lines are not ini. A missing end still drops from GPS start through the rest of the text.
-        public static string WithoutMarker(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return "";
-
-            int start = FindLine(text, 0, StartMark);
-            if (start < 0)
-                return text;
-
-            int end = FindLine(text, LinePast(text, start), EndMark);
-            int stop = end < 0 ? text.Length : LinePast(text, end);
-            return text.Substring(0, start) + text.Substring(stop);
         }
 
         public bool Near(Vector3D pos)

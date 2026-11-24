@@ -98,7 +98,7 @@ namespace IngameScript
             if (percent > 5)
                 return Color.Red;
             if (background.R == 0 && background.G == 0 && background.B == 0)
-                return Color.Gray;
+                return new Color(15, 15, 15); ;
             return Color.Black;
         }
     }

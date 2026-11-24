@@ -65,6 +65,7 @@ namespace IngameScript
         bool menuToggle;
         bool menuIsLocked;
         bool menuSeatHold;
+        int seatHoldKeys;
         string textModeEcho;
 
         double planetRadius = 0;
@@ -219,7 +220,7 @@ namespace IngameScript
                     RefreshHudLines();
                     if (menuHud.ShouldClose(ic))
                     {
-                        CloseMenuFromSpace();
+                        CloseMenuFromC();
                         menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
                         // menuToggle is false now. Rebind so the shared panel is the flight HUD, not the idle list.
                         RefreshHudLines();
@@ -448,7 +449,7 @@ namespace IngameScript
             }
 
             Lcd1Display.Fill(hudStack1, ic, gc, pc, command);
-            Lcd2Display.Fill(hudStack2, pc, command, sb, isDocked);
+            Lcd2Display.Fill(hudStack2, pc, command, sb, isDockMode);
             Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
 
@@ -724,8 +725,7 @@ namespace IngameScript
         {
             if (dockSeatsHeld || gc.Cockpits.Count <= 1 || !CockpitOccupied())
                 return;
-            pi.OcupiedController(gc.Controllers);
-            pi.PrepareController();
+            pi.HoldSeat(gc.Controllers);
             dockSeatsHeld = true;
         }
 
@@ -740,6 +740,7 @@ namespace IngameScript
             if (ControlHeld())
             {
                 menuSeatHold = true;
+                seatHoldKeys = ReadHeldKeys();
                 HoldMenuSeat();
                 return;
             }
@@ -1538,24 +1539,47 @@ namespace IngameScript
             inputLock = 0;
         }
 
+        const int HoldW = 1;
+        const int HoldA = 2;
+        const int HoldS = 4;
+        const int HoldD = 8;
+        const int HoldQ = 16;
+        const int HoldE = 32;
+        const int HoldC = 64;
+        const int HoldSpace = 128;
+
         void HoldMenuSeat()
         {
-            pi.OcupiedController(gc.Controllers);
-            pi.PrepareController();
+            pi.HoldSeat(gc.Controllers);
+        }
+
+        void CloseMenuFromC()
+        {
+            menuHud.ReleaseScreenMarker();
+            menuToggle = false;
+            BeginSeatHold(HoldC);
         }
 
         void CloseMenuFromSpace()
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            if (ControlHeld())
+            BeginSeatHold(HoldSpace);
+        }
+
+        // The other cockpit stays main while the exit key is down. It is cleared when that key is up.
+        void BeginSeatHold(int exitKey)
+        {
+            if ((ReadHeldKeys() & exitKey) != 0)
             {
                 menuSeatHold = true;
+                seatHoldKeys = exitKey;
                 HoldMenuSeat();
                 return;
             }
 
             menuSeatHold = false;
+            seatHoldKeys = 0;
             pi.ResetControllers(gc.Controllers);
         }
 
@@ -1563,19 +1587,34 @@ namespace IngameScript
         {
             if (!menuSeatHold)
                 return;
-            if (ControlHeld())
+            if ((ReadHeldKeys() & seatHoldKeys) != 0)
             {
                 HoldMenuSeat();
                 return;
             }
 
             menuSeatHold = false;
+            seatHoldKeys = 0;
             pi.ResetControllers(gc.Controllers);
+        }
+
+        int ReadHeldKeys()
+        {
+            int keys = 0;
+            if (pi.W()) keys |= HoldW;
+            if (pi.A()) keys |= HoldA;
+            if (pi.S()) keys |= HoldS;
+            if (pi.D()) keys |= HoldD;
+            if (pi.Q()) keys |= HoldQ;
+            if (pi.E()) keys |= HoldE;
+            if (pi.C()) keys |= HoldC;
+            if (pi.Space()) keys |= HoldSpace;
+            return keys;
         }
 
         bool ControlHeld()
         {
-            return pi.W() || pi.A() || pi.S() || pi.D() || pi.Q() || pi.E() || pi.C() || pi.Space();
+            return ReadHeldKeys() != 0;
         }
 
         void AbortShipContext(GridContext gc)

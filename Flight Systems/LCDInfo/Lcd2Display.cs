@@ -34,31 +34,33 @@ namespace IngameScript
 
                 if (grav)
                     spt.Add2(
-                        string.Format("Accel: {0:0.0} g", pc.Accel.Length() / 9.81),
-                        string.Format("Grav: {0:0.00}", pc.Gravity / 9.81));
+                        string.Format("g: {0:0.0}", pc.Accel.Length() / 9.81),
+                        string.Format("Pg: {0:0.00}", pc.Gravity / 9.81));
                 else
-                    spt.Add(string.Format("Accel: {0:0.0} g", pc.Accel.Length() / 9.81));
+                    spt.Add(string.Format("g: {0:0.0}", pc.Accel.Length() / 9.81));
 
                 bool warn = !color.Equals(new Color());
                 string ground = string.Format("Grnd: {0}", Dist(pc.GroundLevel));
                 string sea = string.Format("Sea: {0}", Dist(pc.SeaLevel));
                 string climb = string.Format("Climb: {0:0}", pc.ClimbRate);
-                string stopY = isDocked ? "StopY: --" : string.Format("StopY: {0}  {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
+                string stopY = string.Format("StopY: {0} m {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
                 if (warn)
                 {
                     spt.Add2B(ground, sea, color);
-                    spt.Add2B(climb, stopY, color);
+                    spt.AddB(climb, color);
+                    spt.AddB(stopY, color);
                 }
                 else
                 {
                     spt.Add2(ground, sea);
-                    spt.Add2(climb, stopY);
+                    spt.Add(climb);
+                    spt.Add(stopY);
                 }
             }
 
-            spt.Add2(string.Format("Long: {0:0}", pc.ForwardVelocity), string.Format("StopZ: {0}  {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
+            spt.Add(string.Format("StopZ: {0} m {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
 
-            spt.Add2(string.Format("Lat: {0:0}", pc.RightVelocity), string.Format("V: {0:0}", pc.UpVelocity));
+            spt.Add3(string.Format("X: {0:0} m/s", pc.ForwardVelocity), string.Format("Z: {0:0} m/s", pc.RightVelocity), string.Format("Y: {0:0} m/s", pc.UpVelocity));
 
             if (sb.GpsToggle)
                 spt.Add("ETA: " + UtilsHelpder.FormatTime(pc.TimeToDistanceSmoothed));
@@ -68,6 +70,8 @@ namespace IngameScript
 
         static string Dist(double meters)
         {
+            if (meters == double.PositiveInfinity)
+                return "--";
             if (meters < 0)
                 return "-" + Dist(-meters);
             if (meters < 1000)

@@ -118,7 +118,7 @@ namespace IngameScript
 
         public bool ShouldClose(IniContext ic)
         {
-            return cEdge;
+            return cEdge && view == MenuView.Home;
         }
 
         public void Handle(
@@ -550,7 +550,7 @@ namespace IngameScript
             spt.Add("Colors", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Dock blocks", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.Add("Screens", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
-            spt.Add("Close", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
+            spt.Add("Close (C)", RowColor(row, ic.SpriteBackgroundColor), RowColor(row++, ic.SpriteFontColor));
             spt.KeepVisible(SelectedRow);
             spt.DrawTo(gc.LcdsMenu);
         }
