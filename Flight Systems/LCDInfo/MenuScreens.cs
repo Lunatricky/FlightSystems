@@ -788,9 +788,9 @@ namespace IngameScript
             int index = 0;
             if (dockKind == DockBlockKind.TriggerConnectors)
                 index = 1;
-            else if (dockKind == DockBlockKind.PadConnectors)
-                index = 2;
             else if (dockKind == DockBlockKind.HomeConnector)
+                index = 2;
+            else if (dockKind == DockBlockKind.PadConnectors)
                 index = 3;
 
             index += dir;
@@ -804,9 +804,9 @@ namespace IngameScript
             else if (index == 1)
                 dockKind = DockBlockKind.TriggerConnectors;
             else if (index == 2)
-                dockKind = DockBlockKind.PadConnectors;
-            else
                 dockKind = DockBlockKind.HomeConnector;
+            else
+                dockKind = DockBlockKind.PadConnectors;
             dockKindRow = index + 1;
         }
 
@@ -968,9 +968,9 @@ namespace IngameScript
             else if (SelectedRow == 2)
                 dockKind = DockBlockKind.TriggerConnectors;
             else if (SelectedRow == 3)
-                dockKind = DockBlockKind.PadConnectors;
-            else if (SelectedRow == 4)
                 dockKind = DockBlockKind.HomeConnector;
+            else if (SelectedRow == 4)
+                dockKind = DockBlockKind.PadConnectors;
             else
                 return false;
 
