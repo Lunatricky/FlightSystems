@@ -2400,8 +2400,29 @@ namespace IngameScript
                 return;
             }
 
+            ConnectTriggerConnectors();
             if (TryLock(gc))
                 AbortShipContext(gc);
+        }
+
+        void ConnectTriggerConnectors()
+        {
+            if (gc == null || ic == null)
+                return;
+            string trigger = ic.DockTriggerTag ?? "";
+            string pad = ic.LandingPadTag ?? "";
+            FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
+            FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
+            for (int i = 0; i < gc.Connectors.Count; i++)
+            {
+                IMyShipConnector connector = gc.Connectors[i];
+                if (connector == null || connector.Closed)
+                    continue;
+                if (!ConnectorIsTrigger(connector, trigger, pad))
+                    continue;
+                if (connector.Status == MyShipConnectorStatus.Connectable)
+                    connector.Connect();
+            }
         }
 
         bool GearHolding(GridContext gc)
