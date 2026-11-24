@@ -1094,11 +1094,8 @@ namespace IngameScript
                     break;
 
                 case Step.Orbit:
-                    if (sb.GpsToggle && pc.DistanceToGPS < reach)
-                    {
-                        SoftAbort(gc);
+                    if (ReachedGps(gc, command, reach))
                         return;
-                    }
                     if (pc.Gravity == 0)
                     {
                         gc.ResetThrusters(gc.ForwardThrusters);
