@@ -18,7 +18,6 @@ namespace IngameScript.Domain
         readonly List<string> snapValue = new List<string>();
         readonly List<string> sectionScratch = new List<string>();
         readonly List<MyIniKey> keyScratch = new List<MyIniKey>();
-        string markerOverride;
         string seenCustomData;
         string pendingSection;
         string pendingKey;
@@ -26,6 +25,9 @@ namespace IngameScript.Domain
         bool reloadPending;
         bool commandRead;
         bool restoreHold;
+        bool colorSeed;
+        bool colorRead;
+        bool forceColorWrite;
         MainState savedState = MainState.Idle;
         Step savedStep = Step.Toggle;
         AutoLandState savedLand = AutoLandState.Idle;
@@ -34,9 +36,6 @@ namespace IngameScript.Domain
         int savedX;
         int savedY;
         int savedZ;
-        string warnWord;
-        string warnKey;
-        string cruiseWarn;
         string warnA;
         string warnB;
         string warnEcho;
@@ -73,35 +72,13 @@ namespace IngameScript.Domain
         bool allowLowFuelLand = DefaultLowFuelLand;
         bool allowDockMode = DefaultDockMode;
         bool controlAntennas = DefaultControlAntennas;
-        bool flightRestoreSet;
-        bool flightRestoreValue;
         bool renameSubgrids = DefaultRenameSubgrids;
         bool paintSurfaces = DefaultPaintSurfaces;
         bool transparentLCD = DefaultTransparentLCD;
         bool textPanels = DefaultTextPanels;
         int toggleBits;
 
-        //NamesTagsSection
-        const string NamesTagsSection = "Names & Tags";
-
-        const string INI_GRID_NAME = "Grid Name";
-        const string INI_DOCK_GROUP_TAG = "Dock Group";
-        const string INI_CONTROLLER_TAG = "Controller";
-        const string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks";
-        const string INI_IGNORE_TAG = "Ignore";
-        const string INI_LCD1_TAG = "LCD 1";
-        const string INI_LCD2_TAG = "LCD 2";
-        const string INI_MENU_TAG = "Menu";
-        const string INI_COCKPIT_TAG = "Cockpit";
-        const string INI_RAY_CAMERA_TAG = "Ray Camera";
-        const string BACKUP_BATTERY_TAG = "Backup battery";
-        const string INI_DOCK_TRIGGER_GROUP = "Dock Trigger Group";
-        const string INI_LANDING_PAD_GROUP = "Landing Pad Group";
-        const string INI_DOCK_TRIGGER_TAG = "Dock Trigger Tag";
-        const string INI_LANDING_PAD_TAG = "Landing Pad Tag";
-        const string ScriptTagsSection = "Script Tags";
-        const string GroupsSection = "Groups";
-        const string RestoreSection = "Restore";
+        //Restore state from server restart section
         const string CommandSection = "Command";
         const string KeyState = "State";
         const string KeyStep = "Step";
@@ -111,37 +88,56 @@ namespace IngameScript.Domain
         const string KeyY = "Y";
         const string KeyZ = "Z";
 
-        const string Lcd1 = "[FS_lcd1]";
-        const string Lcd2 = "[FS_lcd2]";
-        const string Menu = "[FS_menu]";
-        const string Cockpit = "[FS_cockpit]";
-        const string Ray = "[FS_ray]";
+        //NamesTagsSection
+        const string GridSection = "Grid tags";
 
-        string dockGroupTag = "Flight Systems";
+        const string INI_GRID_NAME = "Name";
+
+        const string INI_CONTROLLER_TAG = "RC";
+        const string INI_COCKPIT_TAG = "Cockpit";
+        const string INI_IGNORE_TAG = "Ignore";
+        const string INI_LCD1_TAG = "LCD 1";
+        const string INI_LCD2_TAG = "LCD 2";
+        const string INI_MENU_TAG = "Menu";
+        const string INI_RAY_CAMERA_TAG = "Ray Cam";
+        const string BACKUP_BATTERY_TAG = "Backup batt";
+
         string controllerTag = "[FS_reference]";
-        string overrideBlockTag = "[FS_override]";
+        string cockpitTag = "[FS_cockpit]";
         string ignoreTag = "[FS_ignore]";
         string lcd1Tag = "[FS_lcd1]";
         string lcd2Tag = "[FS_lcd2]";
         string lcdMenuTag = "[FS_menu]";
-        string cockpitTag = "[FS_cockpit]";
         string rayCameraTag = "[FS_ray]";
         string backupBatteryTag = "[FS_backup]";
-        string dockTriggerGroup = "Dock trigger";
-        string landingPadGroup = "Landing pad";
-        string dockTriggerTag = "[FS_trigger]";
-        string dockTriggerRestore = "";
-        string landingPadTag = "[FS_pad]";
-        string landingPadRestore = "";
 
-        //ParamsSection
+        //Dock Mode section
+        const string DockSection = "Dock groups and tags";
+
+        const string INI_DOCK_GROUP = "Dock";
+        const string INI_DOCK_TRIGGER_GROUP = "Trigger";
+        const string INI_LANDING_PAD_GROUP = "LPad";
+
+        const string INI_OVERRIDE_BLOCKS_TAG = "Override Blocks";
+        const string INI_DOCK_TRIGGER_TAG = "Trigger Tag";
+        const string INI_LANDING_PAD_TAG = "LPad Tag";
+
+        string dockGroup = "-Dock Mode";
+        string dockTriggerGroup = "-Dock trigger";
+        string landingPadGroup = "-Landing pad";
+
+        string overrideBlockTag = "[FS_override]";
+        string dockTriggerTag = "[FS_trigger]";
+        string landingPadTag = "[FS_pad]";
+
+        //Params section
         public const string ParamsSection = "Params";
 
         public const string MAX_SPEED = "Max Speed";
         public const string CRUISE_SPEED = "Cruise Speed";
-        public const string CNAV_ALTITUDE = "Cnav Altitude";
-        public const string DISTANCE_TO_GPS = "Distance to GPS";
-        public const string MINIMUM_ACCEPTED_FUEL = "Minimum Fuel";
+        public const string CNAV_ALTITUDE = "Cnav Alt";
+        public const string DISTANCE_TO_GPS = "Dist to GPS";
+        public const string MINIMUM_ACCEPTED_FUEL = "Min Fuel";
 
         public string[] IniParamList = new string[5] { MAX_SPEED, CRUISE_SPEED, CNAV_ALTITUDE, DISTANCE_TO_GPS, MINIMUM_ACCEPTED_FUEL };
 
@@ -151,7 +147,7 @@ namespace IngameScript.Domain
         double distanceToGPS = 500; // m
         double minimumAcceptedFuel = 20; //%
 
-        //SurfaceColorsSection
+        //Surface colors section
         public const string SurfaceColorsSection = "Screen Colors";
 
         public const string LCDBACKGROUNDCOLOR = "LCD Background Color";
@@ -177,26 +173,14 @@ namespace IngameScript.Domain
             this.gc = gc;
         }
 
-        public bool IniChanged => iniChanged;
-        internal string CommandWarnWord { get { return warnWord; } }
-        internal string CommandWarnKey { get { return warnKey; } }
-        internal int WarnCount { get { return warnCount; } }
-        internal string WarnEcho { get { return warnEcho; } }
-
-        internal string WarnLine(int index)
-        {
-            return index == 0 ? warnA : warnB;
-        }
-        public string DockGroupTag => dockGroupTag;
+        public string DockGroupTag => dockGroup;
         public string ControllerTag => controllerTag;
         public string OverrideBlockTag => overrideBlockTag;
         public string IgnoreTag => ignoreTag;
         public string DockTriggerGroup => dockTriggerGroup;
         public string LandingPadGroup => landingPadGroup;
         public string DockTriggerTag => dockTriggerTag;
-        public string DockTriggerRestore => dockTriggerRestore;
         public string LandingPadTag => landingPadTag;
-        public string LandingPadRestore => landingPadRestore;
         public string Lcd1Tag => lcd1Tag;
         public string Lcd2Tag => lcd2Tag;
         public string LcdMenuTag => lcdMenuTag;
@@ -409,6 +393,24 @@ namespace IngameScript.Domain
             return color.R + "," + color.G + "," + color.B;
         }
 
+        public bool NeedsColorSeed { get { return colorSeed && !colorRead; } }
+
+        public void SeedScreenColors(Color font, Color background)
+        {
+            if (!colorSeed || colorRead)
+                return;
+            colorRead = true;
+            colorSeed = false;
+            lcdBackgroundColor = background;
+            lcdFontColor = font;
+            spriteBackgroundColor = background;
+            spriteFontColor = font;
+            spriteMenuColor = background;
+            forceColorWrite = true;
+            UpdateIni(SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(background));
+            forceColorWrite = false;
+        }
+
 
         // ───────────────────────────────────────
         // Load config from CustomData (INI style)
@@ -419,10 +421,8 @@ namespace IngameScript.Domain
             iniChanged = false;
 
             string rawCustomData = gc.Me.CustomData ?? "";
-            // A missing GPS end must not wipe the lines the player pasted.
-            bool gpsOk = gps.LoadBlock(rawCustomData);
-            // GPS lines are not ini. A missing end still leaves the ini above GPS start.
-            bool parsed = ini.TryParse(GpsStore.WithoutMarker(rawCustomData));
+            gps.LoadText(rawCustomData);
+            bool parsed = ini.TryParse(rawCustomData);
             if (!parsed)
             {
                 ReadToggles(false);
@@ -430,7 +430,7 @@ namespace IngameScript.Domain
             }
 
             List<string> sectionsNames = new List<string>();
-            string[] array = { NamesTagsSection, ParamsSection, ToggleSection };
+            string[] array = { GridSection, ParamsSection, ToggleSection };
             sectionsNames.AddArray(array);
 
             foreach (string sectionName in sectionsNames)
@@ -448,52 +448,33 @@ namespace IngameScript.Domain
             ReadToggles(true);
 
             //NamesTagsSection
-            string tempGridName = ini.Get(NamesTagsSection, INI_GRID_NAME).ToString(gc.GridName);
+            string tempGridName = ini.Get(GridSection, INI_GRID_NAME).ToString(gc.GridName);
             gc.GridName = string.IsNullOrWhiteSpace(tempGridName) ? gc.GridName : tempGridName;
 
-            dockGroupTag = ReadMoved(GroupsSection, INI_DOCK_GROUP_TAG, DockGroupTag);
-            controllerTag = ini.Get(NamesTagsSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
-            overrideBlockTag = ini.Get(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
-            ignoreTag = ini.Get(NamesTagsSection, INI_IGNORE_TAG).ToString(IgnoreTag);
-            lcd1Tag = ini.Get(NamesTagsSection, INI_LCD1_TAG).ToString(Lcd1);
-            lcd2Tag = ini.Get(NamesTagsSection, INI_LCD2_TAG).ToString(Lcd2);
-            lcdMenuTag = ini.Get(NamesTagsSection, INI_MENU_TAG).ToString(Menu);
-            cockpitTag = ini.Get(NamesTagsSection, INI_COCKPIT_TAG).ToString(Cockpit);
-            rayCameraTag = ini.Get(NamesTagsSection, INI_RAY_CAMERA_TAG).ToString(Ray);
-            backupBatteryTag = ini.Get(NamesTagsSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
-            dockTriggerGroup = ReadMoved(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup);
-            landingPadGroup = ReadMoved(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup);
-            dockTriggerTag = ReadMoved(ScriptTagsSection, INI_DOCK_TRIGGER_TAG, "[FS_trigger]");
-            landingPadTag = ReadMoved(ScriptTagsSection, INI_LANDING_PAD_TAG, "[FS_pad]");
-            // Missing Restore is empty. The in-memory field is wiped by a recompile, so it is not the default.
-            dockTriggerRestore = ini.Get(RestoreSection, INI_DOCK_TRIGGER_TAG).ToString("");
-            landingPadRestore = ini.Get(RestoreSection, INI_LANDING_PAD_TAG).ToString("");
-            // Same key name as the visible toggle. Read it here so a static grid does not store false over the saved value.
-            flightRestoreSet = ini.ContainsKey(RestoreSection, FLIGHT_SYSTEMS);
-            if (flightRestoreSet)
-                flightRestoreValue = ini.Get(RestoreSection, FLIGHT_SYSTEMS).ToBoolean(false);
-            ApplyFlightSystemsStaticHold();
+            dockGroup = ini.Get(DockSection, INI_DOCK_GROUP).ToString(DockGroupTag);
+            controllerTag = ini.Get(GridSection, INI_CONTROLLER_TAG).ToString(ControllerTag);
+            ignoreTag = ini.Get(GridSection, INI_IGNORE_TAG).ToString(IgnoreTag);
+            lcd1Tag = ini.Get(GridSection, INI_LCD1_TAG).ToString(lcd1Tag);
+            lcd2Tag = ini.Get(GridSection, INI_LCD2_TAG).ToString(lcd2Tag);
+            lcdMenuTag = ini.Get(GridSection, INI_MENU_TAG).ToString(lcdMenuTag);
+            cockpitTag = ini.Get(GridSection, INI_COCKPIT_TAG).ToString(cockpitTag);
+            rayCameraTag = ini.Get(GridSection, INI_RAY_CAMERA_TAG).ToString(rayCameraTag);
+            backupBatteryTag = ini.Get(GridSection, BACKUP_BATTERY_TAG).ToString(BackupBatteryTag);
+            dockTriggerGroup = ini.Get(DockSection, INI_DOCK_TRIGGER_GROUP).ToString(DockTriggerGroup);
+            landingPadGroup = ini.Get(DockSection, INI_LANDING_PAD_GROUP).ToString(LandingPadGroup);
+            overrideBlockTag = ini.Get(DockSection, INI_OVERRIDE_BLOCKS_TAG).ToString(OverrideBlockTag);
+            dockTriggerTag = ini.Get(DockSection, INI_DOCK_TRIGGER_TAG).ToString(DockTriggerTag);
+            landingPadTag = ini.Get(DockSection, INI_LANDING_PAD_TAG).ToString(LandingPadTag);
 
             //ParamsSection
-            string s = ini.Get(ParamsSection, MAX_SPEED).ToString(MaxSpeed.ToString());
+            // Infinity, Infinite, blank, and 00 are no limit. Any other non-number keeps ToDouble's default.
+            string speedText = ini.Get(ParamsSection, MAX_SPEED).ToString("");
+            maxSpeed = ini.Get(ParamsSection, MAX_SPEED).ToDouble(MaxSpeed);
+            if (speedText == "Infinity" || speedText == "Infinite" || speedText == "" || speedText == "00")
+                maxSpeed = double.PositiveInfinity;
 
-            maxSpeed = (s == "Infinity" || s == "Infinite" || s == "" || s == "00")
-                ? double.PositiveInfinity
-                : double.Parse(s);
-
-            bool cruiseMissing = !ini.ContainsKey(ParamsSection, CRUISE_SPEED);
-            string cruiseText = ini.Get(ParamsSection, CRUISE_SPEED).ToString("");
             cruiseSpeed = ini.Get(ParamsSection, CRUISE_SPEED).ToDouble(CruiseSpeed);
-            double parsedCruise;
-            if (cruiseMissing)
-                cruiseWarn = "No " + CRUISE_SPEED;
-            else if (!double.TryParse(cruiseText, out parsedCruise))
-                cruiseWarn = "Bad " + CRUISE_SPEED;
-            else
-            {
-                cruiseSpeed = parsedCruise;
-                cruiseWarn = null;
-            }
+
             cnavAltitude = ini.Get(ParamsSection, CNAV_ALTITUDE).ToDouble(SafeAltitude);
             distanceToGPS = ini.Get(ParamsSection, DISTANCE_TO_GPS).ToDouble(DistanceToGPS);
             minimumAcceptedFuel = ini.Get(ParamsSection, MINIMUM_ACCEPTED_FUEL).ToDouble(MinimumAcceptedFuel);
@@ -504,9 +485,12 @@ namespace IngameScript.Domain
             spriteMenuColor = ReadRgb(SPRITEMENUCOLOR, DefaultSpriteMenu);
             spriteBackgroundColor = ReadRgb(SPRITEBACKGROUNDCOLOR, DefaultSpriteBackground);
             spriteFontColor = ReadRgb(SPRITEFONTCOLOR, DefaultSpriteFont);
+            if (!colorRead)
+                colorSeed = !ini.ContainsKey(SurfaceColorsSection, LCDBACKGROUNDCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, LCDFONTCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR)
+                    || !ini.ContainsKey(SurfaceColorsSection, SPRITEFONTCOLOR);
 
-            if (!gpsOk)
-                return false;
             iniChanged = reloadPending || seenCustomData != rawCustomData;
             reloadPending = false;
             RewriteFromParsed();
@@ -542,51 +526,6 @@ namespace IngameScript.Domain
                 return codeDefault;
             toggleBits |= bit;
             return value;
-        }
-
-        // New section wins. A missing key is read from Names & Tags once, then omitted on the write.
-        string ReadMoved(string section, string key, string fallback)
-        {
-            if (ini.ContainsKey(section, key))
-                return ini.Get(section, key).ToString(fallback);
-            if (section != NamesTagsSection && ini.ContainsKey(NamesTagsSection, key))
-                return ini.Get(NamesTagsSection, key).ToString(fallback);
-            return fallback;
-        }
-
-        void ApplyFlightSystemsStaticHold()
-        {
-            bool gridStatic = gc.Me != null && gc.Me.CubeGrid != null && !gc.Me.CubeGrid.Closed && gc.Me.CubeGrid.IsStatic;
-            if (gridStatic)
-            {
-                if (!flightRestoreSet)
-                {
-                    flightRestoreValue = allowFlightSystems;
-                    flightRestoreSet = true;
-                }
-                allowFlightSystems = false;
-            }
-            else if (flightRestoreSet)
-            {
-                allowFlightSystems = flightRestoreValue;
-                flightRestoreSet = false;
-            }
-        }
-
-        public void SetDockTriggerRestore(string current)
-        {
-            dockTriggerRestore = current ?? "";
-            if (!ini.ContainsSection(NamesTagsSection))
-                return;
-            UpdateIni(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore);
-        }
-
-        public void SetLandingPadRestore(string current)
-        {
-            landingPadRestore = current ?? "";
-            if (!ini.ContainsSection(NamesTagsSection))
-                return;
-            UpdateIni(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore);
         }
 
         Color ReadRgb(string key, Color fallback)
@@ -667,11 +606,8 @@ namespace IngameScript.Domain
             if (gc.Me == null)
                 return;
             string raw = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(raw, out block))
-                return;
             ini.Clear();
-            if (!ini.TryParse(GpsStore.WithoutMarker(raw)))
+            if (!ini.TryParse(raw))
                 return;
 
             string text = newVal.ToString();
@@ -704,28 +640,23 @@ namespace IngameScript.Domain
             SetKept(ToggleSection, TRANSPARENTLCD, TransparentLCD.ToString());
             SetKept(ToggleSection, TEXT_PANELS, TextPanels.ToString());
 
-            SetKept(NamesTagsSection, INI_GRID_NAME, gc.GridName ?? "");
-            SetKept(NamesTagsSection, INI_CONTROLLER_TAG, ControllerTag ?? "");
-            SetKept(NamesTagsSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag ?? "");
-            SetKept(NamesTagsSection, INI_IGNORE_TAG, IgnoreTag ?? "");
-            SetKept(NamesTagsSection, INI_LCD1_TAG, Lcd1Tag ?? "");
-            SetKept(NamesTagsSection, INI_LCD2_TAG, Lcd2Tag ?? "");
-            SetKept(NamesTagsSection, INI_MENU_TAG, LcdMenuTag ?? "");
-            SetKept(NamesTagsSection, INI_COCKPIT_TAG, CockpitTag ?? "");
-            SetKept(NamesTagsSection, INI_RAY_CAMERA_TAG, RayCameraTag ?? "");
-            SetKept(NamesTagsSection, BACKUP_BATTERY_TAG, BackupBatteryTag ?? "");
+            SetKept(GridSection, INI_GRID_NAME, gc.GridName ?? "");
+            SetKept(GridSection, INI_CONTROLLER_TAG, ControllerTag ?? "");
+            SetKept(GridSection, INI_IGNORE_TAG, IgnoreTag ?? "");
+            SetKept(GridSection, INI_LCD1_TAG, Lcd1Tag ?? "");
+            SetKept(GridSection, INI_LCD2_TAG, Lcd2Tag ?? "");
+            SetKept(GridSection, INI_MENU_TAG, LcdMenuTag ?? "");
+            SetKept(GridSection, INI_COCKPIT_TAG, CockpitTag ?? "");
+            SetKept(GridSection, INI_RAY_CAMERA_TAG, RayCameraTag ?? "");
+            SetKept(GridSection, BACKUP_BATTERY_TAG, BackupBatteryTag ?? "");
 
-            SetKept(ScriptTagsSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag ?? "");
-            SetKept(ScriptTagsSection, INI_LANDING_PAD_TAG, LandingPadTag ?? "");
 
-            SetKept(GroupsSection, INI_DOCK_GROUP_TAG, DockGroupTag ?? "");
-            SetKept(GroupsSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup ?? "");
-            SetKept(GroupsSection, INI_LANDING_PAD_GROUP, LandingPadGroup ?? "");
-
-            SetKept(RestoreSection, INI_DOCK_TRIGGER_TAG, dockTriggerRestore ?? "");
-            SetKept(RestoreSection, INI_LANDING_PAD_TAG, landingPadRestore ?? "");
-            if (FindSnap(RestoreSection, FLIGHT_SYSTEMS) >= 0 || flightRestoreSet)
-                SetKept(RestoreSection, FLIGHT_SYSTEMS, flightRestoreValue ? "true" : "false");
+            SetKept(DockSection, INI_DOCK_GROUP, DockGroupTag ?? "");
+            SetKept(DockSection, INI_DOCK_TRIGGER_GROUP, DockTriggerGroup ?? "");
+            SetKept(DockSection, INI_LANDING_PAD_GROUP, LandingPadGroup ?? "");
+            SetKept(DockSection, INI_OVERRIDE_BLOCKS_TAG, OverrideBlockTag ?? "");
+            SetKept(DockSection, INI_DOCK_TRIGGER_TAG, DockTriggerTag ?? "");
+            SetKept(DockSection, INI_LANDING_PAD_TAG, LandingPadTag ?? "");
 
             SetKept(ParamsSection, MAX_SPEED, MaxSpeed.ToString());
             SetKept(ParamsSection, CRUISE_SPEED, CruiseSpeed.ToString());
@@ -733,42 +664,15 @@ namespace IngameScript.Domain
             SetKept(ParamsSection, DISTANCE_TO_GPS, DistanceToGPS.ToString());
             SetKept(ParamsSection, MINIMUM_ACCEPTED_FUEL, MinimumAcceptedFuel.ToString());
 
-            SetKept(SurfaceColorsSection, LCDBACKGROUNDCOLOR, FormatRgb(lcdBackgroundColor));
-            SetKept(SurfaceColorsSection, LCDFONTCOLOR, FormatRgb(lcdFontColor));
+            SetColor(LCDBACKGROUNDCOLOR, lcdBackgroundColor);
+            SetColor(LCDFONTCOLOR, lcdFontColor);
             SetKept(SurfaceColorsSection, SPRITEMENUCOLOR, FormatRgb(spriteMenuColor));
-            SetKept(SurfaceColorsSection, SPRITEBACKGROUNDCOLOR, FormatRgb(spriteBackgroundColor));
-            SetKept(SurfaceColorsSection, SPRITEFONTCOLOR, FormatRgb(spriteFontColor));
+            SetColor(SPRITEBACKGROUNDCOLOR, spriteBackgroundColor);
+            SetColor(SPRITEFONTCOLOR, spriteFontColor);
 
             WriteCommand();
             WriteForeign();
             WriteCustomData();
-            RefreshWarnLines();
-        }
-
-        void RefreshWarnLines()
-        {
-            warnCount = 0;
-            warnA = null;
-            warnB = null;
-            if (cruiseWarn != null)
-                AddWarn(cruiseWarn);
-            if (warnKey != null)
-                AddWarn(warnWord + " " + warnKey);
-            if (warnCount == 0)
-                warnEcho = null;
-            else if (warnCount == 1)
-                warnEcho = "\n" + warnA;
-            else
-                warnEcho = "\n" + warnA + "\n" + warnB;
-        }
-
-        void AddWarn(string line)
-        {
-            if (warnCount == 0)
-                warnA = line;
-            else if (warnCount == 1)
-                warnB = line;
-            warnCount++;
         }
 
         internal void ClearRestoreHold()
@@ -848,7 +752,6 @@ namespace IngameScript.Domain
             MainState state;
             if (!EnumLabels.TryState(ini.Get(CommandSection, KeyState).ToString(""), out state))
             {
-                WarnCommand(KeyState);
                 return;
             }
             if (state == MainState.Idle || state == MainState.Abort || state == MainState.Reload)
@@ -860,7 +763,6 @@ namespace IngameScript.Domain
                 Step parsed;
                 if (!EnumLabels.TryStep(ini.Get(CommandSection, KeyStep).ToString(""), out parsed))
                 {
-                    WarnCommand(KeyStep);
                     return;
                 }
                 step = parsed == Step.Toggle ? Step.On : parsed;
@@ -872,7 +774,6 @@ namespace IngameScript.Domain
                 AutoLandState parsedLand;
                 if (!EnumLabels.TryLand(ini.Get(CommandSection, KeyLand).ToString(""), out parsedLand))
                 {
-                    WarnCommand(KeyLand);
                     return;
                 }
                 land = parsedLand;
@@ -884,7 +785,6 @@ namespace IngameScript.Domain
                 double parsedNumber;
                 if (!double.TryParse(ini.Get(CommandSection, KeyNumber).ToString(""), out parsedNumber))
                 {
-                    WarnCommand(KeyNumber);
                     return;
                 }
                 number = parsedNumber;
@@ -895,7 +795,6 @@ namespace IngameScript.Domain
             bool hasZ = ini.ContainsKey(CommandSection, KeyZ);
             if (state == MainState.Gps && (!hasX || !hasY || !hasZ))
             {
-                WarnCommand(KeyX);
                 return;
             }
 
@@ -907,7 +806,6 @@ namespace IngameScript.Domain
             {
                 if (!hasX || !hasY || !hasZ)
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
                 double dx;
@@ -915,17 +813,14 @@ namespace IngameScript.Domain
                 double dz;
                 if (!double.TryParse(ini.Get(CommandSection, KeyX).ToString(""), out dx))
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
                 if (!double.TryParse(ini.Get(CommandSection, KeyY).ToString(""), out dy))
                 {
-                    WarnCommand(KeyY);
                     return;
                 }
                 if (!double.TryParse(ini.Get(CommandSection, KeyZ).ToString(""), out dz))
                 {
-                    WarnCommand(KeyZ);
                     return;
                 }
                 x = GpsStore.NearestMeter(dx);
@@ -934,7 +829,6 @@ namespace IngameScript.Domain
                 target = x != 0 || y != 0 || z != 0;
                 if (state == MainState.Gps && !target)
                 {
-                    WarnCommand(KeyX);
                     return;
                 }
             }
@@ -948,12 +842,6 @@ namespace IngameScript.Domain
             savedY = y;
             savedZ = z;
             restoreHold = true;
-        }
-
-        void WarnCommand(string key)
-        {
-            warnWord = "Bad";
-            warnKey = key;
         }
 
         void WriteCommand()
@@ -1005,6 +893,18 @@ namespace IngameScript.Domain
             return -1;
         }
 
+        void SetColor(string key, Color color)
+        {
+            if (!forceColorWrite && FindSnap(SurfaceColorsSection, key) < 0)
+            {
+                if (pendingSection == null
+                    || !string.Equals(pendingSection, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(pendingKey, key, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+            SetKept(SurfaceColorsSection, key, FormatRgb(color));
+        }
+
         void SetKept(string section, string key, string fallback)
         {
             if (pendingSection != null
@@ -1021,11 +921,9 @@ namespace IngameScript.Domain
 
         static bool OwnedSection(string section)
         {
-            return string.Equals(section, ToggleSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, NamesTagsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, ScriptTagsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, GroupsSection, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(section, RestoreSection, StringComparison.OrdinalIgnoreCase)
+            return string.Equals(section, GridSection, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(section, DockSection, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(section, ToggleSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, ParamsSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, SurfaceColorsSection, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(section, CommandSection, StringComparison.OrdinalIgnoreCase);
@@ -1038,7 +936,7 @@ namespace IngameScript.Domain
                 string section = snapSection[i];
                 if (OwnedSection(section))
                     continue;
-                if (section.StartsWith("Flight Systems:", StringComparison.OrdinalIgnoreCase))
+                if (section.StartsWith(FLIGHT_SYSTEMS + ": ", StringComparison.OrdinalIgnoreCase))
                     continue;
                 ini.Set(section, snapKey[i], snapValue[i]);
             }
@@ -1050,25 +948,19 @@ namespace IngameScript.Domain
                 return false;
 
             Vector3D here = grid.Controller.GetPosition();
-            IMyShipConnector home = HomeConnector(grid);
-            if (home != null)
-                here = home.GetPosition();
-            int x = GpsStore.NearestMeter(here.X);
-            int y = GpsStore.NearestMeter(here.Y);
-            int z = GpsStore.NearestMeter(here.Z);
-            Vector3D rounded = new Vector3D(x, y, z);
-            if (gps.Near(here) || gps.Near(rounded))
+            double x = Math.Round(here.X, 1, MidpointRounding.AwayFromZero);
+            double y = Math.Round(here.Y, 1, MidpointRounding.AwayFromZero);
+            double z = Math.Round(here.Z, 1, MidpointRounding.AwayFromZero);
+            if (gps.Near(here) || gps.Near(new Vector3D(x, y, z)))
                 return false;
 
-            string line = "GPS:" + gps.NextMarkName() + ":" + x + ":" + y + ":" + z + ":#FF75C9F1:";
-            string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
-                return false;
-            string updated = GpsStore.WithPoint(block, line);
+            string line = string.Format("GPS:{0}:{1:0.0}:{2:0.0}:{3:0.0}:#FF75C9F1:", gps.NextMarkName(), x, y, z);
+            string updated = GpsStore.AddPoint(gc.Me.CustomData ?? "", line);
             if (updated == null)
                 return false;
-            ReplaceMarkerBlock(updated);
+            gc.Me.CustomData = updated;
+            seenCustomData = updated;
+            gps.LoadText(updated);
             return true;
         }
 
@@ -1092,32 +984,16 @@ namespace IngameScript.Domain
         {
             if (gc.Me == null)
                 return false;
-            string old = gc.Me.CustomData ?? "";
-            string block;
-            if (!GpsStore.TryMarkerBlock(old, out block))
+            GpsWaypoint wp = gps.Get(index);
+            if (wp == null)
                 return false;
-            string updated = GpsStore.WithoutPoint(block, index);
+            string updated = GpsStore.RemoveKey(gc.Me.CustomData ?? "", wp.Key);
             if (updated == null)
                 return false;
-            ReplaceMarkerBlock(updated);
+            gc.Me.CustomData = updated;
+            seenCustomData = updated;
+            gps.LoadText(updated);
             return true;
-        }
-
-        void ReplaceMarkerBlock(string block)
-        {
-            if (gc.Me == null || block == null)
-                return;
-            string raw = gc.Me.CustomData ?? "";
-            string existing;
-            if (!GpsStore.TryMarkerBlock(raw, out existing))
-                return;
-            ini.Clear();
-            if (!ini.TryParse(raw))
-                return;
-            markerOverride = block;
-            RewriteFromParsed();
-            markerOverride = null;
-            gps.LoadBlock(gc.Me.CustomData ?? "");
         }
 
         void WriteCustomData()
@@ -1125,15 +1001,10 @@ namespace IngameScript.Domain
             if (gc.Me == null)
                 return;
             string old = gc.Me.CustomData ?? "";
-            string block;
-            if (markerOverride != null)
-                block = markerOverride;
-            else if (!GpsStore.TryMarkerBlock(old, out block))
-                return;
             string body = ini.ToString();
             if (body.Length == 0 || body[body.Length - 1] != '\n')
                 body += "\n";
-            string written = "[Flight Systems: " + gc.Me.EntityId + "]\n\n" + body + "\n" + block;
+            string written = $"[{FLIGHT_SYSTEMS}: {gc.Me.EntityId} ]\n\n" + body;
             if (old != written)
                 gc.Me.CustomData = written;
             seenCustomData = written;

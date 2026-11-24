@@ -65,12 +65,10 @@ namespace IngameScript
         bool menuToggle;
         bool menuIsLocked;
         bool menuSeatHold;
+        int seatHoldKeys;
         string textModeEcho;
 
         double planetRadius = 0;
-        bool homeHold;
-        bool homeTried;
-        Vector3D homeAt;
         bool haveFall;
         double fallAlt;
         double fallDecel;
@@ -182,7 +180,8 @@ namespace IngameScript
                         pi.ResetControllers(gc.Controllers);
                     }
                 }
-                else command = new Command(argument);
+                else if (!DroppedArg(argument))
+                    command = new Command(argument);
             }
 
             inputLock++;
@@ -221,7 +220,7 @@ namespace IngameScript
                     RefreshHudLines();
                     if (menuHud.ShouldClose(ic))
                     {
-                        CloseMenuFromSpace();
+                        CloseMenuFromC();
                         menuHud.FlightSystemIdle(ic, gc, sb, menuStack);
                         // menuToggle is false now. Rebind so the shared panel is the flight HUD, not the idle list.
                         RefreshHudLines();
@@ -369,12 +368,6 @@ namespace IngameScript
                 case 0:
                     task = Task.PhysicsUpdate;
                     Vector3D aimAt = command.Param.TargetCoordinates;
-                    if (command.State == MainState.Gps)
-                    {
-                        Vector3D moved;
-                        if (HomeAim(gc, aimAt, out moved))
-                            aimAt = moved;
-                    }
                     pc.NewRun(timeSinceLastRun, aimAt, command);
                     break;
                 case 1:
@@ -456,7 +449,7 @@ namespace IngameScript
             }
 
             Lcd1Display.Fill(hudStack1, ic, gc, pc, command);
-            Lcd2Display.Fill(hudStack2, pc, command, sb);
+            Lcd2Display.Fill(hudStack2, pc, command, sb, isDockMode);
             Sprites.BindFlight(gc.Lcds1, gc.Lcds2, gc.LcdsMenu, menuToggle, hudStack1, hudStack2, menuStack);
         }
 
@@ -548,8 +541,6 @@ namespace IngameScript
                 report = report + "\n" + gearLockNote;
             if (textModeEcho != null)
                 report = report + "\n" + textModeEcho;
-            if (ic.WarnEcho != null)
-                report = report + ic.WarnEcho;
             return report;
         }
 
@@ -576,7 +567,7 @@ namespace IngameScript
                 return;
             }
 
-            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Glide, MainState.Land, MainState.SBurn, MainState.Gps };
+            var allowedStates = new[] { MainState.CNav, MainState.Cruise, MainState.Orbit, MainState.Land, MainState.Gps };
 
             if (!ic.AllowFlightSystems && allowedStates.Contains(command.State))
             {
@@ -631,10 +622,6 @@ namespace IngameScript
                     gc.Controller.DampenersOverride = true;
                     OrbitStateSwitch(gc, ic, command);
                     break;
-                case MainState.Glide:
-                    gc.Controller.DampenersOverride = true;
-                    GlideStateSwitch(gc, ic, command);
-                    break;
                 case MainState.CNav: // Circumnavigation
                     if (pc.Gravity > 0)
                     {
@@ -656,11 +643,13 @@ namespace IngameScript
                     if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
                     AutoLandStateSwitch(gc, command);
                     break;
-                case MainState.SBurn: // Suicide Burn
-                    if (command.Param.AutoLandState == AutoLandState.Idle) command.Param.AutoLandState = AutoLandState.Align;
-                    SBurnStateSwitch(gc, command);
-                    break;
             }
+        }
+
+        static bool DroppedArg(string argument)
+        {
+            string cmd = argument.Trim().ToLowerInvariant();
+            return cmd == "glide" || cmd == "sburn" || cmd.StartsWith("glide ") || cmd.StartsWith("sburn ");
         }
 
         private void DockToggle(GridContext gc, bool isDocked, bool anyConnected = false)
@@ -736,8 +725,7 @@ namespace IngameScript
         {
             if (dockSeatsHeld || gc.Cockpits.Count <= 1 || !CockpitOccupied())
                 return;
-            pi.OcupiedController(gc.Controllers);
-            pi.PrepareController();
+            pi.HoldSeat(gc.Controllers);
             dockSeatsHeld = true;
         }
 
@@ -746,9 +734,16 @@ namespace IngameScript
             if (!dockSeatsHeld)
                 return;
             dockSeatsHeld = false;
-            // Menu or a Space close still owns the seat. Resetting here would thrust up.
+            // Menu or a key close still owns the seat. Resetting here would thrust up.
             if (menuToggle || menuSeatHold)
                 return;
+            if (ControlHeld())
+            {
+                menuSeatHold = true;
+                seatHoldKeys = ReadHeldKeys();
+                HoldMenuSeat();
+                return;
+            }
             pi.ResetControllers(gc.Controllers);
         }
 
@@ -945,29 +940,6 @@ namespace IngameScript
             }
         }
 
-        void GlideStateSwitch(GridContext gc, IniContext ic, Command command)
-        {
-            double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
-
-            switch (command.Param.Step)
-            {
-                case Step.Toggle:
-                    ToggleCommand(gc, command);
-                    break;
-                case Step.On:
-                    CruiseControl(CruiseSpeed, timeSinceLastRun);
-                    if (pc.Gravity > 0 && pc.GroundLevel < ic.SafeAltitude + pc.StopYDist)
-                    {
-                        AbortShipContext(gc);
-                        command.State = MainState.Land;
-                    }
-                    break;
-                case Step.Off:
-                    AbortShipContext(gc);
-                    break;
-            }
-        }
-
         void CircumNavigateStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             double CruiseSpeed = (command.Param.Number > 0 ? command.Param.Number : ic.CruiseSpeed);
@@ -1018,27 +990,10 @@ namespace IngameScript
             }
         }
 
-        // Moved point is where the remote must sit for the tagged connector to be on the GPS. Not saved.
-        bool HomeAim(GridContext grid, Vector3D gps, out Vector3D at)
-        {
-            at = gps;
-            if (grid == null || grid.Controller == null)
-                return false;
-            IMyShipConnector home = IniContext.HomeConnector(grid);
-            if (home == null)
-                return false;
-            at = gps + grid.Controller.GetPosition() - home.GetPosition();
-            return true;
-        }
-
         void GPSStateSwitch(GridContext gc, IniContext ic, Command command)
         {
             Vector3D gps = command.Param.TargetCoordinates;
-            Vector3D at;
-            bool home = HomeAim(gc, gps, out at);
             double reach = ic.DistanceToGPS + pc.StopZDist;
-            if (home)
-                reach = pc.StopZDist;
 
             switch (command.Param.Step)
             {
@@ -1049,14 +1004,7 @@ namespace IngameScript
                 case Step.On:
                     if (pc.Gravity == 0)
                     {
-                        Vector3D fwd = gc.Controller.WorldMatrix.Forward;
-                        if (home)
-                        {
-                            IMyShipConnector tagged = IniContext.HomeConnector(gc);
-                            if (tagged != null)
-                                fwd = tagged.WorldMatrix.Forward;
-                        }
-                        if (VectorAlignedOverride(gc, fwd, false, gc.Controller.GetPosition() - at))
+                        if (VectorAlignedOverride(gc, gc.Controller.WorldMatrix.Forward, false, gc.Controller.GetPosition() - gps))
                             command.Param.Step = Step.Cruise;
                     }
                     else if (GravityAlignedOverride(gc))
@@ -1093,11 +1041,6 @@ namespace IngameScript
                             command.State = MainState.Land;
                             sb.GpsToggle = false;
                             previousRate = PREV_RATE;
-                            if (home)
-                            {
-                                homeHold = true;
-                                homeAt = gps;
-                            }
                         }
                         return;
                     }
@@ -1438,42 +1381,7 @@ namespace IngameScript
                     break;
 
                 case AutoLandState.LockGear:
-                    HandleLockGear(gc, command, false);
-                    break;
-            }
-        }
-
-        void SBurnStateSwitch(GridContext gc, Command command)
-        {
-            switch (command.Param.Step)
-            {
-                case Step.Toggle:
-                    ToggleCommand(gc, command);
-                    break;
-                case Step.On:
-                    SBurnSwitch(gc, command);
-                    break;
-                case Step.Off:
-                    AbortShipContext(gc);
-                    break;
-            }
-        }
-
-        private void SBurnSwitch(GridContext gc, Command command)
-        {
-            switch (command.Param.AutoLandState)
-            {
-                case AutoLandState.Align:
-                    SoftAbort(gc);
-                    if (GravityAlignedOverride(gc, true)) command.Param.AutoLandState = AutoLandState.Drop;
-                    break;
-
-                case AutoLandState.Drop:
-                    if (SuicideBurn(gc, pc)) command.Param.AutoLandState = AutoLandState.LockGear;
-                    break;
-
-                case AutoLandState.LockGear:
-                    HandleLockGear(gc, command, true);
+                    HandleLockGear(gc);
                     break;
             }
         }
@@ -1487,8 +1395,6 @@ namespace IngameScript
                 HoldMenuSeat();
             SyncDockTriggerGears();
             SyncDockConnectors();
-            ic.SetDockTriggerRestore(ic.DockTriggerTag ?? "");
-            ic.SetLandingPadRestore(ic.LandingPadTag ?? "");
             RememberSyncedGroupIds();
 
             gc.ReloadLCDs()
@@ -1633,24 +1539,47 @@ namespace IngameScript
             inputLock = 0;
         }
 
+        const int HoldW = 1;
+        const int HoldA = 2;
+        const int HoldS = 4;
+        const int HoldD = 8;
+        const int HoldQ = 16;
+        const int HoldE = 32;
+        const int HoldC = 64;
+        const int HoldSpace = 128;
+
         void HoldMenuSeat()
         {
-            pi.OcupiedController(gc.Controllers);
-            pi.PrepareController();
+            pi.HoldSeat(gc.Controllers);
+        }
+
+        void CloseMenuFromC()
+        {
+            menuHud.ReleaseScreenMarker();
+            menuToggle = false;
+            BeginSeatHold(HoldC);
         }
 
         void CloseMenuFromSpace()
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            if (pi.Space() || pi.C())
+            BeginSeatHold(HoldSpace);
+        }
+
+        // The other cockpit stays main while the exit key is down. It is cleared when that key is up.
+        void BeginSeatHold(int exitKey)
+        {
+            if ((ReadHeldKeys() & exitKey) != 0)
             {
                 menuSeatHold = true;
+                seatHoldKeys = exitKey;
                 HoldMenuSeat();
                 return;
             }
 
             menuSeatHold = false;
+            seatHoldKeys = 0;
             pi.ResetControllers(gc.Controllers);
         }
 
@@ -1658,14 +1587,34 @@ namespace IngameScript
         {
             if (!menuSeatHold)
                 return;
-            if (pi.Space() || pi.C())
+            if ((ReadHeldKeys() & seatHoldKeys) != 0)
             {
                 HoldMenuSeat();
                 return;
             }
 
             menuSeatHold = false;
+            seatHoldKeys = 0;
             pi.ResetControllers(gc.Controllers);
+        }
+
+        int ReadHeldKeys()
+        {
+            int keys = 0;
+            if (pi.W()) keys |= HoldW;
+            if (pi.A()) keys |= HoldA;
+            if (pi.S()) keys |= HoldS;
+            if (pi.D()) keys |= HoldD;
+            if (pi.Q()) keys |= HoldQ;
+            if (pi.E()) keys |= HoldE;
+            if (pi.C()) keys |= HoldC;
+            if (pi.Space()) keys |= HoldSpace;
+            return keys;
+        }
+
+        bool ControlHeld()
+        {
+            return ReadHeldKeys() != 0;
         }
 
         void AbortShipContext(GridContext gc)
@@ -1685,8 +1634,6 @@ namespace IngameScript
             integral = 0;
             lastError = 0;
             gearLockNote = null;
-            homeHold = false;
-            homeTried = false;
             haveFall = false;
             ClearClimbBoost(gc);
 
@@ -1791,14 +1738,7 @@ namespace IngameScript
             Vector3D levelAxis = shipUp.Cross(gDown);
             double levelErr = levelAxis.Length();
 
-            Vector3D aimed;
-            if (HomeAim(gc, targetGps, out aimed))
-            {
-                IMyShipConnector home = IniContext.HomeConnector(gc);
-                if (home != null)
-                    shipFwd = home.WorldMatrix.Forward;
-            }
-            Vector3D toTarget = aimed - gc.Controller.GetPosition(); // connector on the GPS, remote when no tag
+            Vector3D toTarget = targetGps - gc.Controller.GetPosition();
             Vector3D targetHoriz = toTarget - gDown * toTarget.Dot(gDown);
             Vector3D fwdHoriz = shipFwd - gDown * shipFwd.Dot(gDown);
 
@@ -1885,11 +1825,9 @@ namespace IngameScript
             return VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc) >= target;
         }
 
-        // Half of the rise to the ground for the burn. The abort uses the full rise.
-        void ProjectFall(double decel, double altitude, out double projected, out double burnDecel)
+        void ProjectFall(double decel, double altitude, out double projected)
         {
             projected = decel;
-            burnDecel = decel;
             if (haveFall && altitude < fallAlt && decel > fallDecel)
             {
                 double drop = fallAlt - altitude;
@@ -1897,10 +1835,7 @@ namespace IngameScript
                 {
                     double rise = (decel - fallDecel) / drop * altitude;
                     if (rise > 0)
-                    {
                         projected = decel + rise;
-                        burnDecel = decel + 0.5 * rise;
-                    }
                 }
             }
             fallAlt = altitude;
@@ -1908,37 +1843,11 @@ namespace IngameScript
             haveFall = true;
         }
 
-        bool SuicideBurn(GridContext gc, PhysicsContext pc)
-        {
-            double projected;
-            double burnDecel;
-            ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out burnDecel);
-            if (gc.ShipType != ShipType.Atmo)
-                if (projected - 0.5 < 0)
-                {
-                    AbortShipContext(gc);
-                    this.command.State = MainState.Orbit;
-                    return false;
-                }
-            gc.Controller.DampenersOverride = false;
-            GravityAlignedOverride(gc);
-            double agl = DescentAgl(gc);
-            double stopReach = 1.1 * pc.StopYDist + 2 * gc.GridHeight;
-            double target = -0.80 * SafeFall(burnDecel, agl);
-            VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 1.5);
-            return agl < stopReach && FallSettled(gc, target);
-        }
-
         bool AutoLand(GridContext gc, PhysicsContext pc)
         {
-            double gate = pc.NetDecel;
-            if (!homeHold)
-            {
-                double projected;
-                double ignored;
-                ProjectFall(pc.MaxYDecel, pc.GroundLevel, out projected, out ignored);
-                gate = projected;
-            }
+            double projected;
+            ProjectFall(pc.MaxYDecel, SurfaceLeft(gc, pc.GroundLevel), out projected);
+            double gate = projected;
             if (gc.ShipType != ShipType.Atmo)
                 if (gate - 0.25 < 0)
                 {
@@ -1950,50 +1859,71 @@ namespace IngameScript
             GravityAlignedOverride(gc);
 
             double agl = DescentAgl(gc);
+            double above = SurfaceLeft(gc, agl);
             double stop = pc.StopYDist;
             double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
-            if (homeHold)
-                stopReach = 0.5;
-            if (homeHold && agl < stopReach)
-            {
-                HoldHome(gc);
-                return false;
-            }
-            double target = LandFall(pc.MaxYDecel, agl);
+            double target = LandFall(pc.MaxYDecel, above);
+            if (above <= SlowToTwo(gc))
+                target = -2;
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 0.5);
-            if (homeHold)
-                return false;
             return agl < stopReach && FallSettled(gc, target);
         }
 
-        // Gear lock every tick. Connect at most once, and only on the tagged connector.
-        void HoldHome(GridContext grid)
+        // Remote altitude minus the block that touches first. Not written down.
+        double SurfaceLeft(GridContext grid, double agl)
         {
-            TryLock(grid);
-            if (grid.Controller != null)
-                grid.Controller.DampenersOverride = true;
-            VectorHelper.MatchVerticalSpeed(grid, pc, 0, true);
-            if (homeTried)
-                return;
-            IMyShipConnector home = IniContext.HomeConnector(grid);
-            if (home == null || home.Status != MyShipConnectorStatus.Connectable)
-                return;
-            homeTried = true;
-            home.Connect();
+            double above = agl - TouchDrop(grid);
+            if (above < 0)
+                return 0;
+            return above;
         }
 
-        // Land, suicide burn, and the GPS handoff into Land. No camera leaves planet altitude.
-        double DescentAgl(GridContext grid)
+        double TouchDrop(GridContext grid)
         {
-            if (homeHold && pc != null && pc.Gravity > 0 && grid != null && grid.Controller != null)
+            if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
+                return 0;
+            Vector3D down = Vector3D.Normalize(pc.NaturalGravity);
+            Vector3D remote = grid.Controller.GetPosition();
+            IMyShipConnector home = IniContext.HomeConnector(grid);
+            if (home != null && !home.Closed)
             {
-                Vector3D from = grid.Controller.GetPosition();
-                IMyShipConnector home = IniContext.HomeConnector(grid);
-                if (home != null)
-                    from = home.GetPosition();
-                return (homeAt - from).Dot(Vector3D.Normalize(pc.NaturalGravity));
+                double drop = (remote - home.GetPosition()).Dot(down);
+                if (drop < 0)
+                    return 0;
+                return drop;
             }
 
+            double lowest = 0;
+            for (int i = 0; i < grid.Gears.Count; i++)
+            {
+                IMyLandingGear gear = grid.Gears[i];
+                if (gear == null || gear.Closed)
+                    continue;
+                double drop = (remote - gear.GetPosition()).Dot(down);
+                if (drop > lowest)
+                    lowest = drop;
+            }
+            return lowest;
+        }
+
+        double SlowToTwo(GridContext grid)
+        {
+            double early = 0.25 * grid.GridHeight;
+            double speed = -pc.ClimbRate;
+            if (speed <= 2)
+                return early;
+            double net = pc.NetDecel;
+            if (double.IsNaN(net) || net <= 1e-6)
+                return double.PositiveInfinity;
+            double need = (speed * speed - 4.0) / (2.0 * net);
+            if (need > early)
+                return need;
+            return early;
+        }
+
+        // Land and the GPS handoff into Land. No camera leaves planet altitude.
+        double DescentAgl(GridContext grid)
+        {
             double planet = pc.GroundLevel;
             if (pc == null || pc.Gravity <= 0 || grid == null || grid.Controller == null)
                 return planet;
@@ -2073,14 +2003,7 @@ namespace IngameScript
                 return;
 
             string current = ic.DockTriggerTag ?? "";
-            string previous = ic.DockTriggerRestore ?? "";
-            bool stripPrevious = previous.Length > 0 && previous != current;
-            string padPrevious = ic.LandingPadRestore ?? "";
             string pad = ic.LandingPadTag ?? "";
-            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
-
-            if (!stripPrevious && !stripPad)
-                return;
 
             // Group membership is not written onto the gear. A menu tag stays when the gear leaves the group.
             gc.GetSameConstructBlocks(constructGears, "");
@@ -2089,11 +2012,6 @@ namespace IngameScript
                 IMyLandingGear gear = constructGears[i];
                 if (gear == null || gear.Closed)
                     continue;
-
-                if (stripPrevious)
-                    RemoveExactLine(gear, previous);
-                if (stripPad)
-                    RetagExactLine(gear, padPrevious, pad);
             }
         }
 
@@ -2104,11 +2022,7 @@ namespace IngameScript
                 return;
 
             string current = ic.DockTriggerTag ?? "";
-            string previous = ic.DockTriggerRestore ?? "";
-            bool stripPrevious = previous.Length > 0 && previous != current;
-            string pad = ic.LandingPadTag ?? "";
-            string padPrevious = ic.LandingPadRestore ?? "";
-            bool stripPad = padPrevious.Length > 0 && padPrevious != pad;
+            string pad = ic.LandingPadTag ?? "";;
 
             FillConnectorGroup(dockTriggerConnectors, ic.DockTriggerGroup);
             FillConnectorGroup(landingPadConnectors, ic.LandingPadGroup);
@@ -2119,11 +2033,6 @@ namespace IngameScript
                 IMyShipConnector connector = constructConnectors[i];
                 if (connector == null || connector.Closed)
                     continue;
-
-                if (stripPrevious)
-                    RemoveExactLine(connector, previous);
-                if (stripPad)
-                    RemoveExactLine(connector, padPrevious);
                 StaticConnectorStamp.StripLegacyLines(connector);
             }
 
@@ -2380,13 +2289,10 @@ namespace IngameScript
             return StaticConnectorStamp.ReadsStatic(data);
         }
 
-        // leaveToLand: suicide burn hands off to Land. Vertical land only drops back to its own descent.
-        void HandleLockGear(GridContext gc, Command command, bool leaveToLand)
+        void HandleLockGear(GridContext gc)
         {
             if (!GearHolding(gc) && pc.GroundLevel > 1.5 * pc.StopZDist)
             {
-                if (leaveToLand)
-                    command.State = MainState.Land;
                 command.Param.AutoLandState = AutoLandState.Drop;
                 return;
             }

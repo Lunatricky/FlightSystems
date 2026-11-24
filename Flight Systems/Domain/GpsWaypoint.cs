@@ -6,6 +6,7 @@ namespace IngameScript.Domain
     {
         public string Name;
         public Vector3D Position;
+        public int Key;
 
         public GpsWaypoint()
         {
@@ -17,7 +18,8 @@ namespace IngameScript.Domain
             return new GpsWaypoint
             {
                 Name = Name,
-                Position = Position
+                Position = Position,
+                Key = Key
             };
         }
     }

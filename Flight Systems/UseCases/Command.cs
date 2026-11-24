@@ -66,10 +66,8 @@ namespace IngameScript.UseCases
             if (input == "idle") return MainState.Idle;
             if (input == "cruise") return MainState.Cruise;
             if (input == "orbit") return MainState.Orbit;
-            if (input == "glide") return MainState.Glide;
             if (input == "cnav") return MainState.CNav;
             if (input == "land") return MainState.Land;
-            if (input == "sburn") return MainState.SBurn;
             if (input == "gps") return MainState.Gps;
             return MainState.Abort;
         }

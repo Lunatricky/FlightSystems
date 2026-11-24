@@ -22,11 +22,24 @@ namespace IngameScript.Utils
 
         public void OcupiedController(List<IMyShipController> controllers)
         {
-            foreach (IMyShipController controller in controllers)
+            foreach (IMyShipController block in controllers)
             {
-                if (controller.IsUnderControl) this.controller = controller;
-                else controller.IsMainCockpit = true;
+                if (block.IsUnderControl)
+                    this.controller = block;
             }
+        }
+
+        // The empty seats become main so the occupied seat cannot fly. Call this only while that hold is on.
+        public void HoldSeat(List<IMyShipController> controllers)
+        {
+            foreach (IMyShipController block in controllers)
+            {
+                if (block.IsUnderControl)
+                    this.controller = block;
+                else
+                    block.IsMainCockpit = true;
+            }
+            PrepareController();
         }
 
         public void PrepareController()

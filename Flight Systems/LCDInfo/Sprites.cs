@@ -33,6 +33,9 @@ namespace IngameScript
         readonly Sprites[] shown = new Sprites[3];
 
         readonly List<string> texts = new List<string>();
+        readonly List<string> boxB = new List<string>();
+        readonly List<string> boxC = new List<string>();
+        readonly List<float> bar = new List<float>();
         readonly List<Color> BackgroundColors = new List<Color>();
         readonly List<Color> FontColors = new List<Color>();
         int followLine = -1;
@@ -45,6 +48,9 @@ namespace IngameScript
         public void Clear()
         {
             texts.Clear();
+            boxB.Clear();
+            boxC.Clear();
+            bar.Clear();
             BackgroundColors.Clear();
             FontColors.Clear();
             followLine = -1;
@@ -59,38 +65,72 @@ namespace IngameScript
             for (int i = 0; i < src.texts.Count; i++)
             {
                 texts.Add(src.texts[i]);
+                boxB.Add(src.boxB[i]);
+                boxC.Add(src.boxC[i]);
+                bar.Add(src.bar[i]);
                 BackgroundColors.Add(src.BackgroundColors[i]);
                 FontColors.Add(src.FontColors[i]);
             }
             followLine = src.followLine;
         }
 
+        void Put(string a, string b, string c, Color back, Color font)
+        {
+            texts.Add(a);
+            boxB.Add(b);
+            boxC.Add(c);
+            bar.Add(-1f);
+            BackgroundColors.Add(back);
+            FontColors.Add(font);
+        }
+
+        public void AddBar(double percent, Color color)
+        {
+            if (double.IsNaN(percent) || percent < 0)
+                percent = 0;
+            if (percent > 100)
+                percent = 100;
+            texts.Add("");
+            boxB.Add(null);
+            boxC.Add(null);
+            bar.Add((float)percent / 100f);
+            BackgroundColors.Add(color);
+            FontColors.Add(ic.SpriteFontColor);
+        }
+
         public void Add(string s)
         {
-            texts.Add(s);
-            BackgroundColors.Add(ic.SpriteBackgroundColor);
-            FontColors.Add(ic.SpriteFontColor);
+            Put(s, null, null, ic.SpriteBackgroundColor, ic.SpriteFontColor);
         }
 
         public void AddB(string s, Color b)
         {
-            texts.Add(s);
-            BackgroundColors.Add(b);
-            FontColors.Add(ic.SpriteFontColor);
+            Put(s, null, null, b, ic.SpriteFontColor);
         }
 
         public void AddF(string s, Color f)
         {
-            texts.Add(s);
-            BackgroundColors.Add(ic.SpriteBackgroundColor);
-            FontColors.Add(f);
+            Put(s, null, null, ic.SpriteBackgroundColor, f);
         }
 
         public void Add(string s, Color b, Color f)
         {
-            texts.Add(s);
-            BackgroundColors.Add(b);
-            FontColors.Add(f);
+            Put(s, null, null, b, f);
+        }
+
+        public void Add2(string a, string b)
+        {
+            Put(a, b, null, ic.SpriteBackgroundColor, ic.SpriteFontColor);
+        }
+
+        public void Add2B(string a, string b, Color back)
+        {
+            Put(a, b, null, back, ic.SpriteFontColor);
+        }
+
+        public void Add3(string a, string b, string c)
+        {
+            Put(a, b, c, ic.SpriteBackgroundColor, ic.SpriteFontColor);
         }
 
         // Line index that must stay on screen. Title is 0. The last line stays put.
@@ -188,17 +228,25 @@ namespace IngameScript
 
                 painted.Add(panel);
 
-                bool onSettings = Contains(flightSettings, panel);
-                // Open menu already filled this shared panel, wide or narrow.
-                if (onSettings && flightSettingsOpen)
-                    continue;
-
-                int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
-                bool in1 = Contains(flight1, panel);
-                // A shared panel does not fall back to the idle list when the HUD stacks are empty.
-                Sprites settings = onSettings ? null : flightMenu;
-                PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+                PaintFlightHud(panel);
             }
+        }
+
+        // Both sprites share a surface only when it is in both LCD lists and wide enough.
+        void PaintFlightHud(IMyTextSurface panel)
+        {
+            bool onSettings = Contains(flightSettings, panel);
+            if (onSettings && flightSettingsOpen)
+                return;
+
+            bool in1 = Contains(flight1, panel);
+            bool in2 = Contains(flight2, panel);
+            Sprites left = in1 ? flightHud1 : null;
+            Sprites right = in2 ? flightHud2 : null;
+            int cols = CountColumns(panel, left, right, null, false);
+            // A shared panel does not fall back to the idle list when the HUD stacks are empty.
+            Sprites settings = onSettings ? null : flightMenu;
+            PaintPanel(panel, cols, false, in1, left, right, settings);
         }
 
         bool TryDrawAsThirdColumn(IMyTextSurface panel)
@@ -290,14 +338,7 @@ namespace IngameScript
         {
             if (panel == null || panel == markedPanel)
                 return;
-            bool onSettings = Contains(flightSettings, panel);
-            if (onSettings && flightSettingsOpen)
-                return;
-
-            int cols = CountColumns(panel, flightHud1, flightHud2, null, false);
-            bool in1 = Contains(flight1, panel);
-            Sprites settings = onSettings ? null : flightMenu;
-            PaintPanel(panel, cols, false, in1, flightHud1, flightHud2, settings);
+            PaintFlightHud(panel);
         }
 
         public void DrawPlainMarker(IMyTextSurface panel)
@@ -337,12 +378,12 @@ namespace IngameScript
             float floor = scale * MenuFitFloor;
             string line = SelectThisScreen;
             string line2 = null;
-            if (WidthOf(panel, line, scale) > textMaxW)
+            if (TextWidth(line, scale) > textMaxW)
             {
                 line = SelectLineTop;
                 line2 = SelectLineBottom;
-                float w1 = WidthOf(panel, line, scale);
-                float w2 = WidthOf(panel, line2, scale);
+                float w1 = TextWidth(line, scale);
+                float w2 = TextWidth(line2, scale);
                 float widest = w1 > w2 ? w1 : w2;
                 if (widest > textMaxW && widest > 1f)
                 {
@@ -356,11 +397,11 @@ namespace IngameScript
             float lineH = scale * DebugLineHeight;
             float blockH = line2 == null ? lineH : lineH * 2f;
             float top = centerY - blockH * 0.5f;
-            float wLine = WidthOf(panel, line, scale);
+            float wLine = TextWidth(line, scale);
             spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine * 0.5f, top), ic.SpriteFontColor, line, scale));
             if (line2 != null)
             {
-                float wLine2 = WidthOf(panel, line2, scale);
+                float wLine2 = TextWidth(line2, scale);
                 spriteBuf.Add(MakeTextSprite(new Vector2(centerX - wLine2 * 0.5f, top + lineH), ic.SpriteFontColor, line2, scale));
             }
             Flush(panel);
@@ -467,9 +508,28 @@ namespace IngameScript
                 if (barW < 1f)
                     barW = 1f;
 
-                float textMaxW = barW - 2f * textPad;
-                if (textMaxW < 1f)
-                    textMaxW = 1f;
+                // One scale for the column. It fits BoxChars in the narrowest box and ignores the live text.
+                int boxes = 1;
+                for (int i = 0; i < lineCount; i++)
+                {
+                    string rawB = stack.boxB[i];
+                    string rawC = stack.boxC[i];
+                    int n = rawB == null ? 1 : rawC == null ? 2 : 3;
+                    if (n > boxes)
+                        boxes = n;
+                }
+                float scaleGap = boxes < 2 ? 0f : pad < 2f ? 2f : pad;
+                float narrow = (barW - scaleGap * (boxes - 1)) / boxes;
+                if (narrow < 1f)
+                    narrow = 1f;
+                float narrowText = narrow - 2f * textPad;
+                if (narrowText < 1f)
+                    narrowText = 1f;
+                float scaleLine = narrowText / (BoxChars * DebugCharWidth);
+                if (scaleLine > baseScale)
+                    scaleLine = baseScale;
+                if (scaleLine < DebugMinScale)
+                    scaleLine = DebugMinScale;
 
                 bool window = IsMenu(stack) && stack.followLine >= 0 && stack.LineCount > rows && rows >= 3;
                 int winStart = 1;
@@ -505,27 +565,58 @@ namespace IngameScript
                     }
 
                     float centerY = originY + i * rowPitch + rowPitch * 0.5f;
-                    spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), stack.BackgroundColors[src]));
-
-                    string line = stack.texts[src] ?? "";
-                    float scaleLine = FitWidth(panel, line, baseScale, textMaxW);
-                    float minScale = MenuMinScale(stack, baseScale);
-                    if (scaleLine < minScale)
+                    float fill = stack.bar[src];
+                    if (fill >= 0f)
                     {
-                        line = Truncate(panel, line, minScale, textMaxW);
-                        scaleLine = minScale;
+                        spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW, barH), ic.SpriteBackgroundColor));
+                        if (fill > 0.004f)
+                            spriteBuf.Add(MakeRectSprite(new Vector2(barX, centerY), new Vector2(barW * fill, barH), stack.BackgroundColors[src]));
+                        continue;
                     }
+                    string rawB = stack.boxB[src];
+                    string rawC = stack.boxC[src];
+                    int n = rawB == null ? 1 : rawC == null ? 2 : 3;
+                    float gap = n < 2 ? 0f : pad < 2f ? 2f : pad;
+                    float boxW = (barW - gap * (n - 1)) / n;
+                    if (boxW < 1f)
+                        boxW = 1f;
+                    // LCD 2 pairs: the right value is the long one. Left keeps 40% of the row.
+                    bool lcd2Pair = n == 2 && stack == flightHud2;
+                    float pair = barW - gap;
+                    float leftW = lcd2Pair ? pair * Lcd2Left : boxW;
+                    if (leftW < 1f)
+                        leftW = 1f;
+                    float x = barX;
+                    for (int b = 0; b < n; b++)
+                    {
+                        string part = b == 0 ? stack.texts[src] ?? "" : b == 1 ? rawB : rawC;
+                        if (part == null)
+                            part = "";
+                        float w = boxW;
+                        if (lcd2Pair)
+                            w = b == 0 ? leftW : pair - leftW;
+                        if (w < 1f)
+                            w = 1f;
+                        spriteBuf.Add(MakeRectSprite(new Vector2(x, centerY), new Vector2(w, barH), stack.BackgroundColors[src]));
+                        float cellMax = w - 2f * textPad;
+                        if (cellMax < 1f)
+                            cellMax = 1f;
+                        int fitChars = (int)(cellMax / (DebugCharWidth * scaleLine));
+                        if (fitChars < 1)
+                            fitChars = 1;
+                        part = Truncate(part, fitChars);
 
-                    float lineH = scaleLine * DebugLineHeight;
-                    float barTop = centerY - barH * 0.5f;
-                    float extra = barH - lineH;
-                    if (extra < 0f)
-                        extra = 0f;
+                        float lineH = scaleLine * DebugLineHeight;
+                        float barTop = centerY - barH * 0.5f;
+                        float extra = barH - lineH;
+                        if (extra < 0f)
+                            extra = 0f;
 
-                    // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
-                    float textX = barX + textPad;
-                    float textY = barTop + extra * 0.22f;
-                    spriteBuf.Add(MakeTextSprite(new Vector2(textX, textY), stack.FontColors[src], line, scaleLine));
+                        // TEXT LEFT is the top-left. Bias toward the top so short cockpit screens don't sit on the bar bottom.
+                        float textY = barTop + extra * 0.22f;
+                        spriteBuf.Add(MakeTextSprite(new Vector2(x + textPad, textY), stack.FontColors[src], part, scaleLine));
+                        x += w + gap;
+                    }
                 }
             }
 
@@ -586,17 +677,42 @@ namespace IngameScript
                         textOut.Append('\n');
                     any = true;
                     string line = stack.texts[i];
+                    string mid = stack.boxB[i];
+                    string end = stack.boxC[i];
                     bool mark = IsMenu(stack) && stack.followLine == i;
                     if (mark)
                         textOut.Append(TextMark);
-                    if (line != null)
-                        textOut.Append(line);
+                    if (mid == null)
+                    {
+                        if (line != null)
+                            textOut.Append(line);
+                    }
+                    else
+                    {
+                        AppendField(textOut, line, 10);
+                        if (end != null)
+                        {
+                            AppendField(textOut, mid, 10);
+                            textOut.Append(end ?? "");
+                        }
+                        else
+                            textOut.Append(mid);
+                    }
                     if (mark)
                         textOut.Append(TextMark);
                 }
             }
 
             panel.WriteText(textOut);
+        }
+
+        static void AppendField(StringBuilder sb, string text, int width)
+        {
+            if (text == null)
+                text = "";
+            sb.Append(text);
+            for (int i = text.Length; i < width; i++)
+                sb.Append(' ');
         }
 
         void WriteMarkerText(IMyTextSurface panel)
@@ -684,15 +800,8 @@ namespace IngameScript
                     measureScale = hs;
             }
 
-            float longest = 0f;
-            if (has1)
-                longest = Max(longest, Longest(panel, s1, measureScale));
-            if (has2)
-                longest = Max(longest, Longest(panel, s2, measureScale));
-            if (showMenu)
-                longest = Max(longest, Longest(panel, menu, measureScale));
-
-            // Insets around the line are part of the column, otherwise the text runs into the next stack.
+            // Column width stays on the longer budget so the bigger text does not force a second column.
+            float longest = ColumnChars * DebugCharWidth * measureScale;
             float needW = longest + chrome;
             if (needW < 1f)
                 needW = 1f;
@@ -705,50 +814,10 @@ namespace IngameScript
             if (cols > stackCount)
                 cols = stackCount;
 
-            while (cols > 1 && !LinesFit(panel, cols, measureScale, chrome, s1, s2, menu, showMenu))
+            while (cols > 1 && surfaceSize.X / cols - chrome < longest)
                 cols--;
 
             return cols;
-        }
-
-        bool LinesFit(IMyTextSurface panel, int cols, float scale, float chrome, Sprites s1, Sprites s2, Sprites settings, bool showSettings)
-        {
-            float textMaxW = panel.SurfaceSize.X / cols - chrome;
-            if (textMaxW < 1f)
-                return false;
-
-            if (!StackFits(panel, s1, scale, textMaxW))
-                return false;
-            if (cols >= 2 && !StackFits(panel, s2, scale, textMaxW))
-                return false;
-            if (cols >= 3 && showSettings && !StackFits(panel, settings, scale, textMaxW))
-                return false;
-            return true;
-        }
-
-        bool StackFits(IMyTextSurface panel, Sprites stack, float scale, float maxW)
-        {
-            if (stack == null)
-                return true;
-
-            for (int i = 0; i < stack.LineCount; i++)
-            {
-                if (FitWidth(panel, stack.texts[i], scale, maxW) < DebugMinScale)
-                    return false;
-            }
-            return true;
-        }
-
-        float Longest(IMyTextSurface panel, Sprites stack, float scale)
-        {
-            float max = 0f;
-            for (int i = 0; i < stack.LineCount; i++)
-            {
-                float w = WidthOf(panel, stack.texts[i], scale);
-                if (w > max)
-                    max = w;
-            }
-            return max;
         }
 
         int LineCount
@@ -786,6 +855,10 @@ namespace IngameScript
         const float DebugLineHeight = 28.8f;
         const float DebugCharWidth = 15f;
         const float DebugMinScale = 0.35f;
+        // Drawn size fits this many chars in the narrowest box. Half of the old 22, so the text is about twice as tall.
+        const int BoxChars = 10;
+        const int ColumnChars = 22;
+        const float Lcd2Left = 0.5f;
         // Home, Flight, and the other short pages stay on their own line count.
         // A shorter page uses the 7-row bars. A longer list does not shrink past 10.
         const int MenuBarRows = 7;
@@ -813,68 +886,21 @@ namespace IngameScript
             return rows;
         }
 
-        static float MenuMinScale(Sprites stack, float baseScale)
+        static float TextWidth(string text, float scale)
         {
-            if (!IsMenu(stack))
-                return DebugMinScale;
-            float floor = baseScale * MenuFitFloor;
-            if (floor < DebugMinScale)
-                return DebugMinScale;
-            return floor;
-        }
-
-        float FitWidth(IMyTextSurface panel, string text, float scale, float maxW)
-        {
-            if (maxW <= 1f)
-                return scale;
-
-            float w = WidthOf(panel, text, scale);
-            if (w > maxW)
-                scale *= maxW / w;
-            return scale;
-        }
-
-        float WidthOf(IMyTextSurface panel, string text, float scale)
-        {
-            Vector2 size = Measure(panel, text, scale);
-            if (size.X > 1f)
-                return size.X;
-
-            int n = text != null && text.Length > 0 ? text.Length : 1;
+            int n = 1;
+            if (text != null && text.Length > 0)
+                n = text.Length;
             return n * DebugCharWidth * scale;
         }
 
-        string Truncate(IMyTextSurface panel, string line, float scale, float maxW)
+        static string Truncate(string line, int maxChars)
         {
-            if (string.IsNullOrEmpty(line))
-                return "";
-
-            float w = WidthOf(panel, line, scale);
-            if (w <= maxW)
+            if (string.IsNullOrEmpty(line) || line.Length <= maxChars)
                 return line;
-
-            int keep = (int)(line.Length * (maxW / w)) - 2;
-            if (keep < 1)
-                keep = 1;
-            if (keep > line.Length)
-                keep = line.Length;
-
-            while (keep > 1)
-            {
-                string cut = line.Substring(0, keep) + "..";
-                if (WidthOf(panel, cut, scale) <= maxW)
-                    return cut;
-                keep--;
-            }
-
-            return "..";
-        }
-
-        Vector2 Measure(IMyTextSurface panel, string text, float scale)
-        {
-            measure.Clear();
-            measure.Append(text ?? "");
-            return panel.MeasureStringInPixels(measure, "DEBUG", scale);
+            if (maxChars < 3)
+                return line.Substring(0, maxChars);
+            return line.Substring(0, maxChars - 2) + "..";
         }
 
         static float HeightScale(float surfaceY, int rows, float pad)
@@ -899,11 +925,6 @@ namespace IngameScript
         {
             float minDim = surfaceSize.X < surfaceSize.Y ? surfaceSize.X : surfaceSize.Y;
             return Clamp(minDim * 0.01f, 2f, 6f);
-        }
-
-        static float Max(float a, float b)
-        {
-            return a > b ? a : b;
         }
 
         static float Clamp(float v, float min, float max)

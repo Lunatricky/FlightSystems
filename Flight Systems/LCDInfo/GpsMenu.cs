@@ -108,7 +108,7 @@ namespace IngameScript
                 int displayRow = i + 1;
                 string label;
                 if (i < store.Count)
-                    label = store.Get(i).Name;
+                    label = PointLabel(store.Get(i));
                 else if (i == store.Count)
                     label = "Create here";
                 else
@@ -158,12 +158,19 @@ namespace IngameScript
             }
 
             Sprites spt = new Sprites(ic);
-            spt.Add(wp.Name);
+            spt.Add(PointLabel(wp));
             int r = 1;
             spt.Add("Fly to GPS", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add("Delete", RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.Add(MenuScreens.BackLabel, RowColor(r, ic.SpriteBackgroundColor), RowColor(r++, ic.SpriteFontColor));
             spt.DrawTo(gc.LcdsMenu);
+        }
+
+        static string PointLabel(GpsWaypoint wp)
+        {
+            if (wp == null || wp.Name == null)
+                return "";
+            return wp.Name;
         }
 
         void Clamp(int min, int max)

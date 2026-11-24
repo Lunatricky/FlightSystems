@@ -6,10 +6,8 @@ namespace IngameScript.Domain
     {
         public bool CruiseToggle;
         public bool OrbitToggle;
-        public bool GlideToggle;
         public bool CNavToggle;
         public bool LandToggle;
-        public bool SBurnToggle;
         public bool GpsToggle;
         public bool GpsMenuToggle;
         public bool LastCheckIsOnNatGrav;
@@ -19,19 +17,15 @@ namespace IngameScript.Domain
         {
             CruiseToggle = false;
             OrbitToggle = false;
-            GlideToggle = false;
             CNavToggle = false;
             LandToggle = false;
-            SBurnToggle = false;
             GpsToggle = false;
             switch (modeName)
             {
                 case MainState.Cruise: CruiseToggle = true; break;
                 case MainState.Orbit: OrbitToggle = true; break;
-                case MainState.Glide: GlideToggle = true; break;
                 case MainState.CNav: CNavToggle = true; break;
                 case MainState.Land: LandToggle = true; break;
-                case MainState.SBurn: SBurnToggle = true; break;
                 case MainState.Gps: GpsToggle = true; break;
             }
         }
@@ -44,10 +38,8 @@ namespace IngameScript.Domain
             // Clear all modes
             CruiseToggle = false;
             OrbitToggle = false;
-            GlideToggle = false;
             CNavToggle = false;
             LandToggle = false;
-            SBurnToggle = false;
             GpsToggle = false;
 
             // Toggle the target mode (if it was true, now false; if false, now true)
@@ -60,10 +52,8 @@ namespace IngameScript.Domain
             {
                 case MainState.Cruise: return CruiseToggle;
                 case MainState.Orbit: return OrbitToggle;
-                case MainState.Glide: return GlideToggle;
                 case MainState.CNav: return CNavToggle;
                 case MainState.Land: return LandToggle;
-                case MainState.SBurn: return SBurnToggle;
                 case MainState.Gps: return GpsToggle;
                 default: return false;
             }
@@ -75,10 +65,8 @@ namespace IngameScript.Domain
             {
                 case MainState.Cruise: CruiseToggle = value; break;
                 case MainState.Orbit: OrbitToggle = value; break;
-                case MainState.Glide: GlideToggle = value; break;
                 case MainState.CNav: CNavToggle = value; break;
                 case MainState.Land: LandToggle = value; break;
-                case MainState.SBurn: SBurnToggle = value; break;
                 case MainState.Gps: GpsToggle = value; break;
             }
         }

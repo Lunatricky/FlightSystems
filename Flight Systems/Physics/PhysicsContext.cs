@@ -89,7 +89,6 @@ namespace IngameScript.Physics
             stopZDist = MaxZDecel > 1e-6
                 ? Math.Abs(forwardVelocity * forwardVelocity / (2 * MaxZDecel))
                 : double.PositiveInfinity;
-            //stopZDist = StopZDistTemp < 0.4 ? 0 : StopZDistTemp;
             timeToStopZ = MaxZDecel > 1e-6 ? Math.Abs(ForwardVelocity / MaxZDecel) : double.PositiveInfinity;
 
             if (Gravity > 0)
@@ -108,9 +107,8 @@ namespace IngameScript.Physics
                 stopYDist = MaxYDecel > 1e-6
                     ? Math.Abs(upVelocity * upVelocity / (2 * MaxYDecel))
                     : double.PositiveInfinity;
-                //stopYDist = StopYDistTemp < 0.4 ? 0 : StopYDistTemp;
 
-                if (command.State == MainState.Land || command.State == MainState.SBurn)
+                if (command.State == MainState.Land)
                     timeToImpact = Math.Abs(UpVelocity) < 0.1 ? 0 : GroundLevel / Math.Abs(UpVelocity);
 
                 timeToStopY = MaxYDecel > 1e-6 ? Math.Abs(ClimbRate / MaxYDecel) : double.PositiveInfinity;
@@ -159,8 +157,6 @@ namespace IngameScript.Physics
         public double Gravity => gravity;
         public double GroundLevel => groundLevel;
         public double SeaLevel => seaLevel;
-        public string GroundLevelStr => groundLevel > 1000 ? $"{groundLevel / 1000:F1} km" : $"{groundLevel:F1} m";
-        public string SeaLevelStr => seaLevel > 1000 ? $"{seaLevel / 1000:F1} km" : $"{seaLevel:F1} m";
         public double StopYDist => stopYDist;
         public double StopZDist => stopZDist;
         public double ClimbRate => climbRate;

@@ -7,10 +7,8 @@
         Idle,
         Cruise,
         Orbit,
-        Glide,
         CNav,
         Land,
-        SBurn,
         Gps
     }
 }

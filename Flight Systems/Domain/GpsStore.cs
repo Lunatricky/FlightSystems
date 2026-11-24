@@ -7,8 +7,8 @@ namespace IngameScript.Domain
 {
     class GpsStore
     {
-        public const string StartMark = "GPS start";
-        public const string EndMark = "GPS end";
+        public const string LibrarySection = "GPS Library";
+        const string LibraryHeader = "[GPS Library]";
 
         readonly List<GpsWaypoint> items = new List<GpsWaypoint>();
 
@@ -26,84 +26,77 @@ namespace IngameScript.Domain
             items.Clear();
         }
 
-        // False means GPS start is present and GPS end is not. The caller must not write custom data.
-        public bool LoadBlock(string customData)
+        public void LoadText(string text)
         {
             items.Clear();
-            string block;
-            if (!TryMarkerBlock(customData, out block))
-                return false;
-            ReadBetween(block);
-            return true;
-        }
-
-        public static bool TryMarkerBlock(string text, out string block)
-        {
-            block = StartMark + "\n" + EndMark + "\n";
             if (string.IsNullOrEmpty(text))
-                return true;
-
-            int start = FindLine(text, 0, StartMark);
-            if (start < 0)
-                return true;
-
-            int end = FindLine(text, LinePast(text, start), EndMark);
-            if (end < 0)
-            {
-                block = null;
-                return false;
-            }
-
-            int stop = LinePast(text, end);
-            block = text.Substring(start, stop - start);
-            return true;
-        }
-
-        // GPS lines are not ini. A missing end still drops from GPS start through the rest of the text.
-        public static string WithoutMarker(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return "";
-
-            int start = FindLine(text, 0, StartMark);
-            if (start < 0)
-                return text;
-
-            int end = FindLine(text, LinePast(text, start), EndMark);
-            int stop = end < 0 ? text.Length : LinePast(text, end);
-            return text.Substring(0, start) + text.Substring(stop);
-        }
-
-        void ReadBetween(string block)
-        {
-            if (string.IsNullOrEmpty(block))
                 return;
 
-            bool inside = false;
-            int i = 0;
-            while (i < block.Length)
+            int header = FindLine(text, 0, LibraryHeader);
+            if (header < 0)
+                return;
+
+            int i = LinePast(text, header);
+            while (i < text.Length)
             {
-                int contentEnd = i;
-                while (contentEnd < block.Length && block[contentEnd] != '\n' && block[contentEnd] != '\r')
-                    contentEnd++;
-
-                string line = block.Substring(i, contentEnd - i).Trim();
-                if (!inside)
-                {
-                    if (line == StartMark)
-                        inside = true;
-                }
-                else if (line == EndMark)
+                int contentEnd;
+                string newline;
+                string raw = TakeLine(text, ref i, out contentEnd, out newline);
+                string trimmed = raw.Trim();
+                if (IsSectionHeader(trimmed))
                     break;
-                else
-                    TryAddLine(line);
 
-                i = contentEnd;
-                if (i < block.Length && block[i] == '\r')
-                    i++;
-                if (i < block.Length && block[i] == '\n')
-                    i++;
+                string key;
+                string value;
+                int number;
+                if (!TryNumberKey(trimmed, out key, out value, out number))
+                    continue;
+
+                string name;
+                double x;
+                double y;
+                double z;
+                if (!TryParsePoint(value, out name, out x, out y, out z))
+                    continue;
+
+                GpsWaypoint wp = new GpsWaypoint();
+                wp.Name = name;
+                wp.Position = new Vector3D(x, y, z);
+                wp.Key = number;
+                InsertSorted(wp);
             }
+        }
+
+        public static string AddPoint(string text, string gpsLine)
+        {
+            if (gpsLine == null || gpsLine.Length == 0)
+                return null;
+            if (text == null)
+                text = "";
+            if (FindLine(text, 0, LibraryHeader) < 0)
+                return AppendLibrary(text, gpsLine);
+
+            int maxKey;
+            int numbered;
+            bool haveCount;
+            if (!ScanLibrary(text, 0, out maxKey, out numbered, out haveCount))
+                return null;
+            return WriteLibrary(text, haveCount, numbered + 1, maxKey + 1, gpsLine, 0);
+        }
+
+        public static string RemoveKey(string text, int keyNumber)
+        {
+            if (string.IsNullOrEmpty(text) || keyNumber <= 0)
+                return null;
+            if (FindLine(text, 0, LibraryHeader) < 0)
+                return null;
+
+            int maxKey;
+            int numbered;
+            bool haveCount;
+            if (!ScanLibrary(text, keyNumber, out maxKey, out numbered, out haveCount))
+                return null;
+            return WriteLibrary(text, haveCount, numbered - 1, 0, null, keyNumber);
         }
 
         public bool Near(Vector3D pos)
@@ -131,83 +124,6 @@ namespace IngameScript.Domain
             return (int)Math.Round(value, MidpointRounding.AwayFromZero);
         }
 
-        public static string WithPoint(string block, string line)
-        {
-            if (string.IsNullOrEmpty(block))
-                return null;
-            StringBuilder kept = new StringBuilder();
-            int i = 0;
-            while (i < block.Length)
-            {
-                int contentEnd;
-                string newline;
-                string raw = TakeLine(block, ref i, out contentEnd, out newline);
-                if (raw.Trim() == EndMark)
-                {
-                    kept.Append(line);
-                    kept.Append('\n');
-                    kept.Append(raw);
-                    kept.Append(newline);
-                    if (i < block.Length)
-                        kept.Append(block, i, block.Length - i);
-                    return kept.ToString();
-                }
-                kept.Append(raw);
-                kept.Append(newline);
-            }
-            return null;
-        }
-
-        public static string WithoutPoint(string block, int pointIndex)
-        {
-            if (string.IsNullOrEmpty(block) || pointIndex < 0)
-                return null;
-            StringBuilder kept = new StringBuilder();
-            bool inside = false;
-            int seen = 0;
-            bool removed = false;
-            int i = 0;
-            while (i < block.Length)
-            {
-                int contentEnd;
-                string newline;
-                string raw = TakeLine(block, ref i, out contentEnd, out newline);
-                string trimmed = raw.Trim();
-                bool drop = false;
-                if (!inside)
-                {
-                    if (trimmed == StartMark)
-                        inside = true;
-                }
-                else if (trimmed == EndMark)
-                    inside = false;
-                else
-                {
-                    string name;
-                    int x;
-                    int y;
-                    int z;
-                    if (TryParsePoint(trimmed, out name, out x, out y, out z))
-                    {
-                        if (seen == pointIndex)
-                        {
-                            drop = true;
-                            removed = true;
-                        }
-                        seen++;
-                    }
-                }
-                if (!drop)
-                {
-                    kept.Append(raw);
-                    kept.Append(newline);
-                }
-            }
-            if (!removed)
-                return null;
-            return kept.ToString();
-        }
-
         static string TakeLine(string text, ref int i, out int contentEnd, out string newline)
         {
             contentEnd = i;
@@ -224,21 +140,149 @@ namespace IngameScript.Domain
             return raw;
         }
 
-        void TryAddLine(string line)
+        static bool ScanLibrary(string text, int mustFind, out int maxKey, out int numbered, out bool haveCount)
         {
-            string name;
-            int x;
-            int y;
-            int z;
-            if (!TryParsePoint(line, out name, out x, out y, out z))
-                return;
-            GpsWaypoint wp = new GpsWaypoint();
-            wp.Name = name;
-            wp.Position = new Vector3D(x, y, z);
-            items.Add(wp);
+            maxKey = 0;
+            numbered = 0;
+            haveCount = false;
+            bool found = mustFind <= 0;
+            int header = FindLine(text, 0, LibraryHeader);
+            if (header < 0)
+                return false;
+
+            int i = LinePast(text, header);
+            while (i < text.Length)
+            {
+                int contentEnd;
+                string newline;
+                string raw = TakeLine(text, ref i, out contentEnd, out newline);
+                string trimmed = raw.Trim();
+                if (IsSectionHeader(trimmed))
+                    break;
+
+                string key;
+                string value;
+                if (!SplitKey(trimmed, out key, out value))
+                    continue;
+                if (IsCount(key))
+                {
+                    haveCount = true;
+                    continue;
+                }
+
+                int number;
+                if (!int.TryParse(key, out number) || number <= 0)
+                    continue;
+                numbered++;
+                if (number > maxKey)
+                    maxKey = number;
+                if (number == mustFind)
+                    found = true;
+            }
+            return found;
         }
 
-        static bool TryParsePoint(string line, out string name, out int x, out int y, out int z)
+        static string WriteLibrary(string text, bool haveCount, int newCount, int newKey, string gpsLine, int dropKey)
+        {
+            StringBuilder sb = new StringBuilder(text.Length + 48);
+            bool inSection = false;
+            bool dropped = dropKey <= 0;
+            bool wrotePoint = gpsLine == null;
+            int i = 0;
+            while (i < text.Length)
+            {
+                int contentEnd;
+                string newline;
+                string raw = TakeLine(text, ref i, out contentEnd, out newline);
+                string trimmed = raw.Trim();
+                if (!inSection)
+                {
+                    sb.Append(raw);
+                    sb.Append(newline);
+                    if (trimmed == LibraryHeader)
+                    {
+                        inSection = true;
+                        if (!haveCount)
+                        {
+                            sb.Append("Count=");
+                            sb.Append(newCount);
+                            sb.Append('\n');
+                        }
+                    }
+                    continue;
+                }
+
+                if (IsSectionHeader(trimmed))
+                {
+                    AppendPoint(sb, newKey, gpsLine, ref wrotePoint);
+                    if (!dropped || !wrotePoint)
+                        return null;
+                    sb.Append(raw);
+                    sb.Append(newline);
+                    if (i < text.Length)
+                        sb.Append(text, i, text.Length - i);
+                    return sb.ToString();
+                }
+
+                string key;
+                string value;
+                if (SplitKey(trimmed, out key, out value) && IsCount(key))
+                {
+                    sb.Append("Count=");
+                    sb.Append(newCount);
+                    if (newline.Length == 0)
+                        sb.Append('\n');
+                    else
+                        sb.Append(newline);
+                    continue;
+                }
+
+                int number;
+                if (!dropped && SplitKey(trimmed, out key, out value) && int.TryParse(key, out number) && number == dropKey)
+                {
+                    dropped = true;
+                    continue;
+                }
+
+                sb.Append(raw);
+                sb.Append(newline);
+            }
+
+            if (inSection)
+                AppendPoint(sb, newKey, gpsLine, ref wrotePoint);
+            if (!dropped || !wrotePoint)
+                return null;
+            return sb.ToString();
+        }
+
+        static string AppendLibrary(string text, string gpsLine)
+        {
+            StringBuilder sb = new StringBuilder(text.Length + gpsLine.Length + 32);
+            if (text.Length > 0)
+            {
+                sb.Append(text);
+                if (text[text.Length - 1] != '\n')
+                    sb.Append('\n');
+            }
+            sb.Append(LibraryHeader);
+            sb.Append("\nCount=1\n1=");
+            sb.Append(gpsLine);
+            sb.Append('\n');
+            return sb.ToString();
+        }
+
+        static void AppendPoint(StringBuilder sb, int newKey, string gpsLine, ref bool wrotePoint)
+        {
+            if (wrotePoint || gpsLine == null)
+                return;
+            sb.Append(newKey);
+            sb.Append('=');
+            sb.Append(gpsLine);
+            sb.Append('\n');
+            wrotePoint = true;
+        }
+
+        static bool TryParsePoint(string line, out string name, out double x, out double y, out double z)
         {
             name = "";
             x = 0;
@@ -254,13 +298,61 @@ namespace IngameScript.Domain
             name = parts[1].Trim();
             if (name.Length == 0)
                 return false;
-            if (!int.TryParse(parts[2].Trim(), out x))
+            if (!double.TryParse(parts[2].Trim(), out x))
                 return false;
-            if (!int.TryParse(parts[3].Trim(), out y))
+            if (!double.TryParse(parts[3].Trim(), out y))
                 return false;
-            if (!int.TryParse(parts[4].Trim(), out z))
+            if (!double.TryParse(parts[4].Trim(), out z))
                 return false;
             return true;
+        }
+
+        static bool SplitKey(string trimmed, out string key, out string value)
+        {
+            key = "";
+            value = "";
+            int eq = trimmed.IndexOf('=');
+            if (eq <= 0)
+                return false;
+            key = trimmed.Substring(0, eq).Trim();
+            value = trimmed.Substring(eq + 1).Trim();
+            return key.Length > 0;
+        }
+
+        static bool TryNumberKey(string trimmed, out string key, out string value, out int number)
+        {
+            key = "";
+            value = "";
+            number = 0;
+            if (!SplitKey(trimmed, out key, out value))
+                return false;
+            if (IsCount(key))
+                return false;
+            return int.TryParse(key, out number) && number > 0;
+        }
+
+        static bool IsCount(string key)
+        {
+            return string.Equals(key, "Count", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static bool IsSectionHeader(string trimmed)
+        {
+            return trimmed.Length >= 2 && trimmed[0] == '[' && trimmed[trimmed.Length - 1] == ']';
+        }
+
+        void InsertSorted(GpsWaypoint wp)
+        {
+            int at = items.Count;
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (items[i].Key > wp.Key)
+                {
+                    at = i;
+                    break;
+                }
+            }
+            items.Insert(at, wp);
         }
 
         bool HasName(string name)
