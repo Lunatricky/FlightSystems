@@ -620,6 +620,7 @@ namespace IngameScript.Domain
         public GridContext ReloadH2Tanks()
         {
             GetSameConstructBlocks(Tanks, ignoreTag);
+            H2Tanks.Clear();
 
             foreach (IMyGasTank tank in Tanks)
             {
