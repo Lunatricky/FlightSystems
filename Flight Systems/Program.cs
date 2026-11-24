@@ -171,7 +171,8 @@ namespace IngameScript
                     {
                         menuSeatHold = false;
                         menuHud.ShowHome();
-                        HoldMenuSeat();
+                        if (PlayerInCockpit())
+                            HoldMenuSeat();
                     }
                     else
                     {
@@ -183,6 +184,8 @@ namespace IngameScript
                 else if (!DroppedArg(argument))
                     command = new Command(argument);
             }
+
+            CloseMenuIfSeatEmpty();
 
             inputLock++;
             if (inputLock > 10)
@@ -824,6 +827,28 @@ namespace IngameScript
                 else
                     OnDockConfirm();
             }
+        }
+
+        bool PlayerInCockpit()
+        {
+            for (int i = 0; i < gc.Cockpits.Count; i++)
+            {
+                IMyShipController seat = gc.Cockpits[i];
+                if (seat != null && !seat.Closed && seat.IsUnderControl)
+                    return true;
+            }
+            return false;
+        }
+
+        void CloseMenuIfSeatEmpty()
+        {
+            if (!menuToggle || PlayerInCockpit())
+                return;
+            menuHud.ReleaseScreenMarker();
+            menuToggle = false;
+            menuSeatHold = false;
+            seatHoldKeys = 0;
+            pi.ResetControllers(gc.Controllers);
         }
 
         bool CockpitOccupied()
@@ -1563,6 +1588,8 @@ namespace IngameScript
 
         void HoldMenuSeat()
         {
+            if (!PlayerInCockpit())
+                return;
             pi.HoldSeat(gc.Controllers);
         }
 

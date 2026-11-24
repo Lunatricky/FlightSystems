@@ -44,6 +44,8 @@ namespace IngameScript.Utils
 
         public void PrepareController()
         {
+            if (controller == null)
+                return;
             controller.ControlThrusters = false;
             controller.ControlWheels = false;
         }
