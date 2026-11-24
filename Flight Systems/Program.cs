@@ -741,9 +741,7 @@ namespace IngameScript
                 return;
             if (ControlHeld())
             {
-                menuSeatHold = true;
-                seatHoldKeys = ReadHeldKeys();
-                HoldMenuSeat();
+                BeginSeatHold();
                 return;
             }
             pi.ResetControllers(gc.Controllers);
@@ -1572,23 +1570,24 @@ namespace IngameScript
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            BeginSeatHold(HoldC);
+            BeginSeatHold();
         }
 
         void CloseMenuFromSpace()
         {
             menuHud.ReleaseScreenMarker();
             menuToggle = false;
-            BeginSeatHold(HoldSpace);
+            BeginSeatHold();
         }
 
-        // The other cockpit stays main while the exit key is down. It is cleared when that key is up.
-        void BeginSeatHold(int exitKey)
+        // Every key that is down at the close keeps the spare cockpit main. A key pressed later does not.
+        void BeginSeatHold()
         {
-            if ((ReadHeldKeys() & exitKey) != 0)
+            int held = ReadHeldKeys();
+            if (held != 0)
             {
                 menuSeatHold = true;
-                seatHoldKeys = exitKey;
+                seatHoldKeys = held;
                 HoldMenuSeat();
                 return;
             }
