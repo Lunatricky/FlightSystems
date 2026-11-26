@@ -1673,6 +1673,8 @@ namespace IngameScript
             lastError = 0;
             gearLockNote = null;
             haveFall = false;
+            lockEntryAgl = -1;
+            stillTicks = 0;
             ClearClimbBoost(gc);
 
             if (gc.Controller != null)
@@ -1920,9 +1922,32 @@ namespace IngameScript
             return -speed;
         }
 
-        bool FallSettled(GridContext gc, double target)
+        int stillTicks = 0;
+        double lockEntryAgl = -1;
+        const int GROUND_TICKS = 180; // ~3 s at Update1
+
+        // Down already: a gear is ready to lock, or we ask to descend and nothing moves for ~3 s.
+        bool Touched(GridContext gc, double above, double target)
         {
-            return VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc) >= target;
+            for (int i = 0; i < gc.Gears.Count; i++)
+            {
+                IMyLandingGear gear = gc.Gears[i];
+                if (gear != null && !gear.Closed && gear.LockMode == LandingGearMode.ReadyToLock)
+                    return true;
+            }
+            return OnGround(gc, above, target);
+        }
+
+        // Counts ticks where we ask to go down, are near the ground, and vertical speed stays near 0.
+        // The height check stops a mid-air hover from counting as landed.
+        bool OnGround(GridContext gc, double above, double target)
+        {
+            if (target <= -1 && above <= 0.5 * gc.GridHeight
+                && Math.Abs(VectorHelper.GetGravityAlignedVerticalVelocity(gc, pc)) < 0.3)
+                stillTicks++;
+            else
+                stillTicks = 0;
+            return stillTicks >= GROUND_TICKS;
         }
 
         void ProjectFall(double decel, double altitude, out double projected)
@@ -1960,13 +1985,12 @@ namespace IngameScript
 
             double agl = DescentAgl(gc);
             double above = SurfaceLeft(gc, agl);
-            double stop = pc.StopYDist;
-            double stopReach = Math.Max(2.0 * gc.GridHeight, 0.5 * stop + gc.GridHeight);
             double target = LandFall(pc.MaxYDecel, above);
             if (above <= SlowToTwo(gc))
                 target = -2;
             VectorHelper.MatchVerticalSpeed(gc, pc, target, false, 0.5);
-            return agl < stopReach && FallSettled(gc, target);
+            // Stay in Drop at -2 m/s until we really touch: a gear is ready to lock, or we are down and still.
+            return Touched(gc, above, target);
         }
 
         // Remote altitude minus the block that touches first. Not written down.
@@ -2008,7 +2032,7 @@ namespace IngameScript
 
         double SlowToTwo(GridContext grid)
         {
-            double early = 0.25 * grid.GridHeight;
+            double early = 1 * grid.GridHeight;
             double speed = -pc.ClimbRate;
             if (speed <= 2)
                 return early;
@@ -2391,15 +2415,43 @@ namespace IngameScript
 
         void HandleLockGear(GridContext gc)
         {
-            if (!GearHolding(gc) && pc.GroundLevel > 1.5 * pc.StopZDist)
+            double agl = DescentAgl(gc);
+            if (lockEntryAgl < 0)
             {
+                lockEntryAgl = agl;
+                stillTicks = 0;
+            }
+
+            // Only go back to Drop if we clearly climbed away.
+            if (!GearHolding(gc) && agl > lockEntryAgl + 2.0 * gc.GridHeight)
+            {
+                lockEntryAgl = -1;
+                stillTicks = 0;
                 command.Param.AutoLandState = AutoLandState.Drop;
                 return;
             }
 
             ConnectTriggerConnectors();
             if (TryLock(gc))
-                AbortShipContext(gc);
+            {
+                SettleLanded(gc, null);
+                return;
+            }
+
+            // Asking for -2 m/s but not moving: sitting on something without a lock.
+            if (OnGround(gc, SurfaceLeft(gc, agl), -2))
+                SettleLanded(gc, "Landed - gear not locked");
+        }
+
+        // End the land and save fuel: dampeners off, overrides cleared, thrusters stay on.
+        void SettleLanded(GridContext gc, string note)
+        {
+            lockEntryAgl = -1;
+            stillTicks = 0;
+            AbortShipContext(gc);
+            if (gc.Controller != null)
+                gc.Controller.DampenersOverride = false;
+            gearLockNote = note;
         }
 
         void ConnectTriggerConnectors()
@@ -2438,17 +2490,20 @@ namespace IngameScript
         bool TryLock(GridContext gc)
         {
             GravityAlignedOverride(gc);
-            if (gc.Controller != null)
-                gc.Controller.DampenersOverride = true;
 
             if (gc.Gears.Count == 0)
             {
                 // No gear to grab. Dampeners only — do not keep the -2 descent.
+                if (gc.Controller != null)
+                    gc.Controller.DampenersOverride = true;
                 gearLockNote = "No landing gear";
                 return false;
             }
 
             gearLockNote = null;
+            // Dampeners stay off so they don't fight the -2 m/s descent and leave us hovering.
+            if (gc.Controller != null)
+                gc.Controller.DampenersOverride = false;
             VectorHelper.MatchVerticalSpeed(gc, pc, -2, true);
 
             bool grabbed = false;
@@ -2460,9 +2515,9 @@ namespace IngameScript
 
                 g.Enabled = true;
                 g.AutoLock = true;
-                bool ready = g.LockMode == LandingGearMode.ReadyToLock;
-                g.Lock();
-                if (g.IsLocked || ready || g.LockMode == LandingGearMode.ReadyToLock)
+                if (g.LockMode == LandingGearMode.ReadyToLock)
+                    g.Lock();
+                if (g.IsLocked)
                     grabbed = true;
             }
 

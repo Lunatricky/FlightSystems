@@ -31,8 +31,6 @@ namespace IngameScript.Domain
 
         readonly StringBuilder errorMessage;
 
-        double centerGridHeight;
-        double bottomGridHeight;
         double gridHeight;
         double gridLength;
 
@@ -290,7 +288,8 @@ namespace IngameScript.Domain
             ErrorMessage.AppendLine("===============================");
             ErrorMessage.AppendLine("No Remote Control block found!");
             ErrorMessage.AppendLine("Place a RC on the grid facing forward.");
-            ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, in case you need RCs in different directions.");
+            ErrorMessage.AppendLine("Or name a RC with Reference in it's name, facing forward, f");
+            ErrorMessage.AppendLine("in case you need RCs in different directions.");
             ErrorMessage.AppendLine("===============================");
         }
 
@@ -314,19 +313,10 @@ namespace IngameScript.Domain
 
         void ReloadGridHeight()
         {
-            Vector3D gravityDir = Vector3D.Normalize(Controller.GetNaturalGravity());
-
-            Vector3D center = Me.CubeGrid.WorldVolume.Center;
-            Vector3D shipBottom = VectorHelper.GetLowestPoint(this);
-
-            // project onto gravity vector
-            centerGridHeight = center.Dot(gravityDir);
-            bottomGridHeight = shipBottom.Dot(gravityDir);
-
-            // height difference along gravity
-            GridHeight = Math.Abs(centerGridHeight - bottomGridHeight);
-
-            GridHeight = IsLG ? GridHeight * 2.5 : GridHeight * 0.5;
+            Vector3I up = Base6Directions.GetIntVector(Controller.Orientation.Up);
+            Vector3I size = Me.CubeGrid.Max - Me.CubeGrid.Min + Vector3I.One;
+            int blocks = Math.Abs(size.X * up.X + size.Y * up.Y + size.Z * up.Z);
+            GridHeight = blocks * Me.CubeGrid.GridSize;
 
             Vector3D gravity = Controller.GetNaturalGravity();
             if (gravity.LengthSquared() < 1e-6)
@@ -336,8 +326,8 @@ namespace IngameScript.Domain
             }
 
             // Length along forward, once per grid reload. Tick clearance must not rebuild the box.
-            BoundingBoxD box = Me.CubeGrid.WorldAABB;
-            GridLength = 2 * Math.Abs(box.HalfExtents.Dot(Controller.WorldMatrix.Forward));
+            Vector3I fwd = Base6Directions.GetIntVector(Controller.Orientation.Forward);
+            GridLength = Math.Abs(size.X * fwd.X + size.Y * fwd.Y + size.Z * fwd.Z) * Me.CubeGrid.GridSize;
         }
 
         void ReloadThrusters()

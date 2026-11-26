@@ -26,23 +26,19 @@ namespace IngameScript
             spt.Add(gc.GridName ?? "");
 
             stateLine.Clear();
-            stateLine.Append("State: ");
-            stateLine.Append(EnumLabels.State(command.State));
+            stateLine.Append("State: " + EnumLabels.State(command.State));
 
             if (command.Param.AutoLandState != AutoLandState.Idle)
             {
-                stateLine.Append(" - ");
-                stateLine.Append(EnumLabels.Land(command.Param.AutoLandState));
+                stateLine.Append(" - " + EnumLabels.Land(command.Param.AutoLandState));
             }
             else if (command.Param.Step != Step.Toggle)
             {
-                stateLine.Append(" - ");
-                stateLine.Append(EnumLabels.StepName(command.Param.Step));
+                stateLine.Append(" - " + EnumLabels.StepName(command.Param.Step));
             }
             if (command.Param.Number != 0)
             {
-                stateLine.Append(" - ");
-                stateLine.Append(command.Param.Number);
+                stateLine.Append(" - " + command.Param.Number);
             }
 
             spt.Add(stateLine.ToString());
