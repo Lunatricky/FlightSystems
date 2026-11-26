@@ -43,7 +43,7 @@ namespace IngameScript
                 string ground = string.Format("Grnd: {0}", Dist(pc.GroundLevel));
                 string sea = string.Format("Sea: {0}", Dist(pc.SeaLevel));
                 string climb = string.Format("Climb: {0:0}", pc.ClimbRate);
-                string stopY = string.Format("StopY: {0} m {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
+                string stopY = string.Format("StopY: {0} {1:0} s", Dist(pc.StopYDist), pc.TimeToStopY);
                 if (warn)
                 {
                     spt.Add2B(ground, sea, color);
@@ -58,7 +58,7 @@ namespace IngameScript
                 }
             }
 
-            spt.Add(string.Format("StopZ: {0} m {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
+            spt.Add(string.Format("StopZ: {0} {1:0} s", Dist(pc.StopZDist), pc.TimeToStopZ));
 
             spt.Add3(string.Format("X: {0:0} m/s", pc.ForwardVelocity), string.Format("Z: {0:0} m/s", pc.RightVelocity), string.Format("Y: {0:0} m/s", pc.UpVelocity));
 

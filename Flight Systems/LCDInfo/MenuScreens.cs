@@ -1399,7 +1399,7 @@ namespace IngameScript
             if (slot == ScreenSlot.Lcd2)
                 return CockpitSpriteIni.LCD2;
             if (slot == ScreenSlot.Menu)
-                return CockpitSpriteIni.LCDSETTINGS;
+                return CockpitSpriteIni.LCDMENU;
             return CockpitSpriteIni.LCD1;
         }
 

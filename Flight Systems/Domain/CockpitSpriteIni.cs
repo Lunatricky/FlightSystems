@@ -17,7 +17,7 @@ namespace IngameScript.Domain
 
     /// <summary>
     /// Copy-paste helper: tagged-cockpit Custom Data for sprite slots.
-    /// Writes LCD1 / LCD2 / LCDSettings (empty until the player sets a surface index).
+    /// Writes LCD1 / LCD2 / LCDMenu (empty until the player sets a surface index).
     /// Sync() rewrites the template and returns true when a value changed.
     /// </summary>
     public class CockpitSpriteIni : ICockpitSpriteSlots, IBlockIniSync
@@ -25,7 +25,7 @@ namespace IngameScript.Domain
         public const string Section = "Flight Systems";
         public const string LCD1 = "LCD1";
         public const string LCD2 = "LCD2";
-        public const string LCDSETTINGS = "LCDSettings";
+        public const string LCDMENU = "LCDMenu";
         const string OldLcdMenuKey = "LCDMenu";
 
         readonly MyIni ini = new MyIni();
@@ -44,12 +44,12 @@ namespace IngameScript.Domain
             TakeMenuKey();
             Lcd1 = ini.Get(Section, LCD1).ToString("");
             Lcd2 = ini.Get(Section, LCD2).ToString("");
-            LcdMenu = ini.Get(Section, LCDSETTINGS).ToString("");
+            LcdMenu = ini.Get(Section, LCDMENU).ToString("");
 
             bool changed = false;
             changed |= snapshot.ReadAndDetectChange(ini, Section, LCD1, Lcd1 ?? "");
             changed |= snapshot.ReadAndDetectChange(ini, Section, LCD2, Lcd2 ?? "");
-            changed |= snapshot.ReadAndDetectChange(ini, Section, LCDSETTINGS, LcdMenu ?? "");
+            changed |= snapshot.ReadAndDetectChange(ini, Section, LCDMENU, LcdMenu ?? "");
 
             block.CustomData = ini.ToString();
             return changed;
@@ -68,22 +68,22 @@ namespace IngameScript.Domain
             ini.Set(Section, key, index.ToString());
             Lcd1 = ini.Get(Section, LCD1).ToString("");
             Lcd2 = ini.Get(Section, LCD2).ToString("");
-            LcdMenu = ini.Get(Section, LCDSETTINGS).ToString("");
+            LcdMenu = ini.Get(Section, LCDMENU).ToString("");
             snapshot.ReadAndDetectChange(ini, Section, LCD1, Lcd1 ?? "");
             snapshot.ReadAndDetectChange(ini, Section, LCD2, Lcd2 ?? "");
-            snapshot.ReadAndDetectChange(ini, Section, LCDSETTINGS, LcdMenu ?? "");
+            snapshot.ReadAndDetectChange(ini, Section, LCDMENU, LcdMenu ?? "");
             block.CustomData = ini.ToString();
         }
 
-        // LCDMenu was the old menu key. LCDSettings is the one the screen picker writes.
+        // LCDMenu was the old menu key. LCDMenu is the one the screen picker writes.
         void TakeMenuKey()
         {
             if (!ini.ContainsKey(Section, OldLcdMenuKey))
                 return;
-            if (!ini.ContainsKey(Section, LCDSETTINGS))
+            if (!ini.ContainsKey(Section, LCDMENU))
             {
                 string oldMenu = ini.Get(Section, OldLcdMenuKey).ToString("");
-                ini.Set(Section, LCDSETTINGS, oldMenu ?? "");
+                ini.Set(Section, LCDMENU, oldMenu ?? "");
             }
             ini.Delete(Section, OldLcdMenuKey);
         }
